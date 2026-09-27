@@ -8,24 +8,62 @@ import { Header } from './components/Header';
 import { MetricsCards } from './components/MetricsCards';
 import { PlayerTable } from './components/PlayerTable';
 import { MilitaryUnitData, PlayerStats, ApiResponse } from './types';
-import { fetchMilitaryUnitData } from './services/wareraApi';
+import { 
+  fetchMilitaryUnitData, 
+  getCachedMilitaryUnitData, 
+  getCookie, 
+  setCookie, 
+  DEFAULT_MU_ID 
+} from './services/wareraApi';
 import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
 
 export default function App() {
-  const [muId, setMuId] = useState('69c229c4449287ea1a26a5b3');
-  const [muData, setMuData] = useState<MilitaryUnitData | null>(null);
-  const [players, setPlayers] = useState<PlayerStats[]>([]);
-  const [aggregated, setAggregated] = useState<ApiResponse['aggregated']>({
-    totalDonations: 0,
-    totalContributors: 0,
-    averageDonation: 0,
-    topDonor: null,
+  const [muId, setMuId] = useState(() => {
+    return getCookie('warera_last_mu') || DEFAULT_MU_ID;
   });
-  const [isLoading, setIsLoading] = useState(true);
+
+  // Read initial cached state instantly on mount (0ms instant hydration - zero flicker/reset on refresh)
+  const [muData, setMuData] = useState<MilitaryUnitData | null>(() => {
+    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    return cached?.militaryUnit || null;
+  });
+
+  const [players, setPlayers] = useState<PlayerStats[]>(() => {
+    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    return cached?.players || [];
+  });
+
+  const [aggregated, setAggregated] = useState<ApiResponse['aggregated']>(() => {
+    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    return (
+      cached?.aggregated || {
+        totalDonations: 0,
+        totalContributors: 0,
+        averageDonation: 0,
+        topDonor: null,
+      }
+    );
+  });
+
+  // Only show skeleton if we have literally 0 cached players
+  const [isLoading, setIsLoading] = useState(() => {
+    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    return !cached || !cached.players || cached.players.length === 0;
+  });
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
-  const [isLiveDonations, setIsLiveDonations] = useState(false);
-  const [hasApiToken, setHasApiToken] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(() => {
+    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    return cached?.timestamp || null;
+  });
+  const [isLiveDonations, setIsLiveDonations] = useState(() => {
+    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    return Boolean(cached?.isLiveDonations);
+  });
+  const [hasApiToken, setHasApiToken] = useState(() => {
+    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    return Boolean(cached?.hasApiToken);
+  });
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   // Dark mode initialized from localStorage or prefers-color-scheme
@@ -56,34 +94,59 @@ export default function App() {
     setIsDarkMode((prev) => !prev);
   };
 
-  // Fetch MU Data
+  // Switch MU and instantly swap to cached state if available
+  const handleMuIdChange = (newId: string) => {
+    setMuId(newId);
+    setCookie('warera_last_mu', newId);
+    const cached = getCachedMilitaryUnitData(newId);
+    if (cached && cached.players?.length > 0) {
+      setMuData(cached.militaryUnit);
+      setPlayers(cached.players);
+      setAggregated(cached.aggregated);
+      setIsLiveDonations(Boolean(cached.isLiveDonations));
+      setHasApiToken(Boolean(cached.hasApiToken));
+      setLastUpdated(cached.timestamp || Date.now());
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+  };
+
+  // Fetch MU Data with smooth background revalidation
   const fetchData = useCallback(
     async (forceRefresh = false) => {
-      setIsLoading(true);
+      // If players are already loaded, do a smooth background refresh without blanking the table
+      if (forceRefresh || players.length === 0) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       setError(null);
       try {
         const data = await fetchMilitaryUnitData(muId, forceRefresh);
         if (data && data.militaryUnit) {
           setMuData(data.militaryUnit);
           setPlayers(data.players || []);
-          setAggregated(data.aggregated || {
-            totalDonations: 0,
-            totalContributors: 0,
-            averageDonation: 0,
-            topDonor: null,
-          });
+          setAggregated(
+            data.aggregated || {
+              totalDonations: 0,
+              totalContributors: 0,
+              averageDonation: 0,
+              topDonor: null,
+            }
+          );
           setIsLiveDonations(Boolean(data.isLiveDonations));
           setHasApiToken(Boolean(data.hasApiToken));
           setLastUpdated(data.timestamp || Date.now());
         }
       } catch (err: any) {
         console.warn('Non-blocking data sync notice:', err);
-        // Even if something unexpected throws, gracefully keep current or seed data
       } finally {
         setIsLoading(false);
+        setIsRefreshing(false);
       }
     },
-    [muId]
+    [muId, players.length]
   );
 
   // Initial load
@@ -112,10 +175,10 @@ export default function App() {
       <Header
         muData={muData}
         currentMuId={muId}
-        onMuIdChange={(newId) => setMuId(newId)}
+        onMuIdChange={handleMuIdChange}
         isDarkMode={isDarkMode}
         onToggleDarkMode={toggleDarkMode}
-        isLoading={isLoading}
+        isLoading={isLoading || isRefreshing}
         onRefresh={() => fetchData(true)}
         autoRefresh={autoRefresh}
         onToggleAutoRefresh={() => setAutoRefresh((prev) => !prev)}

@@ -1,8 +1,62 @@
 import { ApiResponse, DonationItem, MilitaryUnitData, PlayerStats } from '../types';
 
-const DEFAULT_MU_ID = '69c229c4449287ea1a26a5b3';
+export const DEFAULT_MU_ID = '69c229c4449287ea1a26a5b3';
 const CACHE_KEY_PREFIX = 'warera_mu_cache_';
-const CACHE_TTL_MS = 60 * 1000; // 60 seconds client-side cache
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes fresh client cache to prevent unnecessary refetches
+
+/**
+ * Cookie utilities for persistent user preferences and sync tracking
+ */
+export function setCookie(name: string, value: string, days = 30) {
+  if (typeof document === 'undefined') return;
+  const expires = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+}
+
+export function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const matches = document.cookie.match(
+    new RegExp('(?:^|; )' + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)')
+  );
+  return matches ? decodeURIComponent(matches[1]) : null;
+}
+
+/**
+ * Reads cached military unit data immediately (0ms instant hydration on page load/refresh)
+ */
+export function getCachedMilitaryUnitData(muId: string = DEFAULT_MU_ID): ApiResponse | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const cacheKey = `${CACHE_KEY_PREFIX}${muId}`;
+    const stored = localStorage.getItem(cacheKey);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed?.data && Array.isArray(parsed?.data?.players) && parsed.data.players.length > 0) {
+        return parsed.data;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed reading cached military unit data', e);
+  }
+  return null;
+}
+
+/**
+ * Persists data to client storage and updates lightweight sync tracking cookies
+ */
+export function persistMilitaryUnitData(muId: string, data: ApiResponse) {
+  if (typeof window === 'undefined') return;
+  try {
+    const cacheKey = `${CACHE_KEY_PREFIX}${muId}`;
+    localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+    // Update cookies with sync timestamp, unit id and donor count
+    setCookie('warera_last_mu', muId);
+    setCookie('warera_last_sync', String(Date.now()));
+    setCookie('warera_donor_count', String(data.players?.length || 0));
+  } catch (e) {
+    console.warn('Failed saving military unit data to storage', e);
+  }
+}
 
 // Seed data based on live Turkic Tribe API response to ensure instant, zero-flicker load
 const SEED_DATA: ApiResponse = {
@@ -742,9 +796,7 @@ export async function fetchMilitaryUnitData(
     if (res.ok) {
       const json: ApiResponse = await res.json();
       if (json && json.success && Array.isArray(json.players) && json.players.length > 0) {
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify({ data: json, timestamp: Date.now() }));
-        } catch (e) {}
+        persistMilitaryUnitData(muId, json);
         return json;
       }
     }
@@ -755,9 +807,7 @@ export async function fetchMilitaryUnitData(
   // Step 2: Fallback to direct WarEra API fetch
   try {
     const directData = await fetchDirectFromWarEra(muId);
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify({ data: directData, timestamp: Date.now() }));
-    } catch (e) {}
+    persistMilitaryUnitData(muId, directData);
     return directData;
   } catch (directErr) {
     console.error('Direct WarEra API fetch failed:', directErr);
