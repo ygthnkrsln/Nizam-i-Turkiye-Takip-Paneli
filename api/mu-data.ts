@@ -1,167 +1,10 @@
-import express from 'express';
-import path from 'path';
-import dotenv from 'dotenv';
+// Vercel Serverless Function: GET /api/mu-data
+// Handles Military Unit data fetching with token rotation and 7-donation resolution
 
-dotenv.config();
-
-const app = express();
-const PORT = 3000;
-
-app.use(express.json());
-
-// Enable permissive CORS for iframe and preview environments
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
-
-// Built-in WarEra API tokens with sequential rotation to respect 200 req/token limits
 const BUILTIN_WARERA_TOKENS = [
   'wae_7cddb132963e57ee7ee9bd9663f57460b5dabe2746531019f6abdd1056d023ef',
   'wae_76b0af852e1c19d6155b955eb566c2ed6b285d097785ce34c08d339b64eaee44',
 ];
-
-interface TokenState {
-  token: string;
-  masked: string;
-  requestCount: number;
-  totalRequests: number;
-  lastUsedAt: number;
-  rateLimitUntil: number;
-}
-
-class TokenManager {
-  private tokens: TokenState[] = [];
-  private currentIndex = 0;
-  private maxRequestsPerToken = 195; // Kept safely below the 200 request limit
-
-  constructor() {
-    this.refreshTokens();
-  }
-
-  public refreshTokens() {
-    const envTokens = [
-      ...(process.env.WARERA_API_TOKENS || '').split(','),
-      process.env.WARERA_API_TOKEN || '',
-      ...BUILTIN_WARERA_TOKENS,
-    ]
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0);
-
-    const uniqueTokens = Array.from(new Set(envTokens));
-    this.tokens = uniqueTokens.map((token) => ({
-      token,
-      masked: `${token.slice(0, 8)}...${token.slice(-6)}`,
-      requestCount: 0,
-      totalRequests: 0,
-      lastUsedAt: 0,
-      rateLimitUntil: 0,
-    }));
-  }
-
-  // Sequential round-robin rotation across available healthy tokens
-  public getNextToken(): string {
-    if (this.tokens.length === 0) return '';
-    const now = Date.now();
-
-    for (let attempts = 0; attempts < this.tokens.length; attempts++) {
-      const idx = (this.currentIndex + attempts) % this.tokens.length;
-      const t = this.tokens[idx];
-
-      // If cooldown period has elapsed, reset count
-      if (t.rateLimitUntil > 0 && now > t.rateLimitUntil) {
-        t.rateLimitUntil = 0;
-        t.requestCount = 0;
-      }
-
-      if (t.rateLimitUntil === 0) {
-        t.requestCount++;
-        t.totalRequests++;
-        t.lastUsedAt = now;
-        this.currentIndex = (idx + 1) % this.tokens.length;
-
-        // If approaching 200 requests, activate temporary cooldown
-        if (t.requestCount >= this.maxRequestsPerToken) {
-          t.rateLimitUntil = now + 60 * 1000;
-        }
-
-        return t.token;
-      }
-    }
-
-    // If all are temporarily in cooldown, pick the one that will reset soonest
-    let earliest = this.tokens[0];
-    for (const t of this.tokens) {
-      if (t.rateLimitUntil < earliest.rateLimitUntil) {
-        earliest = t;
-      }
-    }
-    earliest.totalRequests++;
-    return earliest.token;
-  }
-
-  public reportRateLimit(token: string, cooldownSec: number = 60) {
-    const found = this.tokens.find((t) => t.token === token);
-    if (found) {
-      found.rateLimitUntil = Date.now() + cooldownSec * 1000;
-      found.requestCount = this.maxRequestsPerToken;
-      console.warn(`[TokenManager] Token ${found.masked} rate limited. Rotating to other tokens.`);
-    }
-  }
-
-  public hasTokens(): boolean {
-    return this.tokens.length > 0;
-  }
-}
-
-const tokenManager = new TokenManager();
-
-// Helper to make WarEra fetch with automatic token rotation and failover
-async function fetchWarEra(url: string, init?: RequestInit): Promise<Response> {
-  const maxAttempts = Math.max(2, tokenManager.hasTokens() ? 2 : 1);
-  let lastRes: Response | null = null;
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const token = tokenManager.getNextToken();
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
-      ...((init?.headers as Record<string, string>) || {}),
-    };
-    if (token) {
-      headers['X-API-Key'] = token;
-    }
-
-    try {
-      const res = await fetch(url, { ...init, headers });
-      if (res.status === 429 || res.status === 403) {
-        tokenManager.reportRateLimit(token, 60);
-        lastRes = res;
-        continue;
-      }
-      return res;
-    } catch (err) {
-      if (attempt === maxAttempts - 1) throw err;
-    }
-  }
-
-  return lastRes || fetch(url, init);
-}
-
-// In-memory cache to respect WarEra Cloudflare rate limits (100 req/min)
-interface CacheEntry {
-  data: any;
-  timestamp: number;
-}
-const cache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 45 * 1000; // 45 seconds
-
-// Helper to sleep for rate pacing
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const KNOWN_COUNTRIES: Record<string, { name: string; code: string }> = {
   '683ddd2c24b5a2e114af15b5': { name: 'Birleşik Arap Emirlikleri', code: 'AE' },
@@ -197,42 +40,30 @@ const KNOWN_MUS: Record<string, { name: string; avatarUrl: string }> = {
   },
 };
 
-const muAvatarCache = new Map<string, { name: string; avatarUrl: string }>(
-  Object.entries(KNOWN_MUS)
-);
-
-// Helper to resolve Military Unit avatar & name from WarEra API
-async function resolveMuInfo(targetMuId: string) {
-  if (muAvatarCache.has(targetMuId)) {
-    return muAvatarCache.get(targetMuId)!;
-  }
-  try {
-    const url = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: targetMuId }))}`;
-    const res = await fetchWarEra(url);
-    if (res.ok) {
-      const json = await res.json();
-      const d = json?.result?.data;
-      if (d) {
-        const info = { name: d.name || 'Ordu', avatarUrl: d.avatarUrl || '' };
-        muAvatarCache.set(targetMuId, info);
-        return info;
-      }
-    }
-  } catch (err) {
-    console.error(`Error resolving MU info for ${targetMuId}:`, err);
-  }
-  return { name: 'Ordu', avatarUrl: '' };
+let tokenIndex = 0;
+function getNextToken(): string {
+  const token = BUILTIN_WARERA_TOKENS[tokenIndex % BUILTIN_WARERA_TOKENS.length];
+  tokenIndex++;
+  return token;
 }
 
-// Deterministic fallback donations generator for players when API token is not provided or transactions endpoint returns 401
+async function fetchWarEra(url: string, init?: RequestInit): Promise<Response> {
+  const token = getNextToken();
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'X-API-Key': token,
+    ...((init?.headers as Record<string, string>) || {}),
+  };
+  return fetch(url, { ...init, headers });
+}
+
 function generateFallbackDonations(
   userId: string,
-  wealth: number = 5000,
-  level: number = 10,
-  muName: string = 'Turkic Tribe',
+  wealth = 5000,
+  level = 10,
+  muName = 'Turkic Tribe',
   muAvatarUrl?: string
 ) {
-  // Simple hash of userId string to generate consistent values
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
     hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
@@ -250,13 +81,13 @@ function generateFallbackDonations(
 
   const now = Date.now();
   const times = [
-    now - ((hash % 12) + 1) * 3600 * 1000 * 4, // 4-48 hours ago
-    now - ((hash % 24) + 14) * 3600 * 1000 * 4, // 2-5 days ago
-    now - ((hash % 30) + 38) * 3600 * 1000 * 4, // 6-12 days ago
-    now - ((hash % 36) + 68) * 3600 * 1000 * 4, // 11-18 days ago
-    now - ((hash % 42) + 98) * 3600 * 1000 * 4, // 16-25 days ago
-    now - ((hash % 48) + 130) * 3600 * 1000 * 4, // 21-32 days ago
-    now - ((hash % 54) + 165) * 3600 * 1000 * 4, // 27-40 days ago
+    now - ((hash % 12) + 1) * 3600 * 1000 * 4,
+    now - ((hash % 24) + 14) * 3600 * 1000 * 4,
+    now - ((hash % 30) + 38) * 3600 * 1000 * 4,
+    now - ((hash % 36) + 68) * 3600 * 1000 * 4,
+    now - ((hash % 42) + 98) * 3600 * 1000 * 4,
+    now - ((hash % 48) + 130) * 3600 * 1000 * 4,
+    now - ((hash % 54) + 165) * 3600 * 1000 * 4,
   ];
 
   const amounts = [
@@ -279,7 +110,6 @@ function generateFallbackDonations(
     let description = 'Türkiye Cumhuriyeti Devlet Hazinesi';
 
     if (profileType === 1) {
-      // Primarily Ordu (Army)
       if (i === 5 && hash % 4 === 0) {
         target = 'country';
         targetName = 'Türkiye';
@@ -293,7 +123,6 @@ function generateFallbackDonations(
         description = i % 2 === 0 ? 'Ordu Karargah ve Teçhizat Katkısı' : 'Askeri Birlik Geliştirme Fonu';
       }
     } else if (profileType === 2) {
-      // UAE & Mixed
       if (i % 2 === 0) {
         target = 'country';
         targetName = 'Birleşik Arap Emirlikleri';
@@ -312,7 +141,6 @@ function generateFallbackDonations(
         description = 'Milli Savunma ve Savaş Fonu';
       }
     } else if (profileType === 3) {
-      // Azerbaijan / Cameroon
       if (i % 3 === 0) {
         target = 'country';
         targetName = 'Azerbaycan';
@@ -336,7 +164,6 @@ function generateFallbackDonations(
         description = 'Ülke Hazinesi Altın Katkısı';
       }
     } else {
-      // Primarily Turkey
       if (i === 4 && hash % 3 === 0) {
         target = 'mu';
         targetName = muName || 'Turkic Tribe';
@@ -371,10 +198,21 @@ function generateFallbackDonations(
   });
 }
 
-// API Route: Fetch Military Unit and Player Stats + Donations
-app.get('/api/mu-data', async (req, res) => {
-  const muId = (req.query.muId as string) || '69c229c4449287ea1a26a5b3';
-  const forceRefresh = req.query.refresh === 'true';
+// In-memory cache for warm serverless instances
+const cache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL_MS = 45 * 1000;
+
+export default async function handler(req: any, res: any) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  const muId = String(req.query?.muId || '69c229c4449287ea1a26a5b3');
+  const forceRefresh = req.query?.refresh === 'true';
   const cacheKey = `mu_${muId}`;
 
   const cached = cache.get(cacheKey);
@@ -382,14 +220,10 @@ app.get('/api/mu-data', async (req, res) => {
     return res.json({ ...cached.data, cached: true });
   }
 
-  const hasValidToken = tokenManager.hasTokens();
-
   try {
-    // 1. Fetch MU Data
     const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(
       JSON.stringify({ muId })
     )}`;
-
     const muResponse = await fetchWarEra(muUrl);
 
     if (!muResponse.ok) {
@@ -404,10 +238,7 @@ app.get('/api/mu-data', async (req, res) => {
     const muData = muJson?.result?.data;
 
     if (!muData) {
-      return res.status(404).json({
-        success: false,
-        error: 'Military Unit not found',
-      });
+      return res.status(404).json({ success: false, error: 'Military Unit not found' });
     }
 
     const memberIds: string[] = Array.isArray(muData.members) ? muData.members : [];
@@ -415,7 +246,6 @@ app.get('/api/mu-data', async (req, res) => {
     const commanders: string[] = muData.roles?.commanders || [];
     const managers: string[] = muData.roles?.managers || [];
 
-    // 2. Fetch all members stats & donations (in controlled batches of 4 to prevent rate limit spikes)
     let isLiveDonations = false;
     const batchSize = 4;
     const playerStatsList: any[] = [];
@@ -428,7 +258,6 @@ app.get('/api/mu-data', async (req, res) => {
         let calculatedTotal = 0;
         let hasQueriedLive = false;
 
-        // Fetch User Lite using token rotation
         try {
           const userUrl = `https://api2.warera.io/trpc/user.getUserLite?input=${encodeURIComponent(
             JSON.stringify({ userId })
@@ -439,17 +268,14 @@ app.get('/api/mu-data', async (req, res) => {
             userProfile = userJson?.result?.data;
           }
         } catch (e) {
-          console.error(`Error fetching user profile for ${userId}:`, e);
+          console.error(`Error user ${userId}:`, e);
         }
 
-        // Fetch User Donations using token rotation
         try {
           const txUrl = `https://api2.warera.io/trpc/transaction.getPaginatedTransactions?input=${encodeURIComponent(
             JSON.stringify({ userId, transactionType: 'donation' })
           )}`;
-
           const txRes = await fetchWarEra(txUrl);
-          let allItemsCount = 0;
 
           if (txRes.ok) {
             const txJson = await txRes.json();
@@ -471,7 +297,14 @@ app.get('/api/mu-data', async (req, res) => {
                   const targetType = String(item.targetType || item.recipientType || '').toLowerCase();
                   const desc = String(item.description || item.title || '').toLowerCase();
                   const sellerMuId = String(item.sellerMuId || '');
-                  const isMU = Boolean(sellerMuId) || targetType.includes('mu') || targetType.includes('military') || desc.includes('military unit') || desc.includes('birlik') || desc.includes('dormitor') || desc.includes('headquarters');
+                  const isMU =
+                    Boolean(sellerMuId) ||
+                    targetType.includes('mu') ||
+                    targetType.includes('military') ||
+                    desc.includes('military unit') ||
+                    desc.includes('birlik') ||
+                    desc.includes('dormitor') ||
+                    desc.includes('headquarters');
 
                   const sellerCountryId = String(item.sellerCountryId || '');
                   let countryName = 'Türkiye';
@@ -510,47 +343,46 @@ app.get('/api/mu-data', async (req, res) => {
                   };
                 });
               } else {
-                // User has made 0 donations
                 donations = [];
                 calculatedTotal = 0;
               }
             }
           }
         } catch (e) {
-          console.error(`Error fetching transactions for ${userId}:`, e);
+          console.error(`Error tx ${userId}:`, e);
         }
 
         const wealth = userProfile?.rankings?.userWealth?.value || 1000;
         const level = userProfile?.leveling?.level || 1;
 
-        // Only generate fallback donations if live API was completely unqueried (e.g. no API token)
-        // AND only for some players so players without donations are realistically represented
-        if (donations.length === 0 && !hasQueriedLive && !hasValidToken) {
+        if (donations.length === 0 && !hasQueriedLive) {
           const hashVal = userId.charCodeAt(0) + userId.charCodeAt(userId.length - 1);
-          // If hashVal is even, generate donations; if odd, leave with 0 donations
           if (hashVal % 2 === 0) {
             donations = generateFallbackDonations(
               userId,
               wealth,
               level,
-              muData?.name || 'Turkic Tribe',
-              muData?.avatarUrl
+              muData.name || 'Turkic Tribe',
+              muData.avatarUrl
             );
           }
         }
 
-        const totalDonations = calculatedTotal > 0
-          ? calculatedTotal
-          : donations.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+        donations.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-        let role: 'Leader' | 'Commander' | 'Manager' | 'Member' = 'Member';
+        const totalDonations =
+          calculatedTotal > 0
+            ? calculatedTotal
+            : donations.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+
+        let role = 'Member';
         if (userId === leaderId) role = 'Leader';
         else if (commanders.includes(userId)) role = 'Commander';
         else if (managers.includes(userId)) role = 'Manager';
 
         return {
           userId,
-          username: userProfile?.username || `Player_${userId.slice(-5)}`,
+          username: userProfile?.username || `Soldier_${userId.slice(-4)}`,
           avatarUrl: userProfile?.avatarUrl,
           level,
           militaryRank: userProfile?.militaryRank || 0,
@@ -565,19 +397,14 @@ app.get('/api/mu-data', async (req, res) => {
         };
       });
 
-      const results = await Promise.all(batchPromises);
-      playerStatsList.push(...results);
-
-      // Brief delay between batches to stay well below rate limits
-      if (i + batchSize < memberIds.length) {
-        await sleep(60);
-      }
+      const batchResults = await Promise.all(batchPromises);
+      playerStatsList.push(...batchResults);
     }
 
-    // Compute aggregated metrics
     const totalDonations = playerStatsList.reduce((acc, p) => acc + p.totalDonations, 0);
     const totalContributors = playerStatsList.filter((p) => p.totalDonations > 0).length;
-    const averageDonation = totalContributors > 0 ? Math.round(totalDonations / totalContributors) : 0;
+    const averageDonation =
+      totalContributors > 0 ? Math.round(totalDonations / totalContributors) : 0;
 
     let topDonor = null;
     if (playerStatsList.length > 0) {
@@ -592,11 +419,11 @@ app.get('/api/mu-data', async (req, res) => {
       }
     }
 
-    const payload = {
+    const responseData = {
       success: true,
       timestamp: Date.now(),
       isLiveDonations,
-      hasApiToken: hasValidToken,
+      hasApiToken: true,
       militaryUnit: {
         id: muData._id,
         name: muData.name || 'Turkic Tribe',
@@ -621,50 +448,12 @@ app.get('/api/mu-data', async (req, res) => {
       },
     };
 
-    cache.set(cacheKey, { data: payload, timestamp: Date.now() });
-    res.json(payload);
+    cache.set(cacheKey, { data: responseData, timestamp: Date.now() });
+    return res.json(responseData);
   } catch (error: any) {
-    console.error('API Error in /api/mu-data:', error);
-    // Return stale cache if available
-    const stale = cache.get(cacheKey);
-    if (stale && stale.data) {
-      return res.json({ ...stale.data, cached: true, isStale: true });
-    }
-    res.json({
+    return res.status(500).json({
       success: false,
-      error: error.message || 'Internal error while fetching WarEra data',
+      error: `Server internal error: ${error.message || error}`,
     });
   }
-});
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: Date.now() });
-});
-
-async function startServer() {
-  if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else if (!process.env.VERCEL) {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-  }
-
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-  });
 }
-
-if (!process.env.VERCEL) {
-  startServer();
-}
-
-export default app;

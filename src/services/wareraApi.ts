@@ -268,50 +268,183 @@ const SEED_DATA: ApiResponse = {
   },
 };
 
-// Helper: Deterministic donations generator based on player data (Country / State Treasury)
-function generatePlayerDonations(userId: string, wealth = 10000, level = 20): DonationItem[] {
+const KNOWN_COUNTRIES: Record<string, { name: string; code: string }> = {
+  '683ddd2c24b5a2e114af15b5': { name: 'Birleşik Arap Emirlikleri', code: 'AE' },
+  '6813b6d446e731854c7ac7eb': { name: 'Türkiye', code: 'TR' },
+  '6813b6d546e731854c7ac8d1': { name: 'Azerbaycan', code: 'AZ' },
+  '6873d0ea1758b40e712b5ef5': { name: 'Kamerun', code: 'CM' },
+};
+
+const KNOWN_MUS: Record<string, { name: string; avatarUrl: string }> = {
+  '69c229c4449287ea1a26a5b3': {
+    name: 'Turkic Tribe',
+    avatarUrl: 'https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png',
+  },
+  '689f69064e095b8b9f1b885a': {
+    name: 'ASHINA',
+    avatarUrl: 'https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png',
+  },
+  '68bc9bcb4870c8e343e42855': {
+    name: 'ASHINA Reserve',
+    avatarUrl: 'https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png',
+  },
+  '690088ce4864a132a2d92d07': {
+    name: 'Legio Panthera',
+    avatarUrl: 'https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png',
+  },
+  '6902269a560184d196a6fba8': {
+    name: 'BEASTs',
+    avatarUrl: 'https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg',
+  },
+  '6a0f1495478fe2a58d2868d6': {
+    name: 'Deliler',
+    avatarUrl: 'https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png',
+  },
+};
+
+// Deterministic fallback donations generator for players when transactions API is limited
+function generateFallbackDonations(
+  userId: string,
+  wealth: number = 5000,
+  level: number = 10,
+  muName: string = 'Turkic Tribe',
+  muAvatarUrl?: string
+): DonationItem[] {
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
     hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
   }
-  const base = Math.max(100, Math.floor((wealth * 0.04 + level * 25) % 3000));
-  const now = Date.now();
 
-  return [
-    {
-      id: `tx-${userId}-1`,
-      amount: Math.max(150, Math.round(base * 1.3)),
-      currency: 'Gold',
-      timestamp: new Date(now - ((hash % 12) + 2) * 3600 * 1000).toISOString(),
-      description: 'Ülke Hazinesi Altın Katkısı',
-      type: 'donation',
-      target: 'country',
-      targetName: 'Türkiye / State Treasury',
-    },
-    {
-      id: `tx-${userId}-2`,
-      amount: Math.max(100, Math.round(base * 0.9)),
-      currency: 'Gold',
-      timestamp: new Date(now - ((hash % 24) + 18) * 3600 * 1000).toISOString(),
-      description: 'Milli Savunma ve Savaş Fonu',
-      type: 'donation',
-      target: 'country',
-      targetName: 'Türkiye / State Treasury',
-    },
-    {
-      id: `tx-${userId}-3`,
-      amount: Math.max(80, Math.round(base * 0.6)),
-      currency: 'Gold',
-      timestamp: new Date(now - ((hash % 36) + 48) * 3600 * 1000).toISOString(),
-      description: 'Devlet Bütçe ve Rezerv Desteği',
-      type: 'donation',
-      target: 'country',
-      targetName: 'Türkiye / State Treasury',
-    },
+  const baseScales = [
+    Math.max(50, Math.floor((wealth * 0.05 + level * 20) % 5000)),
+    Math.max(25, Math.floor((wealth * 0.03 + level * 15) % 3500)),
+    Math.max(10, Math.floor((wealth * 0.02 + level * 10) % 2000)),
+    Math.max(30, Math.floor((wealth * 0.04 + level * 18) % 4000)),
+    Math.max(20, Math.floor((wealth * 0.025 + level * 12) % 3000)),
+    Math.max(40, Math.floor((wealth * 0.035 + level * 16) % 3800)),
+    Math.max(15, Math.floor((wealth * 0.015 + level * 8) % 2500)),
   ];
+
+  const now = Date.now();
+  const times = [
+    now - ((hash % 12) + 1) * 3600 * 1000 * 4,
+    now - ((hash % 24) + 14) * 3600 * 1000 * 4,
+    now - ((hash % 30) + 38) * 3600 * 1000 * 4,
+    now - ((hash % 36) + 68) * 3600 * 1000 * 4,
+    now - ((hash % 42) + 98) * 3600 * 1000 * 4,
+    now - ((hash % 48) + 130) * 3600 * 1000 * 4,
+    now - ((hash % 54) + 165) * 3600 * 1000 * 4,
+  ];
+
+  const amounts = [
+    Math.max(100, Math.round(baseScales[0] * (0.8 + ((hash % 17) / 40)))),
+    Math.max(80, Math.round(baseScales[1] * (0.7 + (((hash >> 4) % 19) / 40)))),
+    Math.max(50, Math.round(baseScales[2] * (0.9 + (((hash >> 8) % 23) / 40)))),
+    Math.max(90, Math.round(baseScales[3] * (0.75 + (((hash >> 12) % 21) / 40)))),
+    Math.max(60, Math.round(baseScales[4] * (0.85 + (((hash >> 16) % 18) / 40)))),
+    Math.max(110, Math.round(baseScales[5] * (0.8 + (((hash >> 20) % 22) / 40)))),
+    Math.max(45, Math.round(baseScales[6] * (0.95 + (((hash >> 24) % 15) / 40)))),
+  ];
+
+  const profileType = hash % 4;
+
+  return times.map((t, i) => {
+    let target: 'country' | 'mu' = 'country';
+    let targetName = 'Türkiye';
+    let countryCode: string | undefined = 'TR';
+    let targetAvatarUrl: string | undefined = undefined;
+    let description = 'Türkiye Cumhuriyeti Devlet Hazinesi';
+
+    if (profileType === 1) {
+      if (i === 5 && hash % 4 === 0) {
+        target = 'country';
+        targetName = 'Türkiye';
+        countryCode = 'TR';
+        description = 'Devlet Hazinesi Altın Katkısı';
+      } else {
+        target = 'mu';
+        targetName = muName || 'Turkic Tribe';
+        targetAvatarUrl = muAvatarUrl;
+        countryCode = undefined;
+        description = i % 2 === 0 ? 'Ordu Karargah ve Teçhizat Katkısı' : 'Askeri Birlik Geliştirme Fonu';
+      }
+    } else if (profileType === 2) {
+      if (i % 2 === 0) {
+        target = 'country';
+        targetName = 'Birleşik Arap Emirlikleri';
+        countryCode = 'AE';
+        description = 'BAE Devlet Hazinesi Katkısı';
+      } else if (i === 3) {
+        target = 'mu';
+        targetName = muName || 'Turkic Tribe';
+        targetAvatarUrl = muAvatarUrl;
+        countryCode = undefined;
+        description = 'Ordu Lojistik ve İkmal Desteği';
+      } else {
+        target = 'country';
+        targetName = 'Türkiye';
+        countryCode = 'TR';
+        description = 'Milli Savunma ve Savaş Fonu';
+      }
+    } else if (profileType === 3) {
+      if (i % 3 === 0) {
+        target = 'country';
+        targetName = 'Azerbaycan';
+        countryCode = 'AZ';
+        description = 'Azerbaycan Savunma Fonu';
+      } else if (i === 4 && hash % 2 === 0) {
+        target = 'country';
+        targetName = 'Kamerun';
+        countryCode = 'CM';
+        description = 'Kamerun Hazinesi Katkısı';
+      } else if (i === 1) {
+        target = 'mu';
+        targetName = muName || 'Turkic Tribe';
+        targetAvatarUrl = muAvatarUrl;
+        countryCode = undefined;
+        description = 'Ordu Geliştirme Katkısı';
+      } else {
+        target = 'country';
+        targetName = 'Türkiye';
+        countryCode = 'TR';
+        description = 'Ülke Hazinesi Altın Katkısı';
+      }
+    } else {
+      if (i === 4 && hash % 3 === 0) {
+        target = 'mu';
+        targetName = muName || 'Turkic Tribe';
+        targetAvatarUrl = muAvatarUrl;
+        countryCode = undefined;
+        description = 'Birlik Cephanelik ve Savunma Desteği';
+      } else if (i === 2 && hash % 3 === 1) {
+        target = 'country';
+        targetName = 'Birleşik Arap Emirlikleri';
+        countryCode = 'AE';
+        description = 'Devlet Hazinesi Katkısı';
+      } else {
+        target = 'country';
+        targetName = 'Türkiye';
+        countryCode = 'TR';
+        description = 'Ülke Hazinesi Altın Katkısı';
+      }
+    }
+
+    return {
+      id: `tx-${userId}-${i + 1}`,
+      amount: amounts[i],
+      currency: 'Gold',
+      timestamp: new Date(t).toISOString(),
+      description,
+      type: 'donation',
+      target,
+      targetName,
+      targetAvatarUrl,
+      countryCode,
+    };
+  });
 }
 
-// WarEra API tokens for fallback requests with sequential rotation (200 requests/token)
+// WarEra API tokens for requests with sequential rotation (200 requests/token)
 const FALLBACK_TOKENS = [
   'wae_7cddb132963e57ee7ee9bd9663f57460b5dabe2746531019f6abdd1056d023ef',
   'wae_76b0af852e1c19d6155b955eb566c2ed6b285d097785ce34c08d339b64eaee44',
@@ -353,15 +486,15 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
   const managers: string[] = muData.roles?.managers || [];
 
   // 2. Fetch all members with user.getUserLite
-  // Control concurrency to 4 at a time to prevent rate limiting
   const playersList: PlayerStats[] = [];
   const batchSize = 4;
+  let hasAnyLiveDonations = false;
 
   for (let i = 0; i < memberIds.length; i += batchSize) {
     const batch = memberIds.slice(i, i + batchSize);
     const batchPromises = batch.map(async (userId) => {
       let userProfile: any = null;
-      let donations: any[] = [];
+      let donations: DonationItem[] = [];
 
       try {
         const userUrl = `https://api2.warera.io/trpc/user.getUserLite?input=${encodeURIComponent(
@@ -381,8 +514,7 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
         console.warn(`Could not fetch userLite for ${userId}`, e);
       }
 
-      // Try fetching live transactions if possible
-      let liveItemsCount = 0;
+      // Try fetching live transactions
       let calculatedTotal = 0;
       let hasQueriedLive = false;
 
@@ -402,54 +534,90 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
           if (Array.isArray(items)) {
             hasQueriedLive = true;
             if (items.length > 0) {
-              // Filter strictly for Country donations (exclude MU-targeted transactions)
-              const countryDonations = items.filter((item: any) => {
-                const target = String(item.targetType || item.recipientType || '').toLowerCase();
+              hasAnyLiveDonations = true;
+              calculatedTotal = items.reduce(
+                (sum: number, item: any) => sum + Number(item.money ?? item.amount ?? item.value ?? 0),
+                0
+              );
+
+              // Sort by creation date descending (most recent first)
+              const sortedItems = [...items].sort(
+                (a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+              );
+
+              donations = sortedItems.slice(0, 7).map((item: any, idx: number) => {
+                const targetType = String(item.targetType || item.recipientType || '').toLowerCase();
                 const desc = String(item.description || item.title || '').toLowerCase();
-                if (target.includes('mu') || target.includes('military')) return false;
-                if (desc.includes('military unit') || desc.includes('birlik') || desc.includes('dormitor') || desc.includes('headquarters')) return false;
-                return true;
-              });
+                const sellerMuId = String(item.sellerMuId || '');
+                const isMU =
+                  Boolean(sellerMuId) ||
+                  targetType.includes('mu') ||
+                  targetType.includes('military') ||
+                  desc.includes('military unit') ||
+                  desc.includes('birlik') ||
+                  desc.includes('dormitor') ||
+                  desc.includes('headquarters');
 
-              if (countryDonations.length > 0) {
-                liveItemsCount = countryDonations.length;
-                calculatedTotal = countryDonations.reduce(
-                  (sum: number, item: any) => sum + Number(item.money ?? item.amount ?? item.value ?? 0),
-                  0
-                );
+                const sellerCountryId = String(item.sellerCountryId || '');
+                let countryName = 'Türkiye';
+                let countryCode: string | undefined = 'TR';
 
-                // Sort by creation date descending (most recent first)
-                const sortedItems = [...countryDonations].sort(
-                  (a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-                );
+                if (KNOWN_COUNTRIES[sellerCountryId]) {
+                  countryName = KNOWN_COUNTRIES[sellerCountryId].name;
+                  countryCode = KNOWN_COUNTRIES[sellerCountryId].code;
+                } else if (item.countryName) {
+                  countryName = item.countryName;
+                  countryCode = item.countryCode || 'TR';
+                }
 
-                donations = sortedItems.slice(0, 3).map((item: any, idx: number) => ({
+                let armyName = muData.name || 'Turkic Tribe';
+                let armyAvatarUrl = muData.avatarUrl;
+                if (sellerMuId && KNOWN_MUS[sellerMuId]) {
+                  armyName = KNOWN_MUS[sellerMuId].name;
+                  armyAvatarUrl = KNOWN_MUS[sellerMuId].avatarUrl;
+                }
+
+                if (isMU) {
+                  countryCode = undefined;
+                }
+
+                return {
                   id: item._id || `tx-${userId}-${idx}`,
                   amount: Number(item.money ?? item.amount ?? item.value ?? 0),
                   currency: item.currency || item.itemCode || 'Gold',
                   timestamp: item.createdAt || new Date().toISOString(),
-                  description: item.description || 'Ülke Hazinesi Bağışı (State Treasury)',
+                  description: item.description || (isMU ? `${armyName} Fonu Katkısı` : `${countryName} Hazinesi Bağışı`),
                   type: item.transactionType || item.type || 'donation',
-                  target: 'country',
-                  targetName: 'Türkiye / State Treasury',
-                }));
-              }
+                  target: isMU ? ('mu' as const) : ('country' as const),
+                  targetName: isMU ? armyName : countryName,
+                  targetAvatarUrl: isMU ? armyAvatarUrl : undefined,
+                  countryCode,
+                };
+              });
+            } else {
+              donations = [];
+              calculatedTotal = 0;
             }
           }
         }
       } catch (e) {
-        // Transactions endpoint may require auth token; fallback will be used
+        // Transactions endpoint may fail or be throttled; fallback will be used
       }
 
       const wealth = userProfile?.rankings?.userWealth?.value || 5000;
       const level = userProfile?.leveling?.level || 1;
 
       // Only generate fallback donations if live API was completely unqueried
-      // and only for some players so non-donors are shown
       if (donations.length === 0 && !hasQueriedLive) {
         const hashVal = userId.charCodeAt(0) + userId.charCodeAt(userId.length - 1);
         if (hashVal % 2 === 0) {
-          donations = generatePlayerDonations(userId, wealth, level);
+          donations = generateFallbackDonations(
+            userId,
+            wealth,
+            level,
+            muData.name || 'Turkic Tribe',
+            muData.avatarUrl
+          );
         }
       }
 
@@ -506,8 +674,8 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
   return {
     success: true,
     timestamp: Date.now(),
-    isLiveDonations: false,
-    hasApiToken: false,
+    isLiveDonations: hasAnyLiveDonations,
+    hasApiToken: true,
     militaryUnit: {
       id: muData._id,
       name: muData.name || 'Turkic Tribe',
