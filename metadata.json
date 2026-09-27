@@ -1,0 +1,6 @@
+{
+  "name": "Turkic Tribe Community Tracker",
+  "description": "Real-time community contributions and donation tracker for WarEra Military Unit players with aggregated statistics and sortable dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
