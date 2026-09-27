@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <!-- Background Outer Gradient -->
+    <radialGradient id="badgeBase" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#232a34" />
+      <stop offset="85%" stop-color="#14181f" />
+      <stop offset="100%" stop-color="#0b0e12" />
+    </radialGradient>
+
+    <!-- Flame Layer Gradients -->
+    <linearGradient id="outerFlame" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#6b0f00" />
+      <stop offset="35%" stop-color="#b81d00" />
+      <stop offset="70%" stop-color="#ea4c00" />
+      <stop offset="100%" stop-color="#ff9900" />
+    </linearGradient>
+
+    <linearGradient id="innerFlame" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#c41c00" />
+      <stop offset="45%" stop-color="#ff5100" />
+      <stop offset="80%" stop-color="#ffb300" />
+      <stop offset="100%" stop-color="#fff480" />
+    </linearGradient>
+
+    <!-- Globe Sphere 3D Gradient -->
+    <radialGradient id="globeSpherical" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#db2828" />
+      <stop offset="25%" stop-color="#b81616" />
+      <stop offset="60%" stop-color="#730a0a" />
+      <stop offset="88%" stop-color="#3d0303" />
+      <stop offset="100%" stop-color="#1c0101" />
+    </radialGradient>
+
+    <!-- Continent Texture Fill -->
+    <radialGradient id="continentFill" cx="40%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#700e0e" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#3d0505" stop-opacity="0.95" />
+    </radialGradient>
+
+    <!-- Metallic Silver Chrome Crescent & Star -->
+    <linearGradient id="silverHilal" x1="15%" y1="10%" x2="85%" y2="90%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="25%" stop-color="#f0f4f8" />
+      <stop offset="55%" stop-color="#d9e2ec" />
+      <stop offset="80%" stop-color="#9fb3c8" />
+      <stop offset="100%" stop-color="#627d98" />
+    </linearGradient>
+
+    <linearGradient id="silverRim" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#bcccdc" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="#334e68" stop-opacity="0.8" />
+    </linearGradient>
+
+    <!-- Globe Clip Path -->
+    <clipPath id="globeBoundary">
+      <circle cx="64" cy="65" r="37.5" />
+    </clipPath>
+
+    <!-- Glass Specular Highlight Gradient -->
+    <linearGradient id="glassSheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.45" />
+      <stop offset="30%" stop-color="#ffffff" stop-opacity="0.12" />
+      <stop offset="80%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Drop Shadow Filter -->
+    <filter id="shadowCrescent" x="-20%" y="-20%" width="150%" height="150%">
+      <feDropShadow dx="-0.8" dy="1.8" stdDeviation="1.8" flood-color="#000000" flood-opacity="0.85" />
+    </filter>
+  </defs>
+
+  <!-- Dark Circular Base Badge -->
+  <circle cx="64" cy="64" r="62" fill="url(#badgeBase)" stroke="#2b3542" stroke-width="2.5" />
+
+  <!-- Outer Swirling Flames Layer -->
+  <g fill="url(#outerFlame)">
+    <!-- Top-left flames -->
+    <path d="M64 7 C58 19 50 25 43 27 C36 17 48 8 50 4 C40 10 32 20 28 32 C23 23 27 15 29 11 C20 18 16 29 14 41 C9 35 11 26 12 21 C6 30 5 44 9 56 C4 51 5 42 6 36 C1 47 1 61 7 74 C12 85 20 95 30 103 C23 93 21 82 23 72 C25 62 31 54 36 47 C37 57 42 66 45 74 C39 63 43 49 48 39 C54 49 59 60 62 70 C64 53 60 40 57 30 C62 40 65 52 66 61 C70 47 70 32 67 21 C72 32 73 45 72 55 C77 43 81 29 78 17 C83 27 84 39 82 49 C89 36 93 23 91 13 C95 24 96 37 92 48 C99 37 104 26 102 18 C108 30 109 45 106 58 C112 47 114 36 113 28 C118 40 120 56 116 71 C121 60 121 49 119 41 C123 53 125 68 120 81 C114 96 104 107 92 115 C101 106 104 94 103 82 C101 70 94 60 88 51 C88 61 82 71 78 80 C84 68 81 53 76 43 C71 54 67 66 64 7 C64 7 64 7 64 7 Z" />
+  </g>
+
+  <!-- Inner Dynamic Flame Highlights (Hot Core) -->
+  <g fill="url(#innerFlame)">
+    <path d="M64 12 C60 21 53 28 47 31 C43 23 50 16 51 12 C44 17 38 25 35 34 C31 27 34 20 35 17 C28 23 25 32 23 41 C20 35 21 28 22 24 C17 32 17 43 20 52 C16 48 17 41 18 36 C14 45 14 56 18 66 C23 75 30 83 38 89 C32 81 31 72 33 64 C35 56 39 50 43 45 C44 52 48 60 51 66 C46 58 49 46 54 38 C58 46 62 55 64 63 C66 50 63 39 60 31 C64 38 67 48 67 56 C71 45 70 32 68 23 C72 32 73 42 72 50 C76 40 79 28 77 18 C81 27 82 36 80 45 C86 35 89 24 88 16 C91 25 92 36 89 44 C95 35 98 26 97 19 C101 29 102 41 100 51 C104 43 105 34 105 28 C108 38 109 50 106 62 C110 54 111 44 110 38 C113 47 114 59 111 69 C106 81 98 90 89 97 C96 90 98 80 97 71 C95 62 90 54 85 47 C85 54 81 62 78 69 C83 60 80 47 76 39 C72 48 68 58 64 12 Z" />
+  </g>
+
+  <!-- Globe Border Ring (Dark Cast Iron) -->
+  <circle cx="64" cy="65" r="39.5" fill="#180303" stroke="#4a0d0d" stroke-width="2" />
+
+  <!-- Crimson Planet Globe Sphere with 3D Depth -->
+  <circle cx="64" cy="65" r="37.5" fill="url(#globeSpherical)" />
+
+  <!-- Continents Map Texture (Clipped inside Globe) -->
+  <g clip-path="url(#globeBoundary)" fill="url(#continentFill)">
+    <!-- Europe, Mediterranean & Anatolia -->
+    <path d="M52 48 C55 45 59 46 63 45 C67 44 71 47 73 50 C76 49 80 52 83 55 C82 58 78 59 75 58 C72 61 68 62 65 60 C62 61 59 58 57 56 C53 57 50 54 52 48 Z" />
+    <!-- Africa continent shape -->
+    <path d="M54 59 C58 58 63 60 65 62 C68 64 69 68 68 73 C67 78 64 84 61 88 C58 91 56 89 54 84 C51 79 49 75 49 70 C48 64 51 60 54 59 Z" />
+    <!-- Asia landmass silhouette -->
+    <path d="M74 48 C77 45 82 44 87 47 C92 49 95 53 98 57 C95 62 90 64 86 63 C82 62 79 59 76 56 C74 53 73 50 74 48 Z" />
+    <!-- Americas hint on left curve -->
+    <path d="M30 46 C34 45 37 49 36 54 C35 58 32 63 30 67 C28 62 27 54 30 46 Z" />
+    <path d="M32 70 C35 71 37 76 36 81 C34 85 31 88 29 86 C28 81 29 74 32 70 Z" />
+  </g>
+
+  <!-- Spherical Glass Sheen Overlay -->
+  <ellipse cx="64" cy="46" rx="28" ry="16" fill="url(#glassSheen)" clip-path="url(#globeBoundary)" />
+
+  <!-- Metallic Silver Rim around Globe -->
+  <circle cx="64" cy="65" r="37.5" fill="none" stroke="url(#silverRim)" stroke-width="1.8" />
+
+  <!-- Crescent (Hilal) & Star (Yıldız) Emblem -->
+  <g filter="url(#shadowCrescent)">
+    <!-- Crescent Moon (Hilal) - Facing right with sharp elegant horns -->
+    <path
+      d="M57 43.5 
+         C44 43.5 33.5 53.5 33.5 66.5 
+         C33.5 79.5 44 89.5 57 89.5 
+         C64.5 89.5 71 86 75.5 80.5 
+         C61.5 83.5 48.5 74.5 48.5 66.5 
+         C48.5 58.5 61.5 49.5 75.5 52.5 
+         C71 47 64.5 43.5 57 43.5 Z"
+      fill="url(#silverHilal)"
+      stroke="#ffffff"
+      stroke-width="0.75"
+      stroke-linejoin="round"
+    />
+
+    <!-- Five-pointed Star (Yıldız) nestled inside the crescent -->
+    <!-- Pointing towards the crescent opening at the right (~25 deg tilt) -->
+    <polygon
+      points="
+        78,57.5 
+        80.8,63.2 
+        87.1,64.1 
+        82.5,68.6 
+        83.6,74.9 
+        78,71.9 
+        72.4,74.9 
+        73.5,68.6 
+        68.9,64.1 
+        75.2,63.2"
+      fill="url(#silverHilal)"
+      stroke="#ffffff"
+      stroke-width="0.75"
+      stroke-linejoin="round"
+    />
+
+    <!-- Subtle chrome bevel shine on Star -->
+    <polygon
+      points="78,57.5 78,71.9 72.4,74.9 73.5,68.6 68.9,64.1 75.2,63.2"
+      fill="#ffffff"
+      fill-opacity="0.3"
+    />
+  </g>
+</svg>

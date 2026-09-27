@@ -79,8 +79,27 @@ export const Header: React.FC<HeaderProps> = ({
     <header id="main-header" className="border-b border-slate-200 dark:border-[#232b35] bg-white dark:bg-[#14191f] sticky top-0 z-30 transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          {/* Left: MU Logo, Name & Prominent Army Switcher Dropdown */}
-          <div className="flex items-center gap-3.5 w-full sm:w-auto" ref={dropdownRef}>
+          {/* Left: Brand Emblem & Army Switcher Dropdown */}
+          <div className="flex items-center gap-3 w-full sm:w-auto" ref={dropdownRef}>
+            {/* App Brand Emblem (Flaming Crescent Globe) */}
+            <div className="flex items-center gap-2.5 shrink-0">
+              <img
+                src="/favicon.svg"
+                alt="War Era Donation Tracker"
+                className="w-9 h-9 rounded-full object-contain shrink-0 drop-shadow-md hover:scale-105 transition-transform"
+              />
+              <div className="hidden md:block text-left">
+                <div className="text-xs font-black tracking-wider uppercase text-slate-900 dark:text-slate-100 font-mono leading-tight">
+                  War Era
+                </div>
+                <div className="text-[10px] text-cyan-600 dark:text-cyan-400 font-bold tracking-tight">
+                  Donation Tracker
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden sm:block h-6 w-px bg-slate-200 dark:bg-[#27323e] mx-0.5 shrink-0" />
+
             {/* Active Army Avatar */}
             {currentAvatarUrl ? (
               <img
