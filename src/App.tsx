@@ -15,7 +15,7 @@ import {
   setCookie, 
   DEFAULT_MU_ID 
 } from './services/wareraApi';
-import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 export default function App() {
   const [muId, setMuId] = useState(() => {
@@ -89,10 +89,6 @@ export default function App() {
       localStorage.setItem('warera_theme', 'light');
     }
   }, [isDarkMode]);
-
-  const toggleDarkMode = () => {
-    setIsDarkMode((prev) => !prev);
-  };
 
   // Switch MU and instantly swap to cached state if available
   const handleMuIdChange = (newId: string) => {
@@ -170,106 +166,99 @@ export default function App() {
   }, [autoRefresh, fetchData]);
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-[#11151a] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
-      {/* Top Header */}
-      <Header
-        muData={muData}
-        currentMuId={muId}
-        onMuIdChange={handleMuIdChange}
-        isDarkMode={isDarkMode}
-        onToggleDarkMode={toggleDarkMode}
-        isLoading={isLoading || isRefreshing}
-        onRefresh={() => fetchData(true)}
-        autoRefresh={autoRefresh}
-        onToggleAutoRefresh={() => setAutoRefresh((prev) => !prev)}
-        lastUpdated={lastUpdated}
-        isLiveDonations={isLiveDonations}
-        hasApiToken={hasApiToken}
-      />
+    <div className="min-h-screen bg-[#141C21] text-white flex flex-col font-sans relative selection:bg-[#3282B8] selection:text-white">
+      {/* Ambient background glow matching the color scheme */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0F4C75]/20 via-transparent to-transparent pointer-events-none" />
+
+      {/* Top Header - Focused on Brand */}
+      <Header />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 relative z-10">
         {/* Error Alert */}
         {error && (
-          <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900/60 text-red-800 dark:text-red-200 flex items-center justify-between gap-3 text-sm">
+          <div className="mb-6 p-4 rounded-xl bg-[#182329] border border-[#3282B8]/40 text-white flex items-center justify-between gap-3 text-sm shadow-xl">
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-              <span>{error}</span>
+              <AlertCircle className="w-5 h-5 text-[#3282B8] shrink-0" />
+              <span className="text-white font-medium">{error}</span>
             </div>
             <button
               onClick={() => fetchData(true)}
-              className="px-3 py-1 rounded-lg bg-red-100 dark:bg-red-900/70 hover:bg-red-200 font-medium text-xs transition-colors shrink-0"
+              className="px-3 py-1 rounded-lg bg-[#0F4C75] hover:bg-[#3282B8] text-white font-semibold text-xs transition-colors shrink-0 cursor-pointer border border-[#3282B8]/40"
             >
-              Retry
+              Yeniden Dene
             </button>
           </div>
         )}
 
-        {/* Live Status Sub-bar */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-6 pb-2 border-b border-slate-200 dark:border-[#232b35] text-xs text-slate-500 dark:text-slate-400">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-slate-700 dark:text-slate-300">
-              Ülke & Ordu Bağış Takip Paneli
-            </span>
-            <span>•</span>
-            <span className="text-cyan-600 dark:text-cyan-400 font-medium">
-              Askerlerin Yaptığı Son 7 Bağış
-            </span>
-            <span className="text-slate-400 dark:text-slate-500 text-[11px]">
-              (Ülke Hazinesi ve Ordu Fonu Katkıları)
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isLiveDonations ? (
-              <span className="inline-flex items-center gap-1 text-cyan-600 dark:text-cyan-400 font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5 text-cyan-500" />
-                Live API Transactions Active
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
-                <Info className="w-3.5 h-3.5 text-cyan-500" />
-                Live Member Stats Synced
-              </span>
-            )}
-            {lastUpdated && (
-              <span>
-                Updated {new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </span>
-            )}
-          </div>
+        {/* Clean Section Title */}
+        <div className="mb-4 pb-2 border-b border-[#3282B8]/15 flex items-center justify-between">
+          <h1 className="text-xs font-bold text-[#BBE1FA] uppercase tracking-widest font-mono">
+            Ülke & Ordu Bağış Takip Paneli
+          </h1>
         </div>
 
-        {/* Top Metrics Cards */}
+        {/* Top 3-Column Equal Cards (Army Selector, Active Donors, Average per Soldier) */}
         <MetricsCards
           totalContributors={aggregated.totalContributors}
           totalMembers={players.length}
           averageDonation={aggregated.averageDonation}
+          muData={muData}
+          currentMuId={muId}
+          onMuIdChange={handleMuIdChange}
         />
 
-        {/* Sortable Player Donations Table */}
+        {/* Sortable Player Donations Table with PDF Export and Yenile */}
         <PlayerTable
           players={players}
           isLoading={isLoading}
+          isRefreshing={isRefreshing}
+          onRefresh={() => fetchData(true)}
           muName={muData?.name || 'Turkic Tribe'}
           muAvatarUrl={muData?.avatarUrl}
         />
       </main>
 
-      {/* Footer */}
-      <footer className="mt-auto border-t border-slate-200 dark:border-[#232b35] py-4 text-center text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-[#14191f]">
-        <div className="max-w-7xl mx-auto px-4 flex items-center justify-center">
-          <span>
-            Made by{' '}
-            <a
-              href="https://app.warera.io/user/68305110bbd6e3b4179f0110"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-semibold text-cyan-600 dark:text-cyan-400 hover:underline hover:text-cyan-500 transition-colors"
+      {/* Footer with Canlı Senkron, Son Güncelleme Saati, and Credit */}
+      <footer className="mt-auto border-t border-[#3282B8]/15 py-3.5 text-xs text-[#BBE1FA]/60 bg-[#141C21]/90 backdrop-blur-sm relative z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+          {/* Left: Canlı Senkron & Son Güncelleme Saati */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              id="footer-autorefresh-toggle"
+              type="button"
+              onClick={() => setAutoRefresh((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 text-xs text-[#BBE1FA]/80 hover:text-white transition-colors cursor-pointer"
+              title={autoRefresh ? 'Otomatik senkronizasyonu durdur' : 'Otomatik senkronizasyonu başlat'}
             >
-              Muhtarr
-            </a>
-          </span>
+              <span className={`w-2 h-2 rounded-full ${autoRefresh ? 'bg-[#3282B8] animate-pulse shadow-[0_0_8px_rgba(50,130,184,0.8)]' : 'bg-[#182329] border border-[#3282B8]/40'}`} />
+              <span className="font-medium font-mono">{autoRefresh ? 'Canlı Senkron' : 'Senkron Durdu'}</span>
+            </button>
+
+            {lastUpdated && (
+              <>
+                <span className="text-[#3282B8]/40">•</span>
+                <span className="text-[#BBE1FA]/60 font-mono">
+                  Son Güncelleme: {new Date(lastUpdated).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Right: Author / Credit */}
+          <div>
+            <span className="text-[#BBE1FA]/60">
+              Made by{' '}
+              <a
+                href="https://app.warera.io/user/68305110bbd6e3b4179f0110"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-white hover:text-[#BBE1FA] transition-colors"
+              >
+                Muhtarr
+              </a>
+            </span>
+          </div>
         </div>
       </footer>
     </div>

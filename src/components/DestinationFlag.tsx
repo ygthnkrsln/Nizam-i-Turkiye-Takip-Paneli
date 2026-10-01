@@ -201,11 +201,7 @@ export const DestinationBadge: React.FC<DestinationBadgeProps> = ({
     return (
       <span
         title={`${displayName} (${isArmy ? 'Ordu' : 'Ülke'})`}
-        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${
-          isArmy
-            ? 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-900 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-800'
-            : 'bg-red-50 dark:bg-red-950/70 text-red-900 dark:text-red-200 border border-red-200 dark:border-red-900'
-        }`}
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-[#1B262C] text-[#BBE1FA] border border-[#3282B8]/40"
       >
         {renderVisual('w-3.5 h-2.5', 'w-3.5 h-3.5')}
         <span>{isArmy ? 'Ordu' : displayName}</span>
@@ -220,26 +216,22 @@ export const DestinationBadge: React.FC<DestinationBadgeProps> = ({
       </div>
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate">
+          <span className="font-bold text-xs text-white truncate">
             {displayName}
           </span>
           <span
-            className={`text-[9.5px] font-bold px-1.5 py-0.2 rounded-md uppercase tracking-wide border ${
-              isArmy
-                ? 'bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800/80'
-                : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900/60'
-            }`}
+            className="text-[9.5px] font-bold px-1.5 py-0.2 rounded-md uppercase tracking-wide border bg-[#1B262C] text-[#BBE1FA] border-[#3282B8]/40"
           >
             {isArmy ? 'Ordu' : 'Ülke'}
           </span>
           {count !== undefined && count > 1 && (
-            <span className="text-[10px] text-slate-400 font-medium">
+            <span className="text-[10px] text-[#BBE1FA]/80 font-medium">
               ({count} bağış)
             </span>
           )}
         </div>
-        <div className="text-[10.5px] text-slate-400 dark:text-slate-400 flex items-center gap-1 mt-0.5">
-          {isArmy ? <Swords className="w-2.5 h-2.5 text-cyan-500 shrink-0" /> : null}
+        <div className="text-[10.5px] text-[#BBE1FA]/70 flex items-center gap-1 mt-0.5">
+          {isArmy ? <Swords className="w-2.5 h-2.5 text-[#3282B8] shrink-0" /> : null}
           <span className="truncate">{subLabel}</span>
         </div>
       </div>

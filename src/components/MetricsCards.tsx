@@ -1,75 +1,240 @@
-import React from 'react';
-import { Users, TrendingUp } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Users, TrendingUp, Shield, ChevronDown, Check, Building2 } from 'lucide-react';
 import { formatNumber } from '../utils/formatters';
+import { MilitaryUnitData, PRESET_MILITARY_UNITS } from '../types';
 
 interface MetricsCardsProps {
   totalContributors: number;
   totalMembers: number;
   averageDonation: number;
+  muData: MilitaryUnitData | null;
+  currentMuId: string;
+  onMuIdChange: (newId: string) => void;
 }
 
 export const MetricsCards: React.FC<MetricsCardsProps> = ({
   totalContributors,
   totalMembers,
   averageDonation,
+  muData,
+  currentMuId,
+  onMuIdChange,
 }) => {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Close dropdown on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsDropdownOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const activePreset = PRESET_MILITARY_UNITS.find((m) => m.id === currentMuId);
+  const currentDisplayName = muData?.name || activePreset?.name || 'Turkic Tribe';
+  const currentAvatarUrl = muData?.avatarUrl || activePreset?.avatarUrl;
+
+  const handleSelectMu = (id: string) => {
+    if (id !== currentMuId) {
+      onMuIdChange(id);
+    }
+    setIsDropdownOpen(false);
+  };
+
   const participationRate = totalMembers > 0 ? Math.round((totalContributors / totalMembers) * 100) : 0;
 
   return (
-    <div id="metrics-summary-grid" className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-      {/* 1. Active Donors */}
+    <div id="metrics-summary-grid" className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 items-stretch">
+      {/* 1. Askeri Birlik (Ordu) Seçimi */}
+      <div
+        id="card-mu-selector"
+        ref={dropdownRef}
+        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-[#3282B8]/25 hover:border-[#3282B8]/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full relative shadow-lg shadow-black/25 group"
+      >
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono">
+              Askeri Birlik (Ordu)
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-[#0F4C75]/25 text-[#3282B8] flex items-center justify-center border border-[#3282B8]/30 group-hover:border-[#3282B8]/60 transition-colors">
+              <Shield className="w-4 h-4" />
+            </div>
+          </div>
+
+          {/* Interactive Trigger Button */}
+          <button
+            id="mu-dropdown-trigger"
+            type="button"
+            onClick={() => setIsDropdownOpen((prev) => !prev)}
+            className="w-full flex items-center justify-between p-2.5 rounded-lg border border-[#3282B8]/30 hover:border-[#3282B8]/60 bg-[#141C21]/80 hover:bg-[#141C21] transition-all text-left cursor-pointer shadow-inner"
+            title="Başka bir ordu seçin"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              {currentAvatarUrl ? (
+                <img
+                  src={currentAvatarUrl}
+                  alt={currentDisplayName}
+                  className="w-9 h-9 rounded-lg object-cover border border-[#3282B8]/40 shrink-0 shadow-sm"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-lg bg-[#0F4C75]/30 flex items-center justify-center text-[#3282B8] shrink-0 border border-[#3282B8]/40">
+                  <Shield className="w-4 h-4" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-white group-hover:text-[#BBE1FA] transition-colors truncate">
+                  {currentDisplayName}
+                </div>
+                <div className="text-[11px] text-[#BBE1FA]/60 font-mono">
+                  {totalMembers} Asker • Değiştir
+                </div>
+              </div>
+            </div>
+
+            <ChevronDown
+              className={`w-4 h-4 text-[#BBE1FA]/70 transition-transform duration-200 ml-1 shrink-0 ${
+                isDropdownOpen ? 'rotate-180 text-white' : ''
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Dropdown Menu */}
+        {isDropdownOpen && (
+          <div
+            id="mu-dropdown-menu"
+            className="absolute left-0 right-0 top-full mt-2 bg-[#182329] rounded-xl border border-[#3282B8]/50 p-2 shadow-2xl z-50 max-h-72 overflow-y-auto backdrop-blur-xl"
+          >
+            <div className="px-3 py-1.5 border-b border-[#3282B8]/20 mb-1 flex items-center justify-between">
+              <span className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                <Building2 className="w-3.5 h-3.5 text-[#3282B8]" />
+                Kayıtlı Ordular
+              </span>
+              <span className="text-[10px] text-[#BBE1FA]/70 font-mono">
+                {PRESET_MILITARY_UNITS.length} Birlik
+              </span>
+            </div>
+
+            <div className="space-y-1">
+              {PRESET_MILITARY_UNITS.map((unit) => {
+                const isSelected = unit.id === currentMuId;
+                return (
+                  <button
+                    key={unit.id}
+                    id={`select-mu-${unit.name.toLowerCase().replace(/\s+/g, '-')}`}
+                    type="button"
+                    onClick={() => handleSelectMu(unit.id)}
+                    className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#0F4C75]/60 text-white border border-[#3282B8]/60 shadow-sm'
+                        : 'hover:bg-[#141C21] text-[#BBE1FA] hover:text-white border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <img
+                        src={unit.avatarUrl}
+                        alt={unit.name}
+                        className="w-7 h-7 rounded-md object-cover border border-[#3282B8]/30 shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold truncate">
+                          {unit.name}
+                        </div>
+                        {unit.isDefault && (
+                          <span className="text-[9px] text-[#BBE1FA]/60 font-mono">
+                            Varsayılan Birlik
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {isSelected && (
+                      <div className="w-4 h-4 rounded-full bg-[#3282B8] text-white flex items-center justify-center shrink-0">
+                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 2. Bağış Yapan Askerler */}
       <div
         id="metric-active-donors"
-        className="bg-white dark:bg-[#161c23] border border-slate-200 dark:border-[#27323e] rounded-xl p-4.5 transition-colors duration-200"
+        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-[#3282B8]/25 hover:border-[#3282B8]/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
       >
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            Bağış Yapan Askerler
-          </span>
-          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-[#12161b] text-cyan-600 dark:text-cyan-400 flex items-center justify-center border border-slate-200 dark:border-[#27323e]">
-            <Users className="w-4 h-4" />
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono">
+              Bağış Yapan Askerler
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-[#0F4C75]/25 text-[#3282B8] flex items-center justify-center border border-[#3282B8]/30 group-hover:border-[#3282B8]/60 transition-colors">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2 mt-1">
+            <div className="text-3xl font-extrabold text-white font-mono tracking-tight">
+              {totalContributors}
+            </div>
+            <span className="text-xs text-[#BBE1FA]/70 font-mono">
+              / {totalMembers} asker ({participationRate}%)
+            </span>
           </div>
         </div>
-        <div className="flex items-baseline gap-2">
-          <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-            {totalContributors}
+
+        <div>
+          <div className="w-full bg-[#141C21] rounded-full h-2 mt-3 overflow-hidden border border-[#3282B8]/15">
+            <div
+              className="bg-gradient-to-r from-[#0F4C75] via-[#3282B8] to-[#BBE1FA] h-2 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(50,130,184,0.4)]"
+              style={{ width: `${Math.min(100, participationRate)}%` }}
+            />
           </div>
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-            / {totalMembers} asker ({participationRate}%)
-          </span>
-        </div>
-        <div className="w-full bg-slate-100 dark:bg-[#11151a] rounded-full h-1.5 mt-2.5 overflow-hidden">
-          <div
-            className="bg-cyan-600 dark:bg-cyan-500 h-1.5 rounded-full transition-all duration-300"
-            style={{ width: `${Math.min(100, participationRate)}%` }}
-          />
         </div>
       </div>
 
-      {/* 2. Average per Soldier */}
+      {/* 3. Asker Başı Ortalama Bağış */}
       <div
         id="metric-avg-donation"
-        className="bg-white dark:bg-[#161c23] border border-slate-200 dark:border-[#27323e] rounded-xl p-4.5 transition-colors duration-200"
+        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-[#3282B8]/25 hover:border-[#3282B8]/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
       >
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            Asker Başı Ortalama Bağış
-          </span>
-          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-[#12161b] text-cyan-600 dark:text-cyan-400 flex items-center justify-center border border-slate-200 dark:border-[#27323e]">
-            <TrendingUp className="w-4 h-4" />
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono">
+              Asker Başı Ortalama Bağış
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-[#0F4C75]/25 text-[#3282B8] flex items-center justify-center border border-[#3282B8]/30 group-hover:border-[#3282B8]/60 transition-colors">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2 mt-1">
+            <div className="text-3xl font-extrabold text-white font-mono tracking-tight">
+              {formatNumber(averageDonation)}
+            </div>
+            <span className="text-xs font-bold text-[#BBE1FA] bg-[#0F4C75]/40 px-2 py-0.5 rounded border border-[#3282B8]/30 uppercase font-mono tracking-wider">
+              Gold
+            </span>
           </div>
         </div>
-        <div className="flex items-baseline gap-2">
-          <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-            {formatNumber(averageDonation)}
-          </div>
-          <span className="text-xs font-semibold text-cyan-600 dark:text-cyan-400">
-            Gold
-          </span>
-        </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-          Aktif askerlerin ülke ve ordu fonlarına yaptığı ortalama bağış miktarı
-        </p>
       </div>
     </div>
   );
