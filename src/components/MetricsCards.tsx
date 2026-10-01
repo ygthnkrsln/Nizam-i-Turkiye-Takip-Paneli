@@ -1,21 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Users, TrendingUp, Shield, ChevronDown, Check, Building2 } from 'lucide-react';
-import { formatNumber } from '../utils/formatters';
+import { Shield, ChevronDown, Check, Building2, ShieldCheck, Cpu } from 'lucide-react';
 import { MilitaryUnitData, PRESET_MILITARY_UNITS } from '../types';
 
 interface MetricsCardsProps {
-  totalContributors: number;
   totalMembers: number;
-  averageDonation: number;
+  activePlayers: number;
+  totalActiveFactories: number;
+  totalAllFactories: number;
+  totalActiveEnginePower: number;
   muData: MilitaryUnitData | null;
   currentMuId: string;
   onMuIdChange: (newId: string) => void;
 }
 
 export const MetricsCards: React.FC<MetricsCardsProps> = ({
-  totalContributors,
   totalMembers,
-  averageDonation,
+  activePlayers,
+  totalActiveFactories,
+  totalAllFactories,
+  totalActiveEnginePower,
   muData,
   currentMuId,
   onMuIdChange,
@@ -56,10 +59,10 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
     setIsDropdownOpen(false);
   };
 
-  const participationRate = totalMembers > 0 ? Math.round((totalContributors / totalMembers) * 100) : 0;
+  const activeRate = totalMembers > 0 ? Math.round((activePlayers / totalMembers) * 100) : 0;
 
   return (
-    <div id="metrics-summary-grid" className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 items-stretch">
+    <div id="metrics-summary-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-stretch">
       {/* 1. Askeri Birlik (Ordu) Seçimi */}
       <div
         id="card-mu-selector"
@@ -98,17 +101,23 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
                 </div>
               )}
               <div className="min-w-0">
-                <div className="text-sm font-bold text-white group-hover:text-[#BBE1FA] transition-colors truncate">
+                <div className="text-sm font-bold text-white truncate group-hover:text-[#BBE1FA] transition-colors">
                   {currentDisplayName}
                 </div>
-                <div className="text-[11px] text-[#BBE1FA]/60 font-mono">
-                  {totalMembers} Asker • Değiştir
+                <div className="text-[11px] text-[#BBE1FA]/60 font-mono flex items-center gap-1.5 mt-0.5">
+                  <span>{totalMembers} Asker</span>
+                  {muData?.level && (
+                    <>
+                      <span>•</span>
+                      <span>Lv. {muData.level}</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
 
             <ChevronDown
-              className={`w-4 h-4 text-[#BBE1FA]/70 transition-transform duration-200 ml-1 shrink-0 ${
+              className={`w-4 h-4 text-[#3282B8] transition-transform duration-200 shrink-0 ml-2 ${
                 isDropdownOpen ? 'rotate-180 text-white' : ''
               }`}
             />
@@ -178,26 +187,26 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
         )}
       </div>
 
-      {/* 2. Bağış Yapan Askerler */}
+      {/* 2. Aktif Asker */}
       <div
-        id="metric-active-donors"
+        id="metric-active-soldiers"
         className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-[#3282B8]/25 hover:border-[#3282B8]/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
       >
         <div>
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono">
-              Bağış Yapan Askerler
+              Aktif Asker
             </span>
-            <div className="w-8 h-8 rounded-lg bg-[#0F4C75]/25 text-[#3282B8] flex items-center justify-center border border-[#3282B8]/30 group-hover:border-[#3282B8]/60 transition-colors">
-              <Users className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-lg bg-[#0F4C75]/25 text-emerald-400 flex items-center justify-center border border-[#3282B8]/30 group-hover:border-[#3282B8]/60 transition-colors">
+              <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-2 mt-1">
             <div className="text-3xl font-extrabold text-white font-mono tracking-tight">
-              {totalContributors}
+              {activePlayers}
             </div>
             <span className="text-xs text-[#BBE1FA]/70 font-mono">
-              / {totalMembers} asker ({participationRate}%)
+              / {totalMembers} asker ({activeRate}%)
             </span>
           </div>
         </div>
@@ -205,35 +214,68 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
         <div>
           <div className="w-full bg-[#141C21] rounded-full h-2 mt-3 overflow-hidden border border-[#3282B8]/15">
             <div
-              className="bg-gradient-to-r from-[#0F4C75] via-[#3282B8] to-[#BBE1FA] h-2 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(50,130,184,0.4)]"
-              style={{ width: `${Math.min(100, participationRate)}%` }}
+              className="bg-gradient-to-r from-[#0F4C75] via-emerald-500 to-emerald-300 h-2 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+              style={{ width: `${Math.min(100, activeRate)}%` }}
             />
           </div>
         </div>
       </div>
 
-      {/* 3. Asker Başı Ortalama Bağış */}
+      {/* 3. Aktif Fabrika */}
       <div
-        id="metric-avg-donation"
+        id="metric-active-factories"
         className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-[#3282B8]/25 hover:border-[#3282B8]/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
       >
         <div>
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono">
-              Asker Başı Ortalama Bağış
+              Aktif Fabrika
             </span>
             <div className="w-8 h-8 rounded-lg bg-[#0F4C75]/25 text-[#3282B8] flex items-center justify-center border border-[#3282B8]/30 group-hover:border-[#3282B8]/60 transition-colors">
-              <TrendingUp className="w-4 h-4" />
+              <Building2 className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-2 mt-1">
             <div className="text-3xl font-extrabold text-white font-mono tracking-tight">
-              {formatNumber(averageDonation)}
+              {totalActiveFactories}
             </div>
-            <span className="text-xs font-bold text-[#BBE1FA] bg-[#0F4C75]/40 px-2 py-0.5 rounded border border-[#3282B8]/30 uppercase font-mono tracking-wider">
-              Gold
+            <span className="text-xs text-[#BBE1FA]/70 font-mono">
+              ({totalAllFactories} Toplam)
             </span>
           </div>
+        </div>
+
+        <div className="text-[11px] text-[#BBE1FA]/60 font-mono mt-3">
+          Oyuncuların beceri limitlerine göre aktif olan fabrikalar
+        </div>
+      </div>
+
+      {/* 4. Aktif Motor Gücü */}
+      <div
+        id="metric-active-engine-power"
+        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-[#3282B8]/25 hover:border-[#3282B8]/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
+      >
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono">
+              Aktif Motor Gücü
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-[#0F4C75]/25 text-amber-300 flex items-center justify-center border border-[#3282B8]/30 group-hover:border-[#3282B8]/60 transition-colors">
+              <Cpu className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2 mt-1">
+            <div className="text-3xl font-extrabold text-white font-mono tracking-tight">
+              {totalActiveEnginePower}
+            </div>
+            <span className="text-xs font-bold text-amber-300 bg-[#0F4C75]/40 px-2 py-0.5 rounded border border-[#3282B8]/30 uppercase font-mono tracking-wider">
+              Lv
+            </span>
+          </div>
+        </div>
+
+        <div className="text-[11px] text-[#BBE1FA]/60 font-mono mt-3">
+          Aktif fabrikaların toplam otomasyon motor seviyesi
         </div>
       </div>
     </div>

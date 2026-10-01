@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Header } from './components/Header';
 import { MetricsCards } from './components/MetricsCards';
 import { PlayerTable } from './components/PlayerTable';
+import { ArmyStatsTable } from './components/ArmyStatsTable';
+import { CountryStatsPanel } from './components/CountryStatsPanel';
 import { MilitaryUnitData, PlayerStats, ApiResponse } from './types';
 import { 
   fetchMilitaryUnitData, 
@@ -18,6 +20,7 @@ import {
 import { AlertCircle } from 'lucide-react';
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState<'donations' | 'armyStats' | 'countryStats'>('donations');
   const [muId, setMuId] = useState(() => {
     return getCookie('warera_last_mu') || DEFAULT_MU_ID;
   });
@@ -165,13 +168,42 @@ export default function App() {
     };
   }, [autoRefresh, fetchData]);
 
+  // Active army & factory summary metrics for top cards
+  const armyMetrics = useMemo(() => {
+    let activePlayers = 0;
+    let totalActiveFactories = 0;
+    let totalAllFactories = 0;
+    let totalActiveEnginePower = 0;
+
+    players.forEach((p) => {
+      const isAct = p.isActive ?? Boolean(
+        p.lastActive && Date.now() - new Date(p.lastActive).getTime() <= 3 * 24 * 3600 * 1000
+      );
+      if (isAct) activePlayers++;
+
+      const activeFCount = p.factoryCount ?? p.activeFactoryCount ?? (p.factories?.length || 0);
+      const allFCount = p.totalOwnedFactories ?? (p.factories?.length || activeFCount);
+
+      totalActiveFactories += activeFCount;
+      totalAllFactories += allFCount;
+      totalActiveEnginePower += p.totalAutomatedLevel || 0;
+    });
+
+    return {
+      activePlayers,
+      totalActiveFactories,
+      totalAllFactories,
+      totalActiveEnginePower,
+    };
+  }, [players]);
+
   return (
     <div className="min-h-screen bg-[#141C21] text-white flex flex-col font-sans relative selection:bg-[#3282B8] selection:text-white">
       {/* Ambient background glow matching the color scheme */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0F4C75]/20 via-transparent to-transparent pointer-events-none" />
 
-      {/* Top Header - Focused on Brand */}
-      <Header />
+      {/* Top Header - With Tab Switcher (Bağış Takip Paneli & Ordu İstatistikleri) */}
+      <Header activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 relative z-10">
@@ -191,32 +223,41 @@ export default function App() {
           </div>
         )}
 
-        {/* Clean Section Title */}
-        <div className="mb-4 pb-2 border-b border-[#3282B8]/15 flex items-center justify-between">
-          <h1 className="text-xs font-bold text-[#BBE1FA] uppercase tracking-widest font-mono">
-            Ülke & Ordu Bağış Takip Paneli
-          </h1>
-        </div>
+        {/* Top 4-Column Equal Cards (Army Selector, Active Soldiers, Active Factories, Active Engine Power) - shown in army/donation tabs */}
+        {activeTab !== 'countryStats' && (
+          <MetricsCards
+            totalMembers={players.length}
+            activePlayers={armyMetrics.activePlayers}
+            totalActiveFactories={armyMetrics.totalActiveFactories}
+            totalAllFactories={armyMetrics.totalAllFactories}
+            totalActiveEnginePower={armyMetrics.totalActiveEnginePower}
+            muData={muData}
+            currentMuId={muId}
+            onMuIdChange={handleMuIdChange}
+          />
+        )}
 
-        {/* Top 3-Column Equal Cards (Army Selector, Active Donors, Average per Soldier) */}
-        <MetricsCards
-          totalContributors={aggregated.totalContributors}
-          totalMembers={players.length}
-          averageDonation={aggregated.averageDonation}
-          muData={muData}
-          currentMuId={muId}
-          onMuIdChange={handleMuIdChange}
-        />
-
-        {/* Sortable Player Donations Table with PDF Export and Yenile */}
-        <PlayerTable
-          players={players}
-          isLoading={isLoading}
-          isRefreshing={isRefreshing}
-          onRefresh={() => fetchData(true)}
-          muName={muData?.name || 'Turkic Tribe'}
-          muAvatarUrl={muData?.avatarUrl}
-        />
+        {/* Tab 1: Bağış Takip Paneli | Tab 2: Ordu İstatistikleri | Tab 3: Ülke İstatistikleri */}
+        {activeTab === 'donations' ? (
+          <PlayerTable
+            players={players}
+            isLoading={isLoading}
+            isRefreshing={isRefreshing}
+            onRefresh={() => fetchData(true)}
+            muName={muData?.name || 'Turkic Tribe'}
+            muAvatarUrl={muData?.avatarUrl}
+          />
+        ) : activeTab === 'armyStats' ? (
+          <ArmyStatsTable
+            players={players}
+            isLoading={isLoading}
+            isRefreshing={isRefreshing}
+            onRefresh={() => fetchData(true)}
+            muName={muData?.name || 'Turkic Tribe'}
+          />
+        ) : (
+          <CountryStatsPanel />
+        )}
       </main>
 
       {/* Footer with Canlı Senkron, Son Güncelleme Saati, and Credit */}

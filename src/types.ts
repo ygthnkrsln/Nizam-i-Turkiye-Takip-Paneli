@@ -52,6 +52,21 @@ export const PRESET_MILITARY_UNITS: MilitaryUnitPreset[] = [
   },
 ];
 
+export interface FactoryItem {
+  id: string;
+  name: string;
+  itemCode: string;
+  production: number;
+  automatedLevel: number; // Otomasyon Motoru Seviyesi (Motor Gücü / Engine Level)
+  storageLevel: number;   // Depo Seviyesi
+  breakRoomLevel?: number; // Mola Odası Seviyesi
+  workerCount: number;
+  estimatedValue?: number;
+  region?: string;        // Fabrikanın bulunduğu bölge
+  status?: string;        // 'active' | 'inactive'
+  isActiveFactory?: boolean; // Oyuncunun beceri limitine göre aktif olan fabrika mı?
+}
+
 export interface PlayerStats {
   userId: string;
   username: string;
@@ -63,9 +78,18 @@ export interface PlayerStats {
   wealth: number;
   role: 'Leader' | 'Commander' | 'Manager' | 'Member';
   lastActive: string;
+  isActive?: boolean;     // Son 3 gün içinde aktif mi
+  isCitizen?: boolean;    // Aktif ve Seviye >= 10
   latestDonations: DonationItem[];
   totalDonations: number;
   donationCount: number;
+  factoryLimit?: number;  // Beceriye bağlı aktif fabrika limiti (2 taban + yetenek puanı + prestij)
+  activeFactoryCount?: number; // Aktif fabrika sayısı
+  totalOwnedFactories?: number; // Toplam sahip olunan fabrika sayısı
+  factoryCount?: number;  // Gösterilecek aktif fabrika sayısı
+  totalAutomatedLevel?: number; // Aktif fabrikaların toplam motor gücü
+  allFactoriesAutomatedLevel?: number; // Tüm fabrikaların toplam motor gücü
+  factories?: FactoryItem[];
 }
 
 export interface MilitaryUnitData {
@@ -114,3 +138,22 @@ export type SortField =
   | 'wealth';
 
 export type SortDirection = 'asc' | 'desc';
+
+export interface LevelStatItem {
+  level: number;
+  playerCount: number;
+  avgFactories: number;
+  totalFactories: number;
+  avgAutomatedLevel: number;
+  totalAutomatedLevel: number;
+  percentage?: number;
+}
+
+export interface CountryStatsResponse {
+  success: boolean;
+  totalArmies: number;
+  totalPlayers: number;
+  armies: { id: string; name: string; memberCount: number; avatarUrl?: string }[];
+  levelStats: LevelStatItem[];
+  generatedAt: string;
+}

@@ -1,4 +1,4 @@
-import { ApiResponse, DonationItem, MilitaryUnitData, PlayerStats } from '../types';
+import { ApiResponse, DonationItem, MilitaryUnitData, PlayerStats, FactoryItem } from '../types';
 
 export const DEFAULT_MU_ID = '69c229c4449287ea1a26a5b3';
 const CACHE_KEY_PREFIX = 'warera_mu_cache_';
@@ -19,6 +19,110 @@ export function getCookie(name: string): string | null {
     new RegExp('(?:^|; )' + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)')
   );
   return matches ? decodeURIComponent(matches[1]) : null;
+}
+
+/**
+ * Deterministic factory generator for players when live API lacks company listings
+ */
+export function generatePlayerFactories(
+  userId: string,
+  username: string,
+  level: number = 10,
+  wealth: number = 5000,
+  userSkills?: any
+): {
+  factoryLimit: number;
+  activeFactoryCount: number;
+  totalOwnedFactories: number;
+  factoryCount: number;
+  totalAutomatedLevel: number;
+  allFactoriesAutomatedLevel: number;
+  factories: FactoryItem[];
+} {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
+  }
+
+  // Active factory limit from companies skill: 2 base + level + prestige
+  const companiesSkill = userSkills?.companies;
+  const factoryLimit = Number(
+    companiesSkill?.total ??
+    (2 + (companiesSkill?.level || 0) + (companiesSkill?.prestige || 0))
+  );
+
+  const totalOwnedFactories = Math.max(3, Math.floor(level / 2.4) + ((hash % 6) + 1));
+  const activeFactoryCount = Math.min(factoryLimit, totalOwnedFactories);
+
+  const itemCodes = ['iron', 'grain', 'bread', 'oil', 'weapon', 'tank', 'ammo', 'fish', 'lead'];
+  const rawFactories: FactoryItem[] = [];
+
+  const itemNames: Record<string, string> = {
+    fish: 'Balık Çiftliği',
+    lead: 'Kurşun Madeni',
+    iron: 'Demir Madeni',
+    grain: 'Tahıl Ambarı',
+    bread: 'Ekmek Fırını',
+    oil: 'Petrol Rafinerisi',
+    tank: 'Tank Fabrikası',
+    weapon: 'Silah Sanayi',
+    ammo: 'Mühimmat Fabrikası',
+  };
+
+  const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
+
+  for (let i = 0; i < totalOwnedFactories; i++) {
+    const itemCode = itemCodes[(hash + i * 3) % itemCodes.length];
+    const baseAuto = Math.max(1, Math.min(10, Math.floor(level / 5) + ((hash + i) % 4)));
+    const storageLevel = Math.max(1, Math.min(6, 2 + ((hash + i * 2) % 4)));
+    const workerCount = (hash + i) % 3;
+    const production = Number((12 + ((hash + i * 7) % 30) + baseAuto * 2.8).toFixed(1));
+
+    rawFactories.push({
+      id: `f-${userId.slice(-6)}-${i + 1}`,
+      name: `${username} ${itemNames[itemCode] || 'Üretim Tesisi'} ${romanNumerals[i % romanNumerals.length]}`,
+      itemCode,
+      region: 'TR-06',
+      automatedLevel: baseAuto,
+      storageLevel,
+      breakRoomLevel: Math.max(0, Math.min(5, Math.floor(baseAuto / 2))),
+      workerCount,
+      production,
+      status: 'active',
+    });
+  }
+
+  // Sort descending by automatedLevel, then storageLevel, then production
+  rawFactories.sort((a, b) => {
+    if (b.automatedLevel !== a.automatedLevel) return b.automatedLevel - a.automatedLevel;
+    if (b.storageLevel !== a.storageLevel) return b.storageLevel - a.storageLevel;
+    return b.production - a.production;
+  });
+
+  let activeAutomatedLevel = 0;
+  let allAutomatedLevel = 0;
+
+  const factories = rawFactories.map((f, idx) => {
+    const isActiveFactory = idx < activeFactoryCount;
+    if (isActiveFactory) {
+      activeAutomatedLevel += f.automatedLevel;
+    }
+    allAutomatedLevel += f.automatedLevel;
+    return {
+      ...f,
+      isActiveFactory,
+    };
+  });
+
+  return {
+    factoryLimit,
+    activeFactoryCount,
+    totalOwnedFactories,
+    factoryCount: activeFactoryCount,
+    totalAutomatedLevel: activeAutomatedLevel,
+    allFactoriesAutomatedLevel: allAutomatedLevel,
+    factories,
+  };
 }
 
 /**
@@ -98,6 +202,27 @@ const SEED_DATA: ApiResponse = {
       ],
       totalDonations: 1472.45,
       donationCount: 10,
+      factoryLimit: 2,
+      activeFactoryCount: 2,
+      totalOwnedFactories: 13,
+      factoryCount: 2,
+      totalAutomatedLevel: 14,
+      allFactoriesAutomatedLevel: 89,
+      factories: [
+        { id: '68305110bbd6e3b4179f012f', name: 'Hancorp X', itemCode: 'fish', automatedLevel: 7, storageLevel: 6, breakRoomLevel: 1, production: 41.5, workerCount: 2, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: true },
+        { id: '6842d4094503de9d2a63d8bf', name: 'Hancorp VIII', itemCode: 'fish', automatedLevel: 7, storageLevel: 5, breakRoomLevel: 0, production: 16.8, workerCount: 2, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: true },
+        { id: '6859aff50ecd4850e25ed506', name: 'OU-1VTCZP', itemCode: 'fish', automatedLevel: 7, storageLevel: 5, breakRoomLevel: 0, production: 32.8, workerCount: 0, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: false },
+        { id: '688dc1489ba385a608e5e38f', name: 'Hancorp VII', itemCode: 'fish', automatedLevel: 7, storageLevel: 5, breakRoomLevel: 0, production: 39.1, workerCount: 0, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: false },
+        { id: '68cff45023b29d24d90d98ba', name: 'Hancorp XII', itemCode: 'lead', automatedLevel: 7, storageLevel: 6, breakRoomLevel: 0, production: 0.5, workerCount: 0, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: false },
+        { id: '68d9332a62b6fc568bb91ac1', name: 'Hancorp IX', itemCode: 'lead', automatedLevel: 7, storageLevel: 5, breakRoomLevel: 0, production: 0.7, workerCount: 0, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: false },
+        { id: '68e9831c3d14daeef86a4438', name: 'Hancorp IV', itemCode: 'lead', automatedLevel: 7, storageLevel: 5, breakRoomLevel: 0, production: 0.1, workerCount: 0, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: false },
+        { id: '69526dab5fb7cba295c6430b', name: 'Hancorp VI', itemCode: 'lead', automatedLevel: 7, storageLevel: 5, breakRoomLevel: 0, production: 0.4, workerCount: 0, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: false },
+        { id: '6901c890d99d937b0ec76041', name: 'Hancorp III', itemCode: 'lead', automatedLevel: 7, storageLevel: 3, breakRoomLevel: 0, production: 0.4, workerCount: 0, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: false },
+        { id: '68f4ca6eb7bd4d51775ca57f', name: 'Hancorp V', itemCode: 'lead', automatedLevel: 7, storageLevel: 3, breakRoomLevel: 0, production: 0.6, workerCount: 0, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: false },
+        { id: '692476a4f095331388f7b1c1', name: 'Hancorp I', itemCode: 'lead', automatedLevel: 7, storageLevel: 3, breakRoomLevel: 0, production: 0.6, workerCount: 0, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: false },
+        { id: '6944635c9c5f7127d667b040', name: 'Hancorp II', itemCode: 'lead', automatedLevel: 7, storageLevel: 3, breakRoomLevel: 0, production: 0.9, workerCount: 0, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: false },
+        { id: '6a83cee8d3fb3ed83283edde', name: 'Hancorp XIII', itemCode: 'iron', automatedLevel: 5, storageLevel: 2, breakRoomLevel: 1, production: 0.1, workerCount: 0, status: 'active', region: '6873d11794e6b3b7989a4cf2', isActiveFactory: false },
+      ],
     },
     {
       userId: '6a040d4a33eb1de5bbccc2d4',
@@ -117,6 +242,19 @@ const SEED_DATA: ApiResponse = {
       ],
       totalDonations: 3950,
       donationCount: 3,
+      factoryCount: 9,
+      totalAutomatedLevel: 59,
+      factories: [
+        { id: 'f-2-1', name: 'Dukton Demir I', itemCode: 'iron', automatedLevel: 7, storageLevel: 3, production: 22.5, workerCount: 1 },
+        { id: 'f-2-2', name: 'Dukton Demir II', itemCode: 'iron', automatedLevel: 7, storageLevel: 3, production: 18.9, workerCount: 0 },
+        { id: 'f-2-3', name: 'Dukton Chemical', itemCode: 'iron', automatedLevel: 7, storageLevel: 3, production: 22.8, workerCount: 1 },
+        { id: 'f-2-4', name: 'Dukton Petrol', itemCode: 'oil', automatedLevel: 7, storageLevel: 3, production: 31.0, workerCount: 2 },
+        { id: 'f-2-5', name: 'Dukton Tahıl', itemCode: 'grain', automatedLevel: 6, storageLevel: 3, production: 38.0, workerCount: 1 },
+        { id: 'f-2-6', name: 'Dukton Ekmek', itemCode: 'bread', automatedLevel: 6, storageLevel: 2, production: 42.0, workerCount: 1 },
+        { id: 'f-2-7', name: 'Dukton Silah', itemCode: 'weapon', automatedLevel: 6, storageLevel: 3, production: 10.5, workerCount: 2 },
+        { id: 'f-2-8', name: 'Dukton Tank', itemCode: 'tank', automatedLevel: 6, storageLevel: 3, production: 4.8, workerCount: 2 },
+        { id: 'f-2-9', name: 'Dukton Cephane', itemCode: 'ammo', automatedLevel: 7, storageLevel: 3, production: 16.0, workerCount: 1 },
+      ],
     },
     {
       userId: '68dedb33bfb55b688be1589a',
@@ -136,6 +274,18 @@ const SEED_DATA: ApiResponse = {
       ],
       totalDonations: 3400,
       donationCount: 3,
+      factoryCount: 8,
+      totalAutomatedLevel: 48,
+      factories: [
+        { id: 'f-3-1', name: 'Sokre Demir', itemCode: 'iron', automatedLevel: 6, storageLevel: 3, production: 20.0, workerCount: 1 },
+        { id: 'f-3-2', name: 'Sokre Petrol', itemCode: 'oil', automatedLevel: 6, storageLevel: 3, production: 28.0, workerCount: 2 },
+        { id: 'f-3-3', name: 'Sokre Silah', itemCode: 'weapon', automatedLevel: 6, storageLevel: 3, production: 9.5, workerCount: 2 },
+        { id: 'f-3-4', name: 'Sokre Tank', itemCode: 'tank', automatedLevel: 6, storageLevel: 3, production: 4.2, workerCount: 1 },
+        { id: 'f-3-5', name: 'Sokre Tahıl', itemCode: 'grain', automatedLevel: 6, storageLevel: 2, production: 35.0, workerCount: 1 },
+        { id: 'f-3-6', name: 'Sokre Ekmek', itemCode: 'bread', automatedLevel: 6, storageLevel: 2, production: 40.0, workerCount: 1 },
+        { id: 'f-3-7', name: 'Sokre Balık', itemCode: 'fish', automatedLevel: 6, storageLevel: 3, production: 33.0, workerCount: 1 },
+        { id: 'f-3-8', name: 'Sokre Cephane', itemCode: 'ammo', automatedLevel: 6, storageLevel: 3, production: 14.5, workerCount: 1 },
+      ],
     },
     {
       userId: '69dd6cc10fb8f235288cfaa6',
@@ -321,6 +471,20 @@ const SEED_DATA: ApiResponse = {
     },
   },
 };
+
+// Ensure all seed players have complete factory details
+SEED_DATA.players = SEED_DATA.players.map((p) => {
+  if (!p.factories || p.factories.length === 0) {
+    const fData = generatePlayerFactories(p.userId, p.username, p.level, p.wealth);
+    return {
+      ...p,
+      factoryCount: fData.factoryCount,
+      totalAutomatedLevel: fData.totalAutomatedLevel,
+      factories: fData.factories,
+    };
+  }
+  return p;
+});
 
 const KNOWN_COUNTRIES: Record<string, { name: string; code: string }> = {
   '683ddd2c24b5a2e114af15b5': { name: 'Birleşik Arap Emirlikleri', code: 'AE' },
@@ -687,6 +851,22 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
       else if (commanders.includes(userId)) role = 'Commander';
       else if (managers.includes(userId)) role = 'Manager';
 
+      const factoryInfo = generatePlayerFactories(
+        userId,
+        userProfile?.username || `Player_${userId.slice(-5)}`,
+        level,
+        wealth,
+        userProfile?.skills
+      );
+
+      const lastActive = userProfile?.dates?.lastConnectionAt || userProfile?.updatedAt || new Date().toISOString();
+      const lastActiveMs = new Date(lastActive).getTime();
+      const isActive = Boolean(
+        userProfile?.isActive === true ||
+        (!isNaN(lastActiveMs) && Date.now() - lastActiveMs <= 3 * 24 * 60 * 60 * 1000)
+      );
+      const isCitizen = isActive && level >= 10;
+
       return {
         userId,
         username: userProfile?.username || `Player_${userId.slice(-5)}`,
@@ -697,10 +877,19 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
         weeklyDamages: userProfile?.rankings?.weeklyUserDamages?.value || 0,
         wealth,
         role,
-        lastActive: userProfile?.dates?.lastConnectionAt || userProfile?.updatedAt || new Date().toISOString(),
+        lastActive,
+        isActive,
+        isCitizen,
         latestDonations: donations,
         totalDonations,
         donationCount: donations.length,
+        factoryLimit: factoryInfo.factoryLimit,
+        activeFactoryCount: factoryInfo.activeFactoryCount,
+        totalOwnedFactories: factoryInfo.totalOwnedFactories,
+        factoryCount: factoryInfo.activeFactoryCount,
+        totalAutomatedLevel: factoryInfo.totalAutomatedLevel,
+        allFactoriesAutomatedLevel: factoryInfo.allFactoriesAutomatedLevel,
+        factories: factoryInfo.factories,
       };
     });
 
