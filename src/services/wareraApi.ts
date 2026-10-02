@@ -1013,7 +1013,7 @@ export async function fetchMilitaryUnitData(
   muId: string = DEFAULT_MU_ID,
   forceRefresh = false
 ): Promise<ApiResponse> {
-  const cacheKey = `${CACHE_KEY_PREFIX}${muId}`;
+  const cacheKey = `${CACHE_KEY_PREFIX}${muId}_v4`;
 
   // Check client-side storage cache if not forcing refresh
   if (!forceRefresh) {
@@ -1021,7 +1021,10 @@ export async function fetchMilitaryUnitData(
       const stored = localStorage.getItem(cacheKey);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Date.now() - parsed.timestamp < CACHE_TTL_MS) {
+        if (
+          Date.now() - parsed.timestamp < CACHE_TTL_MS &&
+          parsed.data?.players?.[0]?.playerMode !== undefined
+        ) {
           return parsed.data;
         }
       }
@@ -1050,6 +1053,29 @@ export async function fetchMilitaryUnitData(
     if (res.ok) {
       const json: ApiResponse = await res.json();
       if (json && json.success && Array.isArray(json.players) && json.players.length > 0) {
+        json.players = json.players.map((p) => {
+          if (p.playerMode) return p;
+          const ecoSkillNames = ['entrepreneurship', 'energy', 'production', 'companies', 'management'];
+          let ecoSkillPoints = 0;
+          if (p.skills) {
+            for (const sName of ecoSkillNames) {
+              const sk = p.skills[sName];
+              if (sk && sk.level > 0) {
+                const lvl = Number(sk.level);
+                ecoSkillPoints += (lvl * (lvl + 1)) / 2;
+              }
+            }
+          }
+          const totalSkillPoints = Number(p.totalSkillPoints || 0);
+          const effectiveTotalSP = totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
+          const playerMode: 'economy' | 'combat' = ecoSkillPoints > (effectiveTotalSP / 2) ? 'economy' : 'combat';
+          return {
+            ...p,
+            playerMode,
+            ecoSkillPoints,
+            totalSkillPoints: effectiveTotalSP,
+          };
+        });
         persistMilitaryUnitData(muId, json);
         return json;
       }

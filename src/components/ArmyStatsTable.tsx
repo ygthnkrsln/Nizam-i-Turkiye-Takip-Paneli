@@ -31,13 +31,13 @@ export function getPlayerModeInfo(player: PlayerStats) {
     const isEco = player.playerMode === 'economy';
     const ecoSP = player.ecoSkillPoints || 0;
     const totalSP = player.totalSkillPoints || 0;
-    const ratio = totalSP > 0 ? Math.round((ecoSP / totalSP) * 100) : 0;
+    const ecoRatio = totalSP > 0 ? Math.round((ecoSP / totalSP) * 100) : 0;
     return {
       mode: player.playerMode,
       isEco,
       ecoSP,
       totalSP,
-      ratio,
+      ratio: isEco ? ecoRatio : 100 - ecoRatio,
     };
   }
 

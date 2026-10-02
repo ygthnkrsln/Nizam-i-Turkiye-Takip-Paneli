@@ -417,10 +417,15 @@ export default async function handler(req: any, res: any) {
   const muId = String(req.query?.muId || '69c229c4449287ea1a26a5b3');
   const forceRefresh = req.query?.refresh === 'true';
   const userApiKey = (req.headers['x-user-api-key'] as string) || (req.query?.apiKey as string);
-  const cacheKey = `mu_${muId}`;
+  const cacheKey = `mu_v4_${muId}`;
 
   const cached = cache.get(cacheKey);
-  if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+  if (
+    !forceRefresh &&
+    cached &&
+    Date.now() - cached.timestamp < CACHE_TTL_MS &&
+    cached.data?.players?.[0]?.playerMode !== undefined
+  ) {
     return res.json({ ...cached.data, cached: true });
   }
 
@@ -637,6 +642,34 @@ export default async function handler(req: any, res: any) {
           };
         });
 
+        // Skills analysis: Check economy vs combat mode
+        const ecoSkillNames = ['entrepreneurship', 'energy', 'production', 'companies', 'management'];
+        let ecoSkillPoints = 0;
+        if (userProfile?.skills) {
+          for (const sName of ecoSkillNames) {
+            const sk = userProfile.skills[sName];
+            if (sk && sk.level > 0) {
+              const lvl = Number(sk.level);
+              ecoSkillPoints += (lvl * (lvl + 1)) / 2;
+            }
+          }
+        }
+        const totalSkillPoints = Number(
+          userProfile?.leveling?.spentSkillPoints ??
+          userProfile?.leveling?.totalSkillPoints ??
+          0
+        );
+        const effectiveTotalSP = totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
+        const playerMode: 'economy' | 'combat' = ecoSkillPoints > (effectiveTotalSP / 2) ? 'economy' : 'combat';
+
+        const lastActive = userProfile?.dates?.lastConnectionAt || userProfile?.updatedAt || new Date().toISOString();
+        const lastActiveMs = new Date(lastActive).getTime();
+        const isActive = Boolean(
+          userProfile?.isActive === true ||
+          (!isNaN(lastActiveMs) && Date.now() - lastActiveMs <= 3 * 24 * 60 * 60 * 1000)
+        );
+        const isCitizen = isActive && level >= 10;
+
         return {
           userId,
           username: userProfile?.username || `Soldier_${userId.slice(-4)}`,
@@ -647,7 +680,9 @@ export default async function handler(req: any, res: any) {
           weeklyDamages: userProfile?.rankings?.weeklyUserDamages?.value || 0,
           wealth,
           role,
-          lastActive: userProfile?.dates?.lastConnectionAt || userProfile?.updatedAt || new Date().toISOString(),
+          lastActive,
+          isActive,
+          isCitizen,
           latestDonations: donations,
           totalDonations,
           donationCount: donations.length,
@@ -658,6 +693,10 @@ export default async function handler(req: any, res: any) {
           totalAutomatedLevel: activeAutomatedLevel,
           allFactoriesAutomatedLevel: allAutomatedLevel,
           factories: processedFactories,
+          playerMode,
+          ecoSkillPoints,
+          totalSkillPoints: effectiveTotalSP,
+          skills: userProfile?.skills,
         };
       });
 
