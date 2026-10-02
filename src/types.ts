@@ -67,6 +67,8 @@ export interface FactoryItem {
   isActiveFactory?: boolean; // Oyuncunun beceri limitine göre aktif olan fabrika mı?
 }
 
+export type PlayerMode = 'economy' | 'combat';
+
 export interface PlayerStats {
   userId: string;
   username: string;
@@ -90,6 +92,10 @@ export interface PlayerStats {
   totalAutomatedLevel?: number; // Aktif fabrikaların toplam motor gücü
   allFactoriesAutomatedLevel?: number; // Tüm fabrikaların toplam motor gücü
   factories?: FactoryItem[];
+  playerMode?: PlayerMode; // 'economy' (Ekonomi Oyuncusu) | 'combat' (Savaş Oyuncusu)
+  ecoSkillPoints?: number; // Ekonomi becerilerine (entrepreneurship, energy, production, companies, management) harcanan SP
+  totalSkillPoints?: number; // Harcanan / toplam beceri puanı
+  skills?: Record<string, any>;
 }
 
 export interface MilitaryUnitData {
@@ -146,13 +152,33 @@ export interface LevelStatItem {
   totalFactories: number;
   avgAutomatedLevel: number;
   totalAutomatedLevel: number;
+  avgWealth?: number;
+  totalWealth?: number;
   percentage?: number;
+  combatCount?: number;
+  economyCount?: number;
+  combatRatio?: number;
+  economyRatio?: number;
+  combatFactories?: number;
+  economyFactories?: number;
+  combatAutomatedLevel?: number;
+  economyAutomatedLevel?: number;
+  combatWealth?: number;
+  economyWealth?: number;
+  avgCombatFactories?: number;
+  avgEconomyFactories?: number;
+  avgCombatAutomatedLevel?: number;
+  avgEconomyAutomatedLevel?: number;
+  avgCombatWealth?: number;
+  avgEconomyWealth?: number;
 }
 
 export interface CountryStatsResponse {
   success: boolean;
   totalArmies: number;
   totalPlayers: number;
+  totalCombatPlayers?: number;
+  totalEconomyPlayers?: number;
   armies: { id: string; name: string; memberCount: number; avatarUrl?: string }[];
   levelStats: LevelStatItem[];
   generatedAt: string;

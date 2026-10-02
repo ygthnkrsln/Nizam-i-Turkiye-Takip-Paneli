@@ -9,6 +9,7 @@ import { MetricsCards } from './components/MetricsCards';
 import { PlayerTable } from './components/PlayerTable';
 import { ArmyStatsTable } from './components/ArmyStatsTable';
 import { CountryStatsPanel } from './components/CountryStatsPanel';
+import { ApiKeySection } from './components/ApiKeySection';
 import { MilitaryUnitData, PlayerStats, ApiResponse } from './types';
 import { 
   fetchMilitaryUnitData, 
@@ -239,14 +240,19 @@ export default function App() {
 
         {/* Tab 1: Bağış Takip Paneli | Tab 2: Ordu İstatistikleri | Tab 3: Ülke İstatistikleri */}
         {activeTab === 'donations' ? (
-          <PlayerTable
-            players={players}
-            isLoading={isLoading}
-            isRefreshing={isRefreshing}
-            onRefresh={() => fetchData(true)}
-            muName={muData?.name || 'Turkic Tribe'}
-            muAvatarUrl={muData?.avatarUrl}
-          />
+          <div>
+            {/* WarEra API Key Giriş Bölümü */}
+            <ApiKeySection onKeyChange={() => fetchData(true)} />
+
+            <PlayerTable
+              players={players}
+              isLoading={isLoading}
+              isRefreshing={isRefreshing}
+              onRefresh={() => fetchData(true)}
+              muName={muData?.name || 'Turkic Tribe'}
+              muAvatarUrl={muData?.avatarUrl}
+            />
+          </div>
         ) : activeTab === 'armyStats' ? (
           <ArmyStatsTable
             players={players}

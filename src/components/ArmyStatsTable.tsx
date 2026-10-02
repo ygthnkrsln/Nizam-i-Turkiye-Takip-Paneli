@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { PlayerStats, SortDirection, FactoryItem } from '../types';
+import { PlayerStats, SortDirection, FactoryItem, PlayerMode } from '../types';
 import { 
   ArrowUpDown, 
   ArrowUp, 
@@ -11,8 +11,9 @@ import {
   ChevronUp,
   Cpu,
   Boxes,
-  MapPin,
-  Lock
+  Swords,
+  TrendingUp,
+  ShieldAlert
 } from 'lucide-react';
 
 interface ArmyStatsTableProps {
@@ -23,7 +24,47 @@ interface ArmyStatsTableProps {
   muName?: string;
 }
 
-type ArmySortField = 'username' | 'level' | 'factoryCount' | 'totalAutomatedLevel';
+type ArmySortField = 'username' | 'level' | 'playerMode' | 'factoryCount' | 'totalAutomatedLevel';
+
+export function getPlayerModeInfo(player: PlayerStats) {
+  if (player.playerMode) {
+    const isEco = player.playerMode === 'economy';
+    const ecoSP = player.ecoSkillPoints || 0;
+    const totalSP = player.totalSkillPoints || 0;
+    const ratio = totalSP > 0 ? Math.round((ecoSP / totalSP) * 100) : 0;
+    return {
+      mode: player.playerMode,
+      isEco,
+      ecoSP,
+      totalSP,
+      ratio,
+    };
+  }
+
+  // Fallback calculation from skills
+  const ecoSkills = ['entrepreneurship', 'energy', 'production', 'companies', 'management'];
+  let ecoSP = 0;
+  if (player.skills) {
+    for (const s of ecoSkills) {
+      const sk = player.skills[s];
+      if (sk && sk.level > 0) {
+        const lvl = Number(sk.level);
+        ecoSP += (lvl * (lvl + 1)) / 2;
+      }
+    }
+  }
+  const totalSP = player.totalSkillPoints || (ecoSP > 0 ? ecoSP * 2 : 100);
+  const isEco = ecoSP > (totalSP / 2);
+  const ratio = totalSP > 0 ? Math.round((ecoSP / totalSP) * 100) : 0;
+
+  return {
+    mode: (isEco ? 'economy' : 'combat') as PlayerMode,
+    isEco,
+    ecoSP,
+    totalSP,
+    ratio,
+  };
+}
 
 export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
   players,
@@ -35,22 +76,34 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<ArmySortField>('factoryCount');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [modeFilter, setModeFilter] = useState<'all' | 'combat' | 'economy'>('all');
   const [expandedUserIds, setExpandedUserIds] = useState<Set<string>>(new Set());
 
-  // Aggregate stats for footer
+  // Aggregate stats for footer and filters
   const summary = useMemo(() => {
     let totalActiveFactories = 0;
     let totalActiveEnginePower = 0;
+    let totalEconomyPlayers = 0;
+    let totalCombatPlayers = 0;
 
     players.forEach((p) => {
       const activeFCount = p.factoryCount ?? p.activeFactoryCount ?? (p.factories?.length || 0);
       totalActiveFactories += activeFCount;
       totalActiveEnginePower += p.totalAutomatedLevel || 0;
+
+      const modeInfo = getPlayerModeInfo(p);
+      if (modeInfo.isEco) {
+        totalEconomyPlayers++;
+      } else {
+        totalCombatPlayers++;
+      }
     });
 
     return {
       totalActiveFactories,
       totalActiveEnginePower,
+      totalEconomyPlayers,
+      totalCombatPlayers,
     };
   }, [players]);
 
@@ -100,6 +153,13 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
   const filteredAndSortedPlayers = useMemo(() => {
     return players
       .filter((player) => {
+        // Mode filter (all / combat / economy)
+        if (modeFilter !== 'all') {
+          const modeInfo = getPlayerModeInfo(player);
+          if (modeFilter === 'economy' && !modeInfo.isEco) return false;
+          if (modeFilter === 'combat' && modeInfo.isEco) return false;
+        }
+
         if (!searchQuery.trim()) return true;
         const query = searchQuery.toLowerCase();
         return (
@@ -122,6 +182,16 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
             aVal = a.level || 0;
             bVal = b.level || 0;
             break;
+          case 'playerMode':
+            const aM = getPlayerModeInfo(a);
+            const bM = getPlayerModeInfo(b);
+            aVal = aM.isEco ? 1 : 0;
+            bVal = bM.isEco ? 1 : 0;
+            if (aVal === bVal) {
+              aVal = aM.ratio;
+              bVal = bM.ratio;
+            }
+            break;
           case 'factoryCount':
             aVal = a.factoryCount ?? a.activeFactoryCount ?? 0;
             bVal = b.factoryCount ?? b.activeFactoryCount ?? 0;
@@ -139,7 +209,7 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
         if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
         return 0;
       });
-  }, [players, searchQuery, sortField, sortDirection]);
+  }, [players, searchQuery, sortField, sortDirection, modeFilter]);
 
   const renderSortIndicator = (field: ArmySortField) => {
     if (sortField !== field) {
@@ -156,9 +226,9 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
     <div id="army-stats-table-container" className="bg-[#182329]/95 border border-[#3282B8]/25 rounded-xl overflow-hidden shadow-2xl shadow-black/40 backdrop-blur-sm">
       {/* Table Header & Toolbar */}
       <div className="p-4 border-b border-[#3282B8]/15 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#141C21]/60">
-        <div className="flex items-center gap-3 flex-1">
+        <div className="flex items-center gap-3 flex-1 flex-wrap">
           {/* Search Input */}
-          <div className="w-full sm:w-80 relative group">
+          <div className="w-full sm:w-72 relative group">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#3282B8] group-focus-within:text-white transition-colors" />
             <input
               id="army-search-input"
@@ -178,12 +248,47 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
             )}
           </div>
 
-          <span className="hidden sm:inline-block text-xs text-[#BBE1FA]/70 font-mono">
-            Toplam <span className="text-white font-bold">{filteredAndSortedPlayers.length}</span> asker listelendi
-          </span>
+          {/* Mod Filtre Butonları (Tümü / Savaş / Ekonomi) */}
+          <div className="inline-flex items-center rounded-lg bg-[#141C21] p-1 border border-[#3282B8]/25 text-xs font-mono">
+            <button
+              type="button"
+              onClick={() => setModeFilter('all')}
+              className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                modeFilter === 'all'
+                  ? 'bg-[#0F4C75] text-white font-bold shadow-xs'
+                  : 'text-[#BBE1FA]/60 hover:text-white'
+              }`}
+            >
+              Tümü ({players.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setModeFilter('combat')}
+              className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                modeFilter === 'combat'
+                  ? 'bg-rose-950/80 text-rose-300 font-bold border border-rose-500/40 shadow-xs'
+                  : 'text-rose-400/70 hover:text-rose-300'
+              }`}
+            >
+              <Swords className="w-3 h-3 text-rose-400" />
+              <span>Savaş ({summary.totalCombatPlayers})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setModeFilter('economy')}
+              className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                modeFilter === 'economy'
+                  ? 'bg-emerald-950/80 text-emerald-300 font-bold border border-emerald-500/40 shadow-xs'
+                  : 'text-emerald-400/70 hover:text-emerald-300'
+              }`}
+            >
+              <TrendingUp className="w-3 h-3 text-emerald-400" />
+              <span>Ekonomi ({summary.totalEconomyPlayers})</span>
+            </button>
+          </div>
         </div>
 
-        {/* Action Toolbar: Yenile Butonu (Bağış paneliyle uyumlu sade tasarım) */}
+        {/* Action Toolbar: Yenile Butonu */}
         {onRefresh && (
           <div className="flex items-center justify-end shrink-0">
             <button
@@ -201,7 +306,7 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
         )}
       </div>
 
-      {/* Ana Tablo (3 Sütun) */}
+      {/* Ana Tablo (4 Sütun) */}
       <div className="overflow-x-auto">
         <table id="army-stats-data-table" className="w-full text-left border-collapse">
           <thead>
@@ -209,7 +314,7 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
               {/* 1. Sütun: Asker / Oyuncu */}
               <th
                 onClick={() => handleSort('username')}
-                className="py-3.5 px-4 cursor-pointer hover:text-white group min-w-[240px]"
+                className="py-3.5 px-4 cursor-pointer hover:text-white group min-w-[220px]"
               >
                 <div className="flex items-center">
                   <span>Asker / Oyuncu</span>
@@ -220,18 +325,29 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
               {/* 2. Sütun: Oyuncu Seviyesi */}
               <th
                 onClick={() => handleSort('level')}
-                className="py-3.5 px-4 cursor-pointer hover:text-white group min-w-[150px]"
+                className="py-3.5 px-4 cursor-pointer hover:text-white group min-w-[130px]"
               >
                 <div className="flex items-center">
-                  <span>Oyuncu Seviyesi</span>
+                  <span>Seviye</span>
                   {renderSortIndicator('level')}
                 </div>
               </th>
 
-              {/* 3. Sütun: Fabrika Sayısı ve Otomatik Seviyesi */}
+              {/* 3. Sütun: Mod / Odak (Ekonomi vs Savaş) */}
+              <th
+                onClick={() => handleSort('playerMode')}
+                className="py-3.5 px-4 cursor-pointer hover:text-white group min-w-[190px]"
+              >
+                <div className="flex items-center">
+                  <span>Mod / Odak</span>
+                  {renderSortIndicator('playerMode')}
+                </div>
+              </th>
+
+              {/* 4. Sütun: Fabrika Sayısı ve Otomatik Seviyesi */}
               <th
                 onClick={() => handleSort('factoryCount')}
-                className="py-3.5 px-4 cursor-pointer hover:text-white group min-w-[340px]"
+                className="py-3.5 px-4 cursor-pointer hover:text-white group min-w-[320px]"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
@@ -264,17 +380,20 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
                     <div className="w-20 h-4 bg-[#141C21] rounded" />
                   </td>
                   <td className="py-4 px-4">
+                    <div className="w-28 h-4 bg-[#141C21] rounded" />
+                  </td>
+                  <td className="py-4 px-4">
                     <div className="w-48 h-4 bg-[#141C21] rounded" />
                   </td>
                 </tr>
               ))
             ) : filteredAndSortedPlayers.length === 0 ? (
               <tr>
-                <td colSpan={3} className="py-12 text-center text-[#BBE1FA]/70 bg-[#182329]/30">
+                <td colSpan={4} className="py-12 text-center text-[#BBE1FA]/70 bg-[#182329]/30">
                   <div className="flex flex-col items-center justify-center">
                     <Search className="w-8 h-8 mb-2 opacity-50 text-[#3282B8]" />
                     <p className="font-semibold text-white">Aranan kritere uygun asker bulunamadı</p>
-                    <p className="text-xs text-[#BBE1FA]/60 mt-0.5">Arama terimini değiştirmeyi deneyebilirsiniz</p>
+                    <p className="text-xs text-[#BBE1FA]/60 mt-0.5">Arama terimini veya mod filtresini değiştirmeyi deneyebilirsiniz</p>
                   </div>
                 </td>
               </tr>
@@ -288,6 +407,9 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
                 const factoryLimit = player.factoryLimit ?? 2;
                 const totalAutomated = player.totalAutomatedLevel ?? 0;
                 const factories = player.factories || [];
+
+                // Oyuncu Modu Bilgisi
+                const modeInfo = getPlayerModeInfo(player);
 
                 // Bağış takip panelindeki pasif renklendirme mantığı:
                 const isInactive = Boolean(
@@ -322,20 +444,20 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
                               referrerPolicy="no-referrer"
                             />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-[#141C21] text-[#BBE1FA] flex items-center justify-center text-xs font-bold border border-[#3282B8]/30 shrink-0 font-mono">
+                            <div className="w-8 h-8 rounded-full bg-[#0F4C75] text-[#BBE1FA] flex items-center justify-center text-xs font-bold shrink-0">
                               {player.username.slice(0, 2).toUpperCase()}
                             </div>
                           )}
 
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-semibold text-white text-sm group-hover:text-[#BBE1FA] transition-colors truncate">
+                              <span className="font-semibold text-white group-hover:text-[#BBE1FA] transition-colors truncate">
                                 {player.username}
                               </span>
 
-                              {/* Role Badge */}
+                              {/* Asker Rol Rozeti */}
                               {player.role && player.role !== 'Member' && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded font-mono bg-[#0F4C75]/60 text-[#BBE1FA] border border-[#3282B8]/40 shrink-0">
+                                <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-bold bg-[#0F4C75] text-[#BBE1FA] border border-[#3282B8]/40 shrink-0">
                                   {player.role === 'Leader' ? 'Lider' : player.role === 'Commander' ? 'Komutan' : 'Yönetici'}
                                 </span>
                               )}
@@ -366,7 +488,34 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
                         </span>
                       </td>
 
-                      {/* 3. Sütun: Fabrika Sayısı ve Otomatik Seviyesi */}
+                      {/* 3. Sütun: Mod / Odak (Ekonomi vs Savaş) */}
+                      <td className="py-3 px-4">
+                        {modeInfo.isEco ? (
+                          <div 
+                            title={`Toplam ${modeInfo.totalSP} beceri puanının ${modeInfo.ecoSP} puanı (%${modeInfo.ratio}) ekonomi yeteneklerine harcanmış`}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/35 text-emerald-400 font-mono text-xs font-bold shadow-xs"
+                          >
+                            <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>Ekonomi Modu</span>
+                            <span className="text-[10px] text-emerald-300/70 font-normal">
+                              (%{modeInfo.ratio})
+                            </span>
+                          </div>
+                        ) : (
+                          <div 
+                            title={`Toplam ${modeInfo.totalSP} beceri puanının yalnızca ${modeInfo.ecoSP} puanı (%${modeInfo.ratio}) ekonomi yeteneklerine harcanmış, ağırlık savaş yeteneklerinde`}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/35 text-rose-400 font-mono text-xs font-bold shadow-xs"
+                          >
+                            <Swords className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                            <span>Savaş Modu</span>
+                            <span className="text-[10px] text-rose-300/70 font-normal">
+                              (%{100 - modeInfo.ratio})
+                            </span>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* 4. Sütun: Fabrika Sayısı ve Otomatik Seviyesi */}
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2.5 flex-wrap">
@@ -406,7 +555,7 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
                     {/* Akordeon: Fabrika Detayları */}
                     {isExpanded && (
                       <tr className="bg-[#141C21]/95 border-b border-[#3282B8]/25">
-                        <td colSpan={3} className="p-4 sm:p-5">
+                        <td colSpan={4} className="p-4 sm:p-5">
                           <div className="space-y-3">
                             {/* Başlık: Aktif vs Pasif Bilgisi */}
                             <div className="flex items-center justify-between border-b border-[#3282B8]/15 pb-2.5 flex-wrap gap-2">
@@ -416,9 +565,14 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
                                   {player.username} — Fabrika Listesi ({activeFactoryCount} Aktif / {totalOwnedFactories} Toplam • Beceri Limiti: {factoryLimit})
                                 </span>
                               </div>
-                              <div className="text-xs font-mono text-[#BBE1FA]/80 flex items-center gap-2">
+                              <div className="text-xs font-mono text-[#BBE1FA]/80 flex items-center gap-3">
                                 <span>
-                                  Aktif Motor Gücü: <strong className="text-white font-bold">{totalAutomated} Lv</strong>
+                                  Modu: <strong className={modeInfo.isEco ? 'text-emerald-400' : 'text-rose-400'}>
+                                    {modeInfo.isEco ? 'Ekonomi' : 'Savaş'} ({modeInfo.ecoSP}/{modeInfo.totalSP} SP)
+                                  </strong>
+                                </span>
+                                <span>
+                                  Aktif Motor: <strong className="text-white font-bold">{totalAutomated} Lv</strong>
                                 </span>
                                 {totalOwnedFactories > activeFactoryCount && (
                                   <span className="text-[11px] text-[#BBE1FA]/50 font-normal">
@@ -449,44 +603,25 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
                                       }`}
                                     >
                                       <div>
-                                        {/* Kart Üst Başlık */}
-                                        <div className="flex items-start justify-between gap-2 mb-2">
-                                          <div className="min-w-0">
-                                            <div className="text-xs font-bold text-white group-hover/card:text-[#BBE1FA] transition-colors truncate" title={factory.name}>
-                                              {factory.name || `Fabrika #${idx + 1}`}
-                                            </div>
-                                            <div className="text-[10px] text-[#BBE1FA]/60 font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                              <span>{itemDetails.icon} {itemDetails.name}</span>
-                                              <span className="text-[9px] text-[#BBE1FA]/40 font-mono">({factory.itemCode})</span>
-                                              {factory.region && (
-                                                <span className="inline-flex items-center gap-0.5 text-[9px] text-[#BBE1FA]/50">
-                                                  <MapPin className="w-2.5 h-2.5" />
-                                                  {factory.region}
-                                                </span>
-                                              )}
-                                            </div>
+                                        <div className="flex items-center justify-between mb-2">
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <span className="text-xl shrink-0">{itemDetails.icon}</span>
+                                            <span className={`font-bold text-xs truncate ${itemDetails.color}`}>
+                                              {itemDetails.name}
+                                            </span>
                                           </div>
-
-                                          {/* Aktif / Pasif (Limit Dışı) Rozeti */}
                                           {isActiveWithinLimit ? (
-                                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 shrink-0">
-                                              Aktif
+                                            <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 font-bold shrink-0">
+                                              AKTİF
                                             </span>
                                           ) : (
-                                            <span
-                                              title="Beceri limitini aştığı için bu fabrika pasif durumdadır"
-                                              className="text-[9px] font-medium px-1.5 py-0.5 rounded font-mono bg-[#141C21] text-[#BBE1FA]/50 border border-[#3282B8]/20 shrink-0 flex items-center gap-1"
-                                            >
-                                              <Lock className="w-2.5 h-2.5 text-[#BBE1FA]/40" />
-                                              Pasif
+                                            <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#141C21] text-[#BBE1FA]/50 border border-[#3282B8]/20 font-medium shrink-0">
+                                              PASİF
                                             </span>
                                           )}
                                         </div>
-                                      </div>
 
-                                      {/* İstatistikler: Sadece Motor Gücü & Depo Seviyesi (Mola, İşçi, Üretim kaldırıldı) */}
-                                      <div className="pt-2.5 mt-2 border-t border-[#3282B8]/15 text-[11px] font-mono">
-                                        <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1.5 text-xs font-mono mt-3">
                                           <div className="flex items-center gap-1.5 text-[#BBE1FA]/80">
                                             <Cpu className="w-3.5 h-3.5 text-[#3282B8] shrink-0" />
                                             <span>Motor: <strong className="text-white font-bold">Lv. {factory.automatedLevel}</strong></span>
@@ -518,7 +653,7 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
       <div className="px-4 py-3 bg-[#141C21]/90 border-t border-[#3282B8]/20 text-xs text-[#BBE1FA]/70 font-mono flex flex-col sm:flex-row items-center justify-between gap-2">
         <div>
           Toplam <span className="font-bold text-white">{filteredAndSortedPlayers.length}</span> /{' '}
-          <span className="font-bold text-white">{players.length}</span> asker listeleniyor ({summary.totalActiveFactories} Aktif Fabrika • Toplam Aktif Motor Gücü: {summary.totalActiveEnginePower})
+          <span className="font-bold text-white">{players.length}</span> asker listeleniyor ({summary.totalActiveFactories} Aktif Fabrika • Motor Gücü: {summary.totalActiveEnginePower} Lv • <span className="text-rose-400 font-bold">{summary.totalCombatPlayers} Savaş</span> / <span className="text-emerald-400 font-bold">{summary.totalEconomyPlayers} Ekonomi</span>)
         </div>
         <div className="text-[11px] text-[#BBE1FA]/50">
           Detaylı fabrika ve otomasyon bilgilerini görmek için ilgili askerin satırına tıklayabilirsiniz

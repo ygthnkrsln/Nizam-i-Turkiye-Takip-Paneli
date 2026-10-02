@@ -4,6 +4,35 @@ export const DEFAULT_MU_ID = '69c229c4449287ea1a26a5b3';
 const CACHE_KEY_PREFIX = 'warera_mu_cache_';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes fresh client cache to prevent unnecessary refetches
 
+const USER_API_KEY_STORAGE_KEY = 'warera_custom_api_key';
+let userApiKeyCooldownUntil = 0;
+
+export function getUserApiKey(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    return localStorage.getItem(USER_API_KEY_STORAGE_KEY) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+export function setUserApiKey(key: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const trimmed = key.trim();
+    if (!trimmed) {
+      localStorage.removeItem(USER_API_KEY_STORAGE_KEY);
+    } else {
+      localStorage.setItem(USER_API_KEY_STORAGE_KEY, trimmed);
+    }
+    userApiKeyCooldownUntil = 0; // reset cooldown on new key
+  } catch (e) {}
+}
+
+export function reportUserApiKeyRateLimit(cooldownSeconds = 60): void {
+  userApiKeyCooldownUntil = Date.now() + cooldownSeconds * 1000;
+}
+
 /**
  * Cookie utilities for persistent user preferences and sync tracking
  */
@@ -670,6 +699,11 @@ const FALLBACK_TOKENS = [
 let clientTokenIndex = 0;
 
 function getClientToken(): string {
+  const userKey = getUserApiKey();
+  const now = Date.now();
+  if (userKey && now > userApiKeyCooldownUntil) {
+    return userKey;
+  }
   const token = FALLBACK_TOKENS[clientTokenIndex % FALLBACK_TOKENS.length];
   clientTokenIndex++;
   return token;
@@ -867,6 +901,26 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
       );
       const isCitizen = isActive && level >= 10;
 
+      // Skills analysis: Check economy vs combat mode
+      const ecoSkillNames = ['entrepreneurship', 'energy', 'production', 'companies', 'management'];
+      let ecoSkillPoints = 0;
+      if (userProfile?.skills) {
+        for (const sName of ecoSkillNames) {
+          const sk = userProfile.skills[sName];
+          if (sk && sk.level > 0) {
+            const lvl = Number(sk.level);
+            ecoSkillPoints += (lvl * (lvl + 1)) / 2;
+          }
+        }
+      }
+      const totalSkillPoints = Number(
+        userProfile?.leveling?.spentSkillPoints ??
+        userProfile?.leveling?.totalSkillPoints ??
+        0
+      );
+      const effectiveTotalSP = totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
+      const playerMode: 'economy' | 'combat' = ecoSkillPoints > (effectiveTotalSP / 2) ? 'economy' : 'combat';
+
       return {
         userId,
         username: userProfile?.username || `Player_${userId.slice(-5)}`,
@@ -890,6 +944,10 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
         totalAutomatedLevel: factoryInfo.totalAutomatedLevel,
         allFactoriesAutomatedLevel: factoryInfo.allFactoriesAutomatedLevel,
         factories: factoryInfo.factories,
+        playerMode,
+        ecoSkillPoints,
+        totalSkillPoints: effectiveTotalSP,
+        skills: userProfile?.skills,
       };
     });
 
@@ -977,8 +1035,15 @@ export async function fetchMilitaryUnitData(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
+    const userKey = getUserApiKey();
+    const reqHeaders: Record<string, string> = {};
+    if (userKey) {
+      reqHeaders['X-User-Api-Key'] = userKey;
+    }
+
     const res = await fetch(`/api/mu-data?muId=${encodeURIComponent(muId)}${forceRefresh ? '&refresh=true' : ''}`, {
       signal: controller.signal,
+      headers: reqHeaders,
     });
     clearTimeout(timeoutId);
 
@@ -1034,26 +1099,45 @@ async function fetchWithTokens(url: string, init?: RequestInit): Promise<Respons
  * Fetches country-wide statistics across the 6 armies
  * 1. Checks localStorage cache
  * 2. Tries /api/country-stats
- * 3. Falls back to direct WarEra batch fetch
+ * 3. Falls back to direct WarEra batch fetch in parallel
  */
-export async function fetchCountryStats(): Promise<CountryStatsResponse> {
-  const cacheKey = 'warera_country_stats_cache';
-  try {
-    const stored = localStorage.getItem(cacheKey);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Date.now() - parsed.timestamp < 3600 * 1000) {
-        return parsed.data;
+export async function fetchCountryStats(forceRefresh = false): Promise<CountryStatsResponse> {
+  const cacheKey = 'warera_country_stats_cache_v4';
+  if (!forceRefresh) {
+    try {
+      const stored = localStorage.getItem(cacheKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (
+          Date.now() - parsed.timestamp < 3600 * 1000 &&
+          parsed.data?.levelStats?.[0]?.combatCount !== undefined
+        ) {
+          return parsed.data;
+        }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
   // 1. Try local serverless /api/country-stats
   try {
-    const res = await fetch('/api/country-stats');
+    const userKey = getUserApiKey();
+    const reqHeaders: Record<string, string> = {};
+    if (userKey) {
+      reqHeaders['X-User-Api-Key'] = userKey;
+    }
+
+    const res = await fetch(`/api/country-stats${forceRefresh ? '?refresh=true' : ''}`, {
+      headers: reqHeaders,
+    });
     if (res.ok) {
       const json = await res.json();
-      if (json && json.success && Array.isArray(json.levelStats) && json.levelStats.length > 0) {
+      if (
+        json &&
+        json.success &&
+        Array.isArray(json.levelStats) &&
+        json.levelStats.length > 0 &&
+        json.levelStats[0].combatCount !== undefined
+      ) {
         try {
           localStorage.setItem(cacheKey, JSON.stringify({ data: json, timestamp: Date.now() }));
         } catch (e) {}
@@ -1064,7 +1148,7 @@ export async function fetchCountryStats(): Promise<CountryStatsResponse> {
     console.warn('Could not fetch /api/country-stats, attempting direct client fetch...', err);
   }
 
-  // 2. Direct client fetch fallback across the 6 armies
+  // 2. Direct client fetch fallback across the 6 armies in parallel
   const armies = [
     { id: '69c229c4449287ea1a26a5b3', name: 'Turkic Tribe', memberCount: 21, avatarUrl: 'https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png' },
     { id: '689f69064e095b8b9f1b885a', name: 'ASHINA', memberCount: 13, avatarUrl: 'https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png' },
@@ -1075,22 +1159,29 @@ export async function fetchCountryStats(): Promise<CountryStatsResponse> {
   ];
 
   try {
-    const allMemberIds: string[] = [];
-    for (const army of armies) {
-      const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: army.id }))}`;
-      const res = await fetchWithTokens(muUrl);
-      if (res.ok) {
-        const json = await res.json();
-        const m = json?.result?.data?.members;
-        if (Array.isArray(m)) allMemberIds.push(...m);
-      }
+    const muPromises = armies.map(async (army) => {
+      try {
+        const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: army.id }))}`;
+        const res = await fetchWithTokens(muUrl);
+        if (res.ok) {
+          const json = await res.json();
+          const m = json?.result?.data?.members;
+          if (Array.isArray(m)) return m;
+        }
+      } catch (e) {}
+      return [];
+    });
+
+    const muResults = await Promise.all(muPromises);
+    const uniqueIds = Array.from(new Set(muResults.flat()));
+
+    const chunkSize = 25;
+    const chunks: string[][] = [];
+    for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+      chunks.push(uniqueIds.slice(i, i + chunkSize));
     }
 
-    const uniqueIds = Array.from(new Set(allMemberIds));
-    const players: { level: number; factoryLimit: number }[] = [];
-
-    for (let i = 0; i < uniqueIds.length; i += 25) {
-      const chunk = uniqueIds.slice(i, i + 25);
+    const batchPromises = chunks.map(async (chunk) => {
       const batchInput: Record<string, { userId: string }> = {};
       chunk.forEach((id, idx) => { batchInput[String(idx)] = { userId: id }; });
       const batchUrl = `https://api2.warera.io/trpc/${chunk.map(() => 'user.getUserLite').join(',')}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
@@ -1098,42 +1189,138 @@ export async function fetchCountryStats(): Promise<CountryStatsResponse> {
       if (bRes.ok) {
         const bJson = await bRes.json();
         const items = Array.isArray(bJson) ? bJson : [bJson];
-        items.forEach((item: any) => {
-          const u = item?.result?.data;
-          if (u) {
-            const level = Number(u.leveling?.level || 1);
-            const comp = u.skills?.companies;
-            const factoryLimit = Number(comp?.total ?? (2 + (comp?.level || 0) + (comp?.prestige || 0)));
-            players.push({ level, factoryLimit });
-          }
-        });
+        return items.map((item: any) => item?.result?.data).filter(Boolean);
       }
-    }
+      return [];
+    });
 
-    const byLevel: Record<number, { level: number; playerCount: number; totalFactories: number; totalAutomatedLevel: number }> = {};
+    const batchResults = await Promise.all(batchPromises);
+    const players: { level: number; factoryLimit: number; wealth: number; isEconomy: boolean }[] = [];
+
+    batchResults.flat().forEach((u: any) => {
+      const level = Number(u.leveling?.level || 1);
+      const comp = u.skills?.companies;
+      const factoryLimit = Number(comp?.total ?? (2 + (comp?.level || 0) + (comp?.prestige || 0)));
+      const wealth = Number(u.rankings?.userWealth?.value ?? u.wealth ?? 0);
+
+      const ecoSkillNames = ['entrepreneurship', 'energy', 'production', 'companies', 'management'];
+      let ecoSkillPoints = 0;
+      if (u.skills) {
+        for (const sName of ecoSkillNames) {
+          const sk = u.skills[sName];
+          if (sk && sk.level > 0) {
+            const lvl = Number(sk.level);
+            ecoSkillPoints += (lvl * (lvl + 1)) / 2;
+          }
+        }
+      }
+      const totalSkillPoints = Number(
+        u.leveling?.spentSkillPoints ??
+        u.leveling?.totalSkillPoints ??
+        0
+      );
+      const effectiveTotalSP = totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
+      const isEconomy = ecoSkillPoints > (effectiveTotalSP / 2);
+
+      players.push({ level, factoryLimit, wealth, isEconomy });
+    });
+
+    const byLevel: Record<number, {
+      level: number;
+      playerCount: number;
+      combatCount: number;
+      economyCount: number;
+      combatFactories: number;
+      economyFactories: number;
+      combatAutomatedLevel: number;
+      economyAutomatedLevel: number;
+      combatWealth: number;
+      economyWealth: number;
+      totalFactories: number;
+      totalAutomatedLevel: number;
+      totalWealth: number;
+    }> = {};
     const totalCount = players.length || 1;
+    let totalCombatPlayers = 0;
+    let totalEconomyPlayers = 0;
+
     players.forEach((p) => {
       if (!byLevel[p.level]) {
-        byLevel[p.level] = { level: p.level, playerCount: 0, totalFactories: 0, totalAutomatedLevel: 0 };
+        byLevel[p.level] = {
+          level: p.level,
+          playerCount: 0,
+          combatCount: 0,
+          economyCount: 0,
+          combatFactories: 0,
+          economyFactories: 0,
+          combatAutomatedLevel: 0,
+          economyAutomatedLevel: 0,
+          combatWealth: 0,
+          economyWealth: 0,
+          totalFactories: 0,
+          totalAutomatedLevel: 0,
+          totalWealth: 0,
+        };
       }
       byLevel[p.level].playerCount++;
-      byLevel[p.level].totalFactories += p.factoryLimit;
       const estEngine = Math.min(7, Math.max(3, Math.floor(p.level / 7) + 2));
-      byLevel[p.level].totalAutomatedLevel += (p.factoryLimit * estEngine);
+      const estAutomated = p.factoryLimit * estEngine;
+
+      if (p.isEconomy) {
+        byLevel[p.level].economyCount++;
+        byLevel[p.level].economyFactories += p.factoryLimit;
+        byLevel[p.level].economyAutomatedLevel += estAutomated;
+        byLevel[p.level].economyWealth += (p.wealth || 0);
+        totalEconomyPlayers++;
+      } else {
+        byLevel[p.level].combatCount++;
+        byLevel[p.level].combatFactories += p.factoryLimit;
+        byLevel[p.level].combatAutomatedLevel += estAutomated;
+        byLevel[p.level].combatWealth += (p.wealth || 0);
+        totalCombatPlayers++;
+      }
+      byLevel[p.level].totalFactories += p.factoryLimit;
+      byLevel[p.level].totalWealth += (p.wealth || 0);
+      byLevel[p.level].totalAutomatedLevel += estAutomated;
     });
 
     const levelStats = Object.values(byLevel)
       .sort((a, b) => a.level - b.level)
       .map((item) => {
         const count = item.playerCount;
+        const cCount = item.combatCount;
+        const eCount = item.economyCount;
+
         return {
           level: item.level,
           playerCount: count,
           percentage: Number(((count / totalCount) * 100).toFixed(1)),
+          combatCount: cCount,
+          economyCount: eCount,
+          combatRatio: count > 0 ? Number(((cCount / count) * 100).toFixed(1)) : 0,
+          economyRatio: count > 0 ? Number(((eCount / count) * 100).toFixed(1)) : 0,
+
+          combatFactories: item.combatFactories,
+          economyFactories: item.economyFactories,
+          avgCombatFactories: cCount > 0 ? Number((item.combatFactories / cCount).toFixed(2)) : 0,
+          avgEconomyFactories: eCount > 0 ? Number((item.economyFactories / eCount).toFixed(2)) : 0,
+
+          combatAutomatedLevel: item.combatAutomatedLevel,
+          economyAutomatedLevel: item.economyAutomatedLevel,
+          avgCombatAutomatedLevel: cCount > 0 ? Number((item.combatAutomatedLevel / cCount).toFixed(1)) : 0,
+          avgEconomyAutomatedLevel: eCount > 0 ? Number((item.economyAutomatedLevel / eCount).toFixed(1)) : 0,
+
+          combatWealth: item.combatWealth,
+          economyWealth: item.economyWealth,
+          avgCombatWealth: cCount > 0 ? Math.round(item.combatWealth / cCount) : 0,
+          avgEconomyWealth: eCount > 0 ? Math.round(item.economyWealth / eCount) : 0,
+
           avgFactories: count > 0 ? Number((item.totalFactories / count).toFixed(2)) : 0,
           totalFactories: item.totalFactories,
           avgAutomatedLevel: count > 0 ? Number((item.totalAutomatedLevel / count).toFixed(1)) : 0,
           totalAutomatedLevel: item.totalAutomatedLevel,
+          avgWealth: count > 0 ? Math.round(item.totalWealth / count) : 0,
+          totalWealth: item.totalWealth,
         };
       });
 
@@ -1141,6 +1328,8 @@ export async function fetchCountryStats(): Promise<CountryStatsResponse> {
       success: true,
       totalArmies: armies.length,
       totalPlayers: players.length,
+      totalCombatPlayers,
+      totalEconomyPlayers,
       armies,
       levelStats,
       generatedAt: new Date().toISOString(),

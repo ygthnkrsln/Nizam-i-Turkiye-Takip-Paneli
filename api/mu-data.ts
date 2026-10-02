@@ -47,14 +47,30 @@ function getNextToken(): string {
   return token;
 }
 
-async function fetchWarEra(url: string, init?: RequestInit): Promise<Response> {
-  const token = getNextToken();
+async function fetchWarEra(url: string, init?: RequestInit, userToken?: string): Promise<Response> {
+  const token = (userToken && userToken.trim()) || getNextToken();
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'X-API-Key': token,
     ...((init?.headers as Record<string, string>) || {}),
   };
-  return fetch(url, { ...init, headers });
+  try {
+    const res = await fetch(url, { ...init, headers });
+    // If user's custom token is rate-limited (429/403), fail-safe fallback to built-in tokens
+    if ((res.status === 429 || res.status === 403) && userToken) {
+      const fallbackToken = getNextToken();
+      headers['X-API-Key'] = fallbackToken;
+      return fetch(url, { ...init, headers });
+    }
+    return res;
+  } catch (err) {
+    if (userToken) {
+      const fallbackToken = getNextToken();
+      headers['X-API-Key'] = fallbackToken;
+      return fetch(url, { ...init, headers });
+    }
+    throw err;
+  }
 }
 
 function generateFallbackDonations(
@@ -400,6 +416,7 @@ export default async function handler(req: any, res: any) {
 
   const muId = String(req.query?.muId || '69c229c4449287ea1a26a5b3');
   const forceRefresh = req.query?.refresh === 'true';
+  const userApiKey = (req.headers['x-user-api-key'] as string) || (req.query?.apiKey as string);
   const cacheKey = `mu_${muId}`;
 
   const cached = cache.get(cacheKey);
@@ -411,7 +428,7 @@ export default async function handler(req: any, res: any) {
     const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(
       JSON.stringify({ muId })
     )}`;
-    const muResponse = await fetchWarEra(muUrl);
+    const muResponse = await fetchWarEra(muUrl, undefined, userApiKey);
 
     if (!muResponse.ok) {
       const errorText = await muResponse.text();
