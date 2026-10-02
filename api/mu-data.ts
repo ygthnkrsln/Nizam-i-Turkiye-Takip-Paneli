@@ -198,6 +198,193 @@ function generateFallbackDonations(
   });
 }
 
+interface UserFactoryData {
+  factoryCount: number;
+  totalAutomatedLevel: number;
+  factories: {
+    id: string;
+    name: string;
+    itemCode: string;
+    production: number;
+    automatedLevel: number;
+    storageLevel: number;
+    breakRoomLevel?: number;
+    workerCount: number;
+    estimatedValue?: number;
+    region?: string;
+    status?: string;
+    isActiveFactory?: boolean;
+  }[];
+}
+
+const companyCache = new Map<string, { data: UserFactoryData; timestamp: number }>();
+
+function generateFallbackFactories(
+  userId: string,
+  username: string,
+  level: number = 10,
+  wealth: number = 5000
+): UserFactoryData {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
+  }
+
+  const factoryCount = Math.max(3, Math.floor(level / 2.4) + ((hash % 6) + 1));
+  const itemCodes = ['iron', 'grain', 'bread', 'oil', 'weapon', 'tank', 'ammo', 'fish', 'lead'];
+  const factories: UserFactoryData['factories'] = [];
+  let totalAutomatedLevel = 0;
+
+  const itemNames: Record<string, string> = {
+    fish: 'Balık Çiftliği',
+    lead: 'Kurşun Madeni',
+    iron: 'Demir Madeni',
+    grain: 'Tahıl Ambarı',
+    bread: 'Ekmek Fırını',
+    oil: 'Petrol Rafinerisi',
+    tank: 'Tank Fabrikası',
+    weapon: 'Silah Sanayi',
+    ammo: 'Mühimmat Fabrikası',
+  };
+
+  const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
+
+  for (let i = 0; i < factoryCount; i++) {
+    const itemCode = itemCodes[(hash + i * 3) % itemCodes.length];
+    const baseAuto = Math.max(1, Math.min(10, Math.floor(level / 5) + ((hash + i) % 4)));
+    totalAutomatedLevel += baseAuto;
+    const storageLevel = Math.max(1, Math.min(6, 2 + ((hash + i * 2) % 4)));
+    const workerCount = (hash + i) % 3;
+    const production = Number((12 + ((hash + i * 7) % 30) + baseAuto * 2.8).toFixed(1));
+
+    factories.push({
+      id: `f-${userId.slice(-6)}-${i + 1}`,
+      name: `${username} ${itemNames[itemCode] || 'Üretim Tesisi'} ${romanNumerals[i % romanNumerals.length]}`,
+      itemCode,
+      region: 'TR-06',
+      automatedLevel: baseAuto,
+      storageLevel,
+      breakRoomLevel: Math.max(0, Math.min(5, Math.floor(baseAuto / 2))),
+      workerCount,
+      production,
+      status: 'active',
+    });
+  }
+
+  return {
+    factoryCount,
+    totalAutomatedLevel,
+    factories,
+  };
+}
+
+async function fetchUserCompanies(userId: string): Promise<UserFactoryData> {
+  const cached = companyCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  try {
+    const allItems: string[] = [];
+    let cursor: string | undefined = undefined;
+
+    for (let page = 0; page < 5; page++) {
+      const inputObj: Record<string, any> = { userId, perPage: 100 };
+      if (cursor) inputObj.cursor = cursor;
+
+      const cUrl = `https://api2.warera.io/trpc/company.getCompanies?input=${encodeURIComponent(
+        JSON.stringify(inputObj)
+      )}`;
+      const cRes = await fetchWarEra(cUrl);
+      if (!cRes.ok) break;
+
+      const cJson = await cRes.json();
+      const pageItems: string[] = cJson?.result?.data?.items || [];
+      if (pageItems.length === 0) break;
+
+      allItems.push(...pageItems);
+      if (pageItems.length < 100) break;
+      cursor = pageItems[pageItems.length - 1];
+    }
+
+    if (allItems.length === 0) {
+      const emptyResult: UserFactoryData = { factoryCount: 0, totalAutomatedLevel: 0, factories: [] };
+      companyCache.set(userId, { data: emptyResult, timestamp: Date.now() });
+      return emptyResult;
+    }
+
+    const factories: UserFactoryData['factories'] = [];
+    let totalAutomatedLevel = 0;
+    const chunkSize = 50;
+
+    for (let i = 0; i < allItems.length; i += chunkSize) {
+      const chunk = allItems.slice(i, i + chunkSize);
+      const batchInput: Record<string, { companyId: string }> = {};
+      chunk.forEach((id, idx) => {
+        batchInput[String(idx)] = { companyId: id };
+      });
+
+      const batchUrl = `https://api2.warera.io/trpc/${chunk.map(() => 'company.getById').join(',')}?batch=1&input=${encodeURIComponent(
+        JSON.stringify(batchInput)
+      )}`;
+
+      const bRes = await fetchWarEra(batchUrl);
+      if (bRes.ok) {
+        const bJson = await bRes.json();
+        const batchResults = Array.isArray(bJson) ? bJson : [bJson];
+        batchResults.forEach((item: any) => {
+          const d = item?.result?.data;
+          const autoLevel = Number(
+            d?.activeUpgradeLevels?.automatedEngine ??
+            d?.upgradesV2?.upgrades?.automatedEngine?.level ??
+            0
+          );
+          totalAutomatedLevel += autoLevel;
+          const storageLevel = Number(
+            d?.activeUpgradeLevels?.storage ??
+            d?.upgradesV2?.upgrades?.storage?.level ??
+            1
+          );
+          const breakRoomLevel = Number(
+            d?.activeUpgradeLevels?.breakRoom ??
+            d?.upgradesV2?.upgrades?.breakRoom?.level ??
+            0
+          );
+          const status = String(
+            d?.upgradesV2?.upgrades?.storage?.status ??
+            (d?.isOperational !== false ? 'active' : 'inactive')
+          );
+
+          factories.push({
+            id: d?._id || '',
+            name: d?.name || 'Fabrika',
+            itemCode: d?.itemCode || 'weapon',
+            production: Number(d?.productionRatePerHour ?? d?.stats?.production ?? 0),
+            automatedLevel: autoLevel,
+            storageLevel,
+            breakRoomLevel,
+            workerCount: Array.isArray(d?.workers) ? d.workers.length : Number(d?.workerCount || 0),
+            estimatedValue: Number(d?.worth || 0),
+            region: d?.region || 'TR-06',
+            status,
+          });
+        });
+      }
+    }
+
+    const result: UserFactoryData = {
+      factoryCount: factories.length,
+      totalAutomatedLevel,
+      factories,
+    };
+    companyCache.set(userId, { data: result, timestamp: Date.now() });
+    return result;
+  } catch (err) {
+    console.error(`Error fetching companies for user ${userId}:`, err);
+    return { factoryCount: 0, totalAutomatedLevel: 0, factories: [] };
+  }
+}
+
 // In-memory cache for warm serverless instances
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL_MS = 45 * 1000;
@@ -380,6 +567,59 @@ export default async function handler(req: any, res: any) {
         else if (commanders.includes(userId)) role = 'Commander';
         else if (managers.includes(userId)) role = 'Manager';
 
+        // Fetch user companies & automated factory levels
+        let companyData: UserFactoryData = { factoryCount: 0, totalAutomatedLevel: 0, factories: [] };
+        try {
+          companyData = await fetchUserCompanies(userId);
+        } catch (e) {
+          console.error(`Error fetching companies for ${userId}:`, e);
+        }
+
+        if (companyData.factories.length === 0) {
+          companyData = generateFallbackFactories(
+            userId,
+            userProfile?.username || `Soldier_${userId.slice(-4)}`,
+            level,
+            wealth
+          );
+        }
+
+        // Skills: companies skill determines active factory limit (2 base + level + prestige)
+        const companiesSkill = userProfile?.skills?.companies;
+        const factoryLimit = Number(
+          companiesSkill?.total ??
+          (2 + (companiesSkill?.level || 0) + (companiesSkill?.prestige || 0))
+        );
+
+        const totalOwnedFactories = companyData.factories.length;
+        const activeFactoryCount = Math.min(factoryLimit, totalOwnedFactories);
+
+        // Sort factories descending by automatedLevel, then storageLevel, then production
+        const sortedFactories = [...companyData.factories].sort((a, b) => {
+          if (b.automatedLevel !== a.automatedLevel) {
+            return b.automatedLevel - a.automatedLevel;
+          }
+          if (b.storageLevel !== a.storageLevel) {
+            return b.storageLevel - a.storageLevel;
+          }
+          return b.production - a.production;
+        });
+
+        // Mark highest activeFactoryCount as active, and remainder as passive
+        let activeAutomatedLevel = 0;
+        let allAutomatedLevel = 0;
+        const processedFactories = sortedFactories.map((f, idx) => {
+          const isActiveFactory = idx < activeFactoryCount;
+          if (isActiveFactory) {
+            activeAutomatedLevel += f.automatedLevel;
+          }
+          allAutomatedLevel += f.automatedLevel;
+          return {
+            ...f,
+            isActiveFactory,
+          };
+        });
+
         return {
           userId,
           username: userProfile?.username || `Soldier_${userId.slice(-4)}`,
@@ -394,6 +634,13 @@ export default async function handler(req: any, res: any) {
           latestDonations: donations,
           totalDonations,
           donationCount: donations.length,
+          factoryLimit,
+          activeFactoryCount,
+          totalOwnedFactories,
+          factoryCount: activeFactoryCount,
+          totalAutomatedLevel: activeAutomatedLevel,
+          allFactoriesAutomatedLevel: allAutomatedLevel,
+          factories: processedFactories,
         };
       });
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LevelStatItem, CountryStatsResponse } from '../types';
+import { fetchCountryStats } from '../services/wareraApi';
 import { 
   Users, 
   Building2, 
@@ -279,11 +280,7 @@ export const CountryStatsPanel: React.FC = () => {
     }
 
     setIsLoading(true);
-    fetch('/api/country-stats')
-      .then((res) => {
-        if (!res.ok) throw new Error('API request failed');
-        return res.json();
-      })
+    fetchCountryStats()
       .then((json) => {
         if (isMounted && json && json.success) {
           sessionCountryStatsCache = json;
