@@ -7,12 +7,12 @@ import {
   Search, 
   Clock, 
   FileDown,
-  RefreshCw
+  RefreshCw,
+  Coins
 } from 'lucide-react';
 import { formatNumber, formatRelativeTime } from '../utils/formatters';
 import { exportPlayerTableToPDF } from '../utils/exportPdf';
 import { 
-  DestinationBadge, 
   TurkeyFlagSVG, 
   UAEFlagSVG, 
   AzerbaijanFlagSVG, 
@@ -316,14 +316,15 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
                 </div>
               </th>
 
-              {/* Donation Destination Column */}
+              {/* Total Wealth Column */}
               <th
-                onClick={() => handleSort('target')}
-                className="py-3 px-4 cursor-pointer hover:text-white group min-w-[220px]"
+                onClick={() => handleSort('wealth')}
+                className="py-3 px-4 cursor-pointer hover:text-white group min-w-[160px] text-right"
               >
-                <div className="flex items-center">
-                  <span>Bağış Hedefi</span>
-                  {renderSortIndicator('target')}
+                <div className="flex items-center justify-end gap-1.5">
+                  <Coins className="w-3.5 h-3.5 text-[#A78BFA]" />
+                  <span>Toplam Servet</span>
+                  {renderSortIndicator('wealth')}
                 </div>
               </th>
             </tr>
@@ -350,11 +351,8 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
                       ))}
                     </div>
                   </td>
-                  <td className="py-3.5 px-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-4 bg-[#141C21] rounded" />
-                      <div className="w-24 h-3 bg-[#141C21] rounded" />
-                    </div>
+                  <td className="py-3.5 px-4 text-right">
+                    <div className="w-24 h-4 bg-[#141C21] rounded ml-auto" />
                   </td>
                 </tr>
               ))
@@ -370,9 +368,6 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
               </tr>
             ) : (
               filteredAndSortedPlayers.map((player) => {
-                const dest = getPlayerDestinations(player);
-                const hasBoth = dest.countryCount > 0 && dest.muCount > 0;
-
                 // Inactive check: > 3 days without login or missing lastActive
                 const isInactive = Boolean(
                   !player.lastActive ||
@@ -473,95 +468,16 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
                       </div>
                     </td>
 
-                    {/* Destination Column (Flag + Destination Details) */}
-                    <td className="py-3 px-4 whitespace-nowrap">
-                      {dest.totalCount === 0 ? null : hasBoth ? (
-                        <div className="space-y-1.5">
-                          {/* Country Destination */}
-                          <div className="flex items-center gap-2">
-                            {dest.uaeCount > 0 ? (
-                              <UAEFlagSVG className="w-5 h-3.5 shrink-0" />
-                            ) : dest.azCount > 0 ? (
-                              <AzerbaijanFlagSVG className="w-5 h-3.5 shrink-0" />
-                            ) : dest.cmCount > 0 ? (
-                              <CameroonFlagSVG className="w-5 h-3.5 shrink-0" />
-                            ) : (
-                              <TurkeyFlagSVG className="w-5 h-3.5 shrink-0" />
-                            )}
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-semibold text-white">
-                                {dest.uaeCount > 0
-                                  ? 'BAE'
-                                  : dest.azCount > 0
-                                  ? 'Azerbaycan'
-                                  : dest.cmCount > 0
-                                  ? 'Kamerun'
-                                  : 'Türkiye'}
-                              </span>
-                              <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-[#0F4C75]/40 text-[#BBE1FA] border border-[#3282B8]/30">
-                                Ülke
-                              </span>
-                              <span className="text-[10px] text-[#BBE1FA]/60 font-mono">
-                                ({dest.countryCount}x)
-                              </span>
-                            </div>
-                          </div>
-                          {/* Army Destination */}
-                          <div className="flex items-center gap-2">
-                            {muAvatarUrl ? (
-                              <img
-                                src={muAvatarUrl}
-                                alt={muName}
-                                className="w-5 h-5 rounded-xs object-cover border border-[#3282B8]/30 shrink-0 shadow-xs"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              <ArmyFlagSVG className="w-5 h-3.5 shrink-0" />
-                            )}
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-semibold text-white truncate max-w-[120px]">
-                                {muName}
-                              </span>
-                              <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-[#0F4C75]/40 text-[#BBE1FA] border border-[#3282B8]/30">
-                                Ordu
-                              </span>
-                              <span className="text-[10px] text-[#BBE1FA]/60 font-mono">
-                                ({dest.muCount}x)
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ) : dest.muCount > 0 ? (
-                        <DestinationBadge
-                          target="mu"
-                          targetName={muName}
-                          muAvatarUrl={muAvatarUrl}
-                          count={dest.muCount}
-                        />
-                      ) : (
-                        <DestinationBadge
-                          target="country"
-                          targetName={
-                            dest.uaeCount > 0
-                              ? 'Birleşik Arap Emirlikleri'
-                              : dest.azCount > 0
-                              ? 'Azerbaycan'
-                              : dest.cmCount > 0
-                              ? 'Kamerun'
-                              : 'Türkiye'
-                          }
-                          countryCode={
-                            dest.uaeCount > 0
-                              ? 'AE'
-                              : dest.azCount > 0
-                              ? 'AZ'
-                              : dest.cmCount > 0
-                              ? 'CM'
-                              : 'TR'
-                          }
-                          count={dest.countryCount}
-                        />
-                      )}
+                    {/* Toplam Servet Sütunu */}
+                    <td className="py-3 px-4 whitespace-nowrap text-right font-mono">
+                      <div className="inline-flex items-center justify-end gap-1.5 px-2.5 py-1 rounded-md bg-[#141C21] border border-[#A78BFA]/25 shadow-xs">
+                        <Coins className="w-3.5 h-3.5 text-[#A78BFA] shrink-0" />
+                        <span className="font-bold text-[#A78BFA] text-xs">
+                          {player.wealth !== undefined && player.wealth !== null
+                            ? `${Math.round(player.wealth).toLocaleString('tr-TR')} Gold`
+                            : '-'}
+                        </span>
+                      </div>
                     </td>
                   </tr>
                 );
