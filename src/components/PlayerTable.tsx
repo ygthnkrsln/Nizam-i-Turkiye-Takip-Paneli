@@ -70,13 +70,6 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
     }
   };
 
-  const formatLastLogin = (dateStr?: string) => {
-    if (!dateStr) return '-';
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return '-';
-    return `${d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
-  };
-
   // Helper to extract unique destinations for a player
   const getPlayerDestinations = (player: PlayerStats) => {
     const donations = player.latestDonations || [];
@@ -150,6 +143,10 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
           case 'totalDonations':
             aVal = a.totalDonations;
             bVal = b.totalDonations;
+            break;
+          case 'level':
+            aVal = a.level || 0;
+            bVal = b.level || 0;
             break;
           case 'latestDonation': {
             const aLatest = a.latestDonations && a.latestDonations.length > 0
@@ -496,9 +493,10 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
                               </span>
                             )}
                           </div>
-                          {/* Last login date */}
-                          <div className="text-[11px] text-[#BBE1FA]/60 font-mono truncate mt-0.5">
-                            {formatLastLogin(player.lastActive)}
+                          {/* Player Level */}
+                          <div className="text-[11px] text-[#BBE1FA]/70 font-mono truncate mt-0.5 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#3282B8] shrink-0" />
+                            <span>Seviye {player.level}</span>
                           </div>
                         </div>
                       </div>
