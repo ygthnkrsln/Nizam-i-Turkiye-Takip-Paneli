@@ -1,4 +1,13 @@
-import { ApiResponse, DonationItem, MilitaryUnitData, PlayerStats, FactoryItem, CountryStatsResponse } from '../types';
+import { 
+  ApiResponse, 
+  DonationItem, 
+  MilitaryUnitData, 
+  PlayerStats, 
+  FactoryItem, 
+  CountryStatsResponse,
+  MilitaryOverviewResponse,
+  MilitaryOverviewData
+} from '../types';
 
 export const DEFAULT_MU_ID = '69c229c4449287ea1a26a5b3';
 const CACHE_KEY_PREFIX = 'warera_mu_cache_';
@@ -1370,4 +1379,49 @@ export async function fetchCountryStats(forceRefresh = false): Promise<CountrySt
     console.error('Direct country stats fetch failed:', clientErr);
     throw clientErr;
   }
+}
+
+const MILITARY_OVERVIEW_STORAGE_KEY_PREFIX = 'warera_mil_overview_';
+
+export function getCachedMilitaryOverview(muId: string = DEFAULT_MU_ID): MilitaryOverviewData | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`${MILITARY_OVERVIEW_STORAGE_KEY_PREFIX}${muId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.data) {
+      return parsed.data;
+    }
+  } catch (e) {}
+  return null;
+}
+
+export async function fetchMilitaryOverview(
+  muId: string = DEFAULT_MU_ID,
+  forceRefresh = false
+): Promise<MilitaryOverviewData> {
+  const cacheKey = `${MILITARY_OVERVIEW_STORAGE_KEY_PREFIX}${muId}`;
+  
+  if (!forceRefresh) {
+    const cached = getCachedMilitaryOverview(muId);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const endpoint = `/api/military-overview?muId=${encodeURIComponent(muId)}${forceRefresh ? '&refresh=true' : ''}`;
+  const res = await fetch(endpoint);
+  if (!res.ok) {
+    throw new Error(`Ordu genel bilgileri alınamadı (${res.status})`);
+  }
+  const json: MilitaryOverviewResponse = await res.json();
+  if (!json.success || !json.data) {
+    throw new Error(json.error || 'Ordu bilgileri yüklenemedi');
+  }
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify({ data: json.data, timestamp: Date.now() }));
+  } catch (e) {}
+
+  return json.data;
 }

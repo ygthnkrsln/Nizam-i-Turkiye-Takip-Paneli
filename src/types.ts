@@ -183,3 +183,84 @@ export interface CountryStatsResponse {
   levelStats: LevelStatItem[];
   generatedAt: string;
 }
+
+export interface MilitaryLeaderItem {
+  userId: string;
+  username: string;
+  avatarUrl: string;
+  role: 'leader' | 'manager' | 'commander';
+  roleLabel: string;
+  level: number;
+}
+
+export interface MilitaryMvpItem {
+  userId: string;
+  username: string;
+  avatarUrl: string;
+  value: number;
+  formattedValue: string;
+  level?: number;
+  prestigeLevel?: number;
+}
+
+export interface LevelSpectrumItem {
+  range: string;
+  min: number;
+  max: number;
+  count: number;
+  percentage: number;
+}
+
+export interface MilitaryMemberItem {
+  userId: string;
+  username: string;
+  avatarUrl: string;
+  level: number;
+  totalXp: number;
+  prestigeLevel: number;
+  weeklyDamage: number;
+  allTimeDamage: number;
+  wealth: number;
+}
+
+export interface MilitaryOverviewData {
+  muInfo: {
+    id: string;
+    name: string;
+    avatarUrl: string;
+    description: string;
+    countryId: string;
+    leaderId: string;
+  };
+  countryInfo: {
+    name: string;
+    code: string;
+    flagUrl: string;
+  };
+  stats: {
+    memberCount: number;
+    commanderCount: number;
+    totalWeeklyDamage: number;
+    totalAllTimeDamage: number;
+    averageLevel: number;
+    totalWealth: number;
+    averageWealth: number;
+  };
+  mvps: {
+    weeklyDamageLeader: MilitaryMvpItem | null;
+    allTimeDamageLeader: MilitaryMvpItem | null;
+    mostExperienced: MilitaryMvpItem | null;
+    wealthiest: MilitaryMvpItem | null;
+  };
+  leadership: MilitaryLeaderItem[];
+  levelSpectrum: LevelSpectrumItem[];
+  members: MilitaryMemberItem[];
+  generatedAt: string;
+}
+
+export interface MilitaryOverviewResponse {
+  success: boolean;
+  data?: MilitaryOverviewData;
+  error?: string;
+}
+

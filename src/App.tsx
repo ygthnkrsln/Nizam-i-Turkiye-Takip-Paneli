@@ -10,6 +10,8 @@ import { PlayerTable } from './components/PlayerTable';
 import { ArmyStatsTable } from './components/ArmyStatsTable';
 import { CountryStatsPanel } from './components/CountryStatsPanel';
 import { ApiKeySection } from './components/ApiKeySection';
+import { WorkInProgressPanel } from './components/WorkInProgressPanel';
+import { MilitaryOverviewSection } from './components/MilitaryOverviewSection';
 import { MilitaryUnitData, PlayerStats, ApiResponse } from './types';
 import { 
   fetchMilitaryUnitData, 
@@ -20,18 +22,41 @@ import {
 } from './services/wareraApi';
 import { AlertCircle } from 'lucide-react';
 
-export type ActiveTab = 'donations' | 'armyStats' | 'countryStats';
+export type ActiveTab = 
+  | 'donations' 
+  | 'armyStats' 
+  | 'countryStats' 
+  | 'combatArmyInfo' 
+  | 'combatDetails' 
+  | 'combatDamage';
+
+export type AppMode = 'economy' | 'combat';
 
 export const TAB_TO_SLUG: Record<ActiveTab, string> = {
   donations: 'bagis-takip',
   armyStats: 'ordu-istatistikleri',
   countryStats: 'ulke-istatistikleri',
+  combatArmyInfo: 'ordu-bilgisi',
+  combatDetails: 'detayli-bilgi',
+  combatDamage: 'hasar',
+};
+
+export const TAB_TO_MODE: Record<ActiveTab, AppMode> = {
+  donations: 'economy',
+  armyStats: 'economy',
+  countryStats: 'economy',
+  combatArmyInfo: 'combat',
+  combatDetails: 'combat',
+  combatDamage: 'combat',
 };
 
 const TAB_TITLES: Record<ActiveTab, string> = {
   donations: 'War Era - Bağış Takip Paneli',
   armyStats: 'War Era - Ordu İstatistikleri',
   countryStats: 'War Era - Ülke İstatistikleri',
+  combatArmyInfo: 'War Era - Ordu Bilgisi (Savaş Modu)',
+  combatDetails: 'War Era - Detaylı Bilgi (Savaş Modu)',
+  combatDamage: 'War Era - Hasar (Savaş Modu)',
 };
 
 export function getTabFromUrl(): ActiveTab {
@@ -42,6 +67,18 @@ export function getTabFromUrl(): ActiveTab {
   const hash = window.location.hash.toLowerCase().replace(/^#\/?/, '');
   const segment = path || hash;
 
+  // Savaş Modu (Combat) rotaları
+  if (segment === 'ordu-bilgisi' || segment === 'ordubilgisi' || segment === 'army-info') {
+    return 'combatArmyInfo';
+  }
+  if (segment === 'detayli-bilgi' || segment === 'detaylibilgi' || segment === 'detailed-info' || segment === 'detay') {
+    return 'combatDetails';
+  }
+  if (segment === 'hasar' || segment === 'damage') {
+    return 'combatDamage';
+  }
+
+  // Ekonomi Modu (Economy) rotaları
   if (
     segment === 'ordu-istatistikleri' ||
     segment === 'ordu' ||
@@ -145,6 +182,16 @@ export default function App() {
       document.title = TAB_TITLES[newTab];
     }
   }, []);
+
+  const currentMode: AppMode = TAB_TO_MODE[activeTab] || 'economy';
+
+  const handleModeChange = useCallback((newMode: AppMode) => {
+    if (newMode === 'combat') {
+      handleTabChange('combatArmyInfo');
+    } else {
+      handleTabChange('donations');
+    }
+  }, [handleTabChange]);
 
   // Listen for browser Back/Forward (popstate) navigation & sync URL
   useEffect(() => {
@@ -295,8 +342,13 @@ export default function App() {
       {/* Ambient background glow matching the color scheme */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0F4C75]/20 via-transparent to-transparent pointer-events-none" />
 
-      {/* Top Header - With Tab Switcher (Bağış Takip Paneli, Ordu İstatistikleri, Ülke İstatistikleri) */}
-      <Header activeTab={activeTab} onTabChange={handleTabChange} />
+      {/* Top Header - With Mode Switcher (Ekonomi vs Savaş) & Dynamic Tabs */}
+      <Header 
+        activeTab={activeTab} 
+        onTabChange={handleTabChange} 
+        currentMode={currentMode}
+        onModeChange={handleModeChange}
+      />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 relative z-10">
@@ -316,45 +368,63 @@ export default function App() {
           </div>
         )}
 
-        {/* Top 4-Column Equal Cards (Army Selector, Active Soldiers, Active Factories, Active Engine Power) - shown in army/donation tabs */}
-        {activeTab !== 'countryStats' && (
-          <MetricsCards
-            totalMembers={players.length}
-            activePlayers={armyMetrics.activePlayers}
-            totalActiveFactories={armyMetrics.totalActiveFactories}
-            totalAllFactories={armyMetrics.totalAllFactories}
-            totalActiveEnginePower={armyMetrics.totalActiveEnginePower}
-            muData={muData}
-            currentMuId={muId}
-            onMuIdChange={handleMuIdChange}
-          />
-        )}
-
-        {/* Tab 1: Bağış Takip Paneli | Tab 2: Ordu İstatistikleri | Tab 3: Ülke İstatistikleri */}
-        {activeTab === 'donations' ? (
-          <div>
-            {/* WarEra API Key Giriş Bölümü */}
-            <ApiKeySection onKeyChange={() => fetchData(true)} />
-
-            <PlayerTable
-              players={players}
-              isLoading={isLoading}
-              isRefreshing={isRefreshing}
-              onRefresh={() => fetchData(true)}
-              muName={muData?.name || 'Turkic Tribe'}
-              muAvatarUrl={muData?.avatarUrl}
+        {/* Main Content Area */}
+        {currentMode === 'combat' ? (
+          activeTab === 'combatArmyInfo' ? (
+            <MilitaryOverviewSection
+              muId={muId}
+              onMuIdChange={handleMuIdChange}
+              onNavigateTab={handleTabChange}
             />
-          </div>
-        ) : activeTab === 'armyStats' ? (
-          <ArmyStatsTable
-            players={players}
-            isLoading={isLoading}
-            isRefreshing={isRefreshing}
-            onRefresh={() => fetchData(true)}
-            muName={muData?.name || 'Turkic Tribe'}
-          />
+          ) : (
+            <WorkInProgressPanel
+              activeTab={activeTab}
+              onSwitchToEconomy={() => handleModeChange('economy')}
+            />
+          )
         ) : (
-          <CountryStatsPanel />
+          <>
+            {/* Top 4-Column Equal Cards (Army Selector, Active Soldiers, Active Factories, Active Engine Power) - shown in army/donation tabs */}
+            {activeTab !== 'countryStats' && (
+              <MetricsCards
+                totalMembers={players.length}
+                activePlayers={armyMetrics.activePlayers}
+                totalActiveFactories={armyMetrics.totalActiveFactories}
+                totalAllFactories={armyMetrics.totalAllFactories}
+                totalActiveEnginePower={armyMetrics.totalActiveEnginePower}
+                muData={muData}
+                currentMuId={muId}
+                onMuIdChange={handleMuIdChange}
+              />
+            )}
+
+            {/* Tab 1: Bağış Takip Paneli | Tab 2: Ordu İstatistikleri | Tab 3: Ülke İstatistikleri */}
+            {activeTab === 'donations' ? (
+              <div>
+                {/* WarEra API Key Giriş Bölümü */}
+                <ApiKeySection onKeyChange={() => fetchData(true)} />
+
+                <PlayerTable
+                  players={players}
+                  isLoading={isLoading}
+                  isRefreshing={isRefreshing}
+                  onRefresh={() => fetchData(true)}
+                  muName={muData?.name || 'Turkic Tribe'}
+                  muAvatarUrl={muData?.avatarUrl}
+                />
+              </div>
+            ) : activeTab === 'armyStats' ? (
+              <ArmyStatsTable
+                players={players}
+                isLoading={isLoading}
+                isRefreshing={isRefreshing}
+                onRefresh={() => fetchData(true)}
+                muName={muData?.name || 'Turkic Tribe'}
+              />
+            ) : (
+              <CountryStatsPanel />
+            )}
+          </>
         )}
       </main>
 
