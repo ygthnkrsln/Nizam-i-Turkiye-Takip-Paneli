@@ -12,6 +12,9 @@ import { CountryStatsPanel } from './components/CountryStatsPanel';
 import { ApiKeySection } from './components/ApiKeySection';
 import { WorkInProgressPanel } from './components/WorkInProgressPanel';
 import { MilitaryOverviewSection } from './components/MilitaryOverviewSection';
+import { MilitaryDetailsSection } from './components/MilitaryDetailsSection';
+import { DailyDamageTelemetrySection } from './components/DailyDamageTelemetrySection';
+import { ManagementWipSection, ManagementTab } from './components/ManagementWipSection';
 import { MilitaryUnitData, PlayerStats, ApiResponse } from './types';
 import { 
   fetchMilitaryUnitData, 
@@ -28,9 +31,13 @@ export type ActiveTab =
   | 'countryStats' 
   | 'combatArmyInfo' 
   | 'combatDetails' 
-  | 'combatDamage';
+  | 'combatDamage'
+  | 'mgmtUnit'
+  | 'mgmtOrders'
+  | 'mgmtTreasury'
+  | 'mgmtDiplomacy';
 
-export type AppMode = 'economy' | 'combat';
+export type AppMode = 'economy' | 'combat' | 'management';
 
 export const TAB_TO_SLUG: Record<ActiveTab, string> = {
   donations: 'bagis-takip',
@@ -39,6 +46,10 @@ export const TAB_TO_SLUG: Record<ActiveTab, string> = {
   combatArmyInfo: 'ordu-bilgisi',
   combatDetails: 'detayli-bilgi',
   combatDamage: 'hasar',
+  mgmtUnit: 'birlik-yonetimi',
+  mgmtOrders: 'gorev-ve-emirler',
+  mgmtTreasury: 'kasa-lojistik',
+  mgmtDiplomacy: 'ittifak-diplomasi',
 };
 
 export const TAB_TO_MODE: Record<ActiveTab, AppMode> = {
@@ -48,15 +59,23 @@ export const TAB_TO_MODE: Record<ActiveTab, AppMode> = {
   combatArmyInfo: 'combat',
   combatDetails: 'combat',
   combatDamage: 'combat',
+  mgmtUnit: 'management',
+  mgmtOrders: 'management',
+  mgmtTreasury: 'management',
+  mgmtDiplomacy: 'management',
 };
 
 const TAB_TITLES: Record<ActiveTab, string> = {
-  donations: 'War Era - Bağış Takip Paneli',
-  armyStats: 'War Era - Ordu İstatistikleri',
-  countryStats: 'War Era - Ülke İstatistikleri',
-  combatArmyInfo: 'War Era - Ordu Bilgisi (Savaş Modu)',
-  combatDetails: 'War Era - Detaylı Bilgi (Savaş Modu)',
-  combatDamage: 'War Era - Hasar (Savaş Modu)',
+  donations: 'Nizam-ı Türkiye - Bağış Takip Paneli',
+  armyStats: 'Nizam-ı Türkiye - Ordu İstatistikleri',
+  countryStats: 'Nizam-ı Türkiye - Ülke İstatistikleri',
+  combatArmyInfo: 'Nizam-ı Türkiye - Ordu Bilgisi (Savaş Modu)',
+  combatDetails: 'Nizam-ı Türkiye - Detaylı Bilgi (Savaş Modu)',
+  combatDamage: 'Nizam-ı Türkiye - Hasar Telemetrisi (Savaş Modu)',
+  mgmtUnit: 'Nizam-ı Türkiye - Birlik Yönetimi (Yönetim Modu)',
+  mgmtOrders: 'Nizam-ı Türkiye - Görev & Emirler (Yönetim Modu)',
+  mgmtTreasury: 'Nizam-ı Türkiye - Kasa & Lojistik (Yönetim Modu)',
+  mgmtDiplomacy: 'Nizam-ı Türkiye - İttifak & Diplomasi (Yönetim Modu)',
 };
 
 export function getTabFromUrl(): ActiveTab {
@@ -66,6 +85,20 @@ export function getTabFromUrl(): ActiveTab {
   const path = window.location.pathname.toLowerCase().replace(/^\/+|\/+$/g, '');
   const hash = window.location.hash.toLowerCase().replace(/^#\/?/, '');
   const segment = path || hash;
+
+  // Yönetim Modu (Management) rotaları
+  if (segment === 'birlik-yonetimi' || segment === 'birlik' || segment === 'unit-management' || segment === 'yonetim') {
+    return 'mgmtUnit';
+  }
+  if (segment === 'gorev-ve-emirler' || segment === 'emirler' || segment === 'orders' || segment === 'gorev') {
+    return 'mgmtOrders';
+  }
+  if (segment === 'kasa-lojistik' || segment === 'kasa' || segment === 'treasury' || segment === 'lojistik') {
+    return 'mgmtTreasury';
+  }
+  if (segment === 'ittifak-diplomasi' || segment === 'diplomasi' || segment === 'diplomacy' || segment === 'ittifak') {
+    return 'mgmtDiplomacy';
+  }
 
   // Savaş Modu (Combat) rotaları
   if (segment === 'ordu-bilgisi' || segment === 'ordubilgisi' || segment === 'army-info') {
@@ -188,6 +221,8 @@ export default function App() {
   const handleModeChange = useCallback((newMode: AppMode) => {
     if (newMode === 'combat') {
       handleTabChange('combatArmyInfo');
+    } else if (newMode === 'management') {
+      handleTabChange('mgmtUnit');
     } else {
       handleTabChange('donations');
     }
@@ -369,9 +404,28 @@ export default function App() {
         )}
 
         {/* Main Content Area */}
-        {currentMode === 'combat' ? (
+        {currentMode === 'management' ? (
+          <ManagementWipSection
+            activeTab={activeTab as ManagementTab}
+            onTabChange={(t) => handleTabChange(t)}
+            onSwitchMode={(m) => handleModeChange(m)}
+            muName={muData?.name}
+          />
+        ) : currentMode === 'combat' ? (
           activeTab === 'combatArmyInfo' ? (
             <MilitaryOverviewSection
+              muId={muId}
+              onMuIdChange={handleMuIdChange}
+              onNavigateTab={handleTabChange}
+            />
+          ) : activeTab === 'combatDetails' ? (
+            <MilitaryDetailsSection
+              muId={muId}
+              onMuIdChange={handleMuIdChange}
+              onNavigateTab={handleTabChange}
+            />
+          ) : activeTab === 'combatDamage' ? (
+            <DailyDamageTelemetrySection
               muId={muId}
               onMuIdChange={handleMuIdChange}
               onNavigateTab={handleTabChange}

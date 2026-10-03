@@ -48,7 +48,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = ({ onKeyChange }) => 
   return (
     <div
       id="api-key-section"
-      className="mb-6 p-5 sm:p-6 rounded-2xl bg-[#182329]/95 border border-[#3282B8]/25 shadow-xl shadow-black/30 backdrop-blur-sm"
+      className="mb-6 p-5 sm:p-6 rounded-2xl bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 shadow-xl shadow-black/30 backdrop-blur-sm transition-colors"
     >
       {/* 1. Üst Başlık */}
       <div className="flex items-center gap-2.5 mb-3 flex-wrap">

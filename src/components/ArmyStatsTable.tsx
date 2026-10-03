@@ -223,20 +223,20 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
   };
 
   return (
-    <div id="army-stats-table-container" className="bg-[#182329]/95 border border-[#3282B8]/25 rounded-xl overflow-hidden shadow-2xl shadow-black/40 backdrop-blur-sm">
+    <div id="army-stats-table-container" className="bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl overflow-hidden shadow-2xl shadow-black/40 backdrop-blur-sm transition-colors">
       {/* Table Header & Toolbar */}
-      <div className="p-4 border-b border-[#3282B8]/15 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#141C21]/60">
+      <div className="p-4 border-b border-emerald-500/20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#141C21]/60">
         <div className="flex items-center gap-3 flex-1 flex-wrap">
           {/* Search Input */}
           <div className="w-full sm:w-72 relative group">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#3282B8] group-focus-within:text-white transition-colors" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 group-focus-within:text-white transition-colors" />
             <input
               id="army-search-input"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Asker veya oyuncu adına göre ara..."
-              className="w-full pl-9 pr-8 py-2 text-xs rounded-lg border border-[#3282B8]/30 focus:border-[#3282B8] bg-[#182329] text-white placeholder:text-[#BBE1FA]/40 focus:outline-none focus:ring-1 focus:ring-[#3282B8]/50 transition-all shadow-inner"
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-lg border border-emerald-500/30 focus:border-emerald-500 bg-[#182329] text-white placeholder:text-[#BBE1FA]/40 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all shadow-inner"
             />
             {searchQuery && (
               <button
@@ -249,13 +249,13 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
           </div>
 
           {/* Mod Filtre Butonları (Tümü / Savaş / Ekonomi) */}
-          <div className="inline-flex items-center rounded-lg bg-[#141C21] p-1 border border-[#3282B8]/25 text-xs font-mono">
+          <div className="inline-flex items-center rounded-lg bg-[#141C21] p-1 border border-emerald-500/25 text-xs font-mono">
             <button
               type="button"
               onClick={() => setModeFilter('all')}
               className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
                 modeFilter === 'all'
-                  ? 'bg-[#0F4C75] text-white font-bold shadow-xs'
+                  ? 'bg-emerald-950/90 text-emerald-300 font-bold border border-emerald-500/50 shadow-xs'
                   : 'text-[#BBE1FA]/60 hover:text-white'
               }`}
             >
@@ -278,7 +278,7 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
               onClick={() => setModeFilter('economy')}
               className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
                 modeFilter === 'economy'
-                  ? 'bg-emerald-950/80 text-emerald-300 font-bold border border-emerald-500/40 shadow-xs'
+                  ? 'bg-emerald-950/90 text-emerald-300 font-bold border border-emerald-500/50 shadow-xs'
                   : 'text-emerald-400/70 hover:text-emerald-300'
               }`}
             >
@@ -297,9 +297,9 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
               onClick={onRefresh}
               disabled={isLoading || isRefreshing}
               title="Ordu ve fabrika verilerini API'den yenile"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium bg-[#141C21] hover:bg-[#0F4C75]/40 text-[#BBE1FA] hover:text-white border border-[#3282B8]/30 transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium bg-[#141C21] hover:bg-emerald-950/40 text-[#BBE1FA] hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 transition-all disabled:opacity-50 cursor-pointer shadow-sm"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${(isLoading || isRefreshing) ? 'animate-spin text-[#BBE1FA]' : 'text-[#3282B8]'}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${(isLoading || isRefreshing) ? 'animate-spin text-emerald-300' : 'text-emerald-400'}`} />
               <span>Yenile</span>
             </button>
           </div>
@@ -310,7 +310,7 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
       <div className="overflow-x-auto">
         <table id="army-stats-data-table" className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-[#3282B8]/20 bg-[#141C21]/90 text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono select-none">
+            <tr className="border-b border-emerald-500/20 bg-[#141C21]/90 text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono select-none">
               {/* 1. Sütun: Asker / Oyuncu */}
               <th
                 onClick={() => handleSort('username')}
@@ -650,7 +650,7 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({
       </div>
 
       {/* Tablo Alt Bilgisi */}
-      <div className="px-4 py-3 bg-[#141C21]/90 border-t border-[#3282B8]/20 text-xs text-[#BBE1FA]/70 font-mono flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div className="px-4 py-3 bg-[#141C21]/90 border-t border-emerald-500/20 text-xs text-[#BBE1FA]/70 font-mono flex flex-col sm:flex-row items-center justify-between gap-2">
         <div>
           Toplam <span className="font-bold text-white">{filteredAndSortedPlayers.length}</span> /{' '}
           <span className="font-bold text-white">{players.length}</span> asker listeleniyor ({summary.totalActiveFactories} Aktif Fabrika • Motor Gücü: {summary.totalActiveEnginePower} Lv • <span className="text-rose-400 font-bold">{summary.totalCombatPlayers} Savaş</span> / <span className="text-emerald-400 font-bold">{summary.totalEconomyPlayers} Ekonomi</span>)

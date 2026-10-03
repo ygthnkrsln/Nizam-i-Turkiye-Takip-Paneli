@@ -406,7 +406,7 @@ export const CountryStatsPanel: React.FC = () => {
   return (
     <div id="country-stats-panel" className="space-y-6">
       {/* 1. Ülke Orduları Bilgi Banner'ı */}
-      <div className="bg-gradient-to-r from-[#182329]/95 via-[#1B262C]/95 to-[#182329]/95 border border-[#3282B8]/30 rounded-xl p-5 shadow-xl shadow-black/30 backdrop-blur-sm">
+      <div className="bg-gradient-to-r from-[#182329]/95 via-[#1B262C]/95 to-[#182329]/95 border border-emerald-500/30 rounded-xl p-5 shadow-xl shadow-black/30 backdrop-blur-sm">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-3 flex-wrap">
@@ -622,7 +622,7 @@ export const CountryStatsPanel: React.FC = () => {
       {/* 2. BÖLÜM 1: Seviye Başına Düşen Oyuncu Grafiği ve Tablosu */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         {/* Sol: Grafik */}
-        <div className="lg:col-span-8 bg-[#182329]/95 border border-[#3282B8]/25 rounded-xl p-5 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between">
+        <div className="lg:col-span-8 bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl p-5 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between transition-colors">
           <div className="flex items-center justify-between mb-4 border-b border-[#3282B8]/15 pb-3">
             <div>
               <div className="text-[11px] uppercase tracking-wider text-[#3282B8] font-mono font-bold flex items-center gap-1.5">
@@ -670,7 +670,7 @@ export const CountryStatsPanel: React.FC = () => {
         </div>
 
         {/* Sağ: Tablo */}
-        <div className="lg:col-span-4 bg-[#182329]/95 border border-[#3282B8]/25 rounded-xl p-4 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between">
+        <div className="lg:col-span-4 bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl p-4 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between transition-colors">
           <div>
             <div className="flex items-center justify-between border-b border-[#3282B8]/15 pb-2 mb-3">
               <span className="text-xs font-bold text-white font-mono uppercase tracking-wider">
@@ -741,7 +741,7 @@ export const CountryStatsPanel: React.FC = () => {
       {/* 3. BÖLÜM 2: Seviye Başına Düşen Ortalama Fabrika Grafiği ve Tablosu */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         {/* Sol: Grafik */}
-        <div className="lg:col-span-8 bg-[#182329]/95 border border-[#3282B8]/25 rounded-xl p-5 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between">
+        <div className="lg:col-span-8 bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl p-5 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between transition-colors">
           <div className="flex items-center justify-between mb-4 border-b border-[#3282B8]/15 pb-3">
             <div>
               <div className="text-[11px] uppercase tracking-wider text-emerald-400 font-mono font-bold flex items-center gap-1.5">
@@ -781,7 +781,7 @@ export const CountryStatsPanel: React.FC = () => {
         </div>
 
         {/* Sağ: Tablo */}
-        <div className="lg:col-span-4 bg-[#182329]/95 border border-[#3282B8]/25 rounded-xl p-4 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between">
+        <div className="lg:col-span-4 bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl p-4 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between transition-colors">
           <div>
             <div className="flex items-center justify-between border-b border-[#3282B8]/15 pb-2 mb-3">
               <span className="text-xs font-bold text-white font-mono uppercase tracking-wider">
@@ -846,7 +846,7 @@ export const CountryStatsPanel: React.FC = () => {
       {/* 4. BÖLÜM 3: Seviye Başına Düşen Otomatik Motor Gücü Grafiği ve Tablosu */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         {/* Sol: Grafik */}
-        <div className="lg:col-span-8 bg-[#182329]/95 border border-[#3282B8]/25 rounded-xl p-5 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between">
+        <div className="lg:col-span-8 bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl p-5 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between transition-colors">
           <div className="flex items-center justify-between mb-4 border-b border-[#3282B8]/15 pb-3">
             <div>
               <div className="text-[11px] uppercase tracking-wider text-amber-400 font-mono font-bold flex items-center gap-1.5">
@@ -886,7 +886,7 @@ export const CountryStatsPanel: React.FC = () => {
         </div>
 
         {/* Sağ: Tablo */}
-        <div className="lg:col-span-4 bg-[#182329]/95 border border-[#3282B8]/25 rounded-xl p-4 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between">
+        <div className="lg:col-span-4 bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl p-4 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between transition-colors">
           <div>
             <div className="flex items-center justify-between border-b border-[#3282B8]/15 pb-2 mb-3">
               <span className="text-xs font-bold text-white font-mono uppercase tracking-wider">
@@ -951,7 +951,7 @@ export const CountryStatsPanel: React.FC = () => {
       {/* 5. BÖLÜM 4: Seviye Başına Ortalama Toplam Servet Dağılımı Grafiği ve Tablosu */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         {/* Sol: Grafik */}
-        <div className="lg:col-span-8 bg-[#182329]/95 border border-[#3282B8]/25 rounded-xl p-5 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between">
+        <div className="lg:col-span-8 bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl p-5 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between transition-colors">
           <div className="flex items-center justify-between mb-4 border-b border-[#3282B8]/15 pb-3">
             <div>
               <div className="text-[11px] uppercase tracking-wider text-[#A78BFA] font-mono font-bold flex items-center gap-1.5">
@@ -991,7 +991,7 @@ export const CountryStatsPanel: React.FC = () => {
         </div>
 
         {/* Sağ: Tablo */}
-        <div className="lg:col-span-4 bg-[#182329]/95 border border-[#3282B8]/25 rounded-xl p-4 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between">
+        <div className="lg:col-span-4 bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl p-4 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between transition-colors">
           <div>
             <div className="flex items-center justify-between border-b border-[#3282B8]/15 pb-2 mb-3">
               <span className="text-xs font-bold text-white font-mono uppercase tracking-wider">

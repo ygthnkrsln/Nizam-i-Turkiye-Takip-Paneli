@@ -264,3 +264,160 @@ export interface MilitaryOverviewResponse {
   error?: string;
 }
 
+export interface MilitaryDetailMember {
+  userId: string;
+  username: string;
+  avatarUrl: string;
+  level: number;
+  prestigeLevel: number;
+  totalXp: number;
+  weeklyDamage: number;
+  weeklyTier: string;
+  weeklyRank: number;
+  allTimeDamage: number;
+  allTimeTier: string;
+  allTimeRank: number;
+  wealth: number;
+  role: 'leader' | 'commander' | 'manager' | 'soldier';
+  roleBadge: string;
+  roleLabel: string;
+}
+
+export interface MilitaryDetailsData {
+  muInfo: {
+    id: string;
+    name: string;
+    avatarUrl: string;
+    level: number;
+    leaderId: string;
+    leaderUsername: string;
+    reputation: number;
+    memberCount: number;
+    createdAt: string;
+    overallTier: string;
+    activeUpgradeLevels: {
+      headquarters: number;
+      dormitories: number;
+    };
+    rankings: {
+      muWeeklyDamages: { value: number; rank: number; tier: string };
+      muDamages: { value: number; rank: number; tier: string };
+      muBounty: { value: number; rank: number; tier: string };
+      muReputation: { value: number; rank: number; tier: string };
+      muTerrain: { value: number; rank: number; tier: string };
+      muWealth: { value: number; rank: number; tier: string };
+    };
+  };
+  members: MilitaryDetailMember[];
+  commanderCount: number;
+  managerCount: number;
+  generatedAt: string;
+}
+
+export interface MilitaryDetailsResponse {
+  success: boolean;
+  data?: MilitaryDetailsData;
+  error?: string;
+}
+
+export interface CombatMemberTelemetry {
+  userId: string;
+  username: string;
+  avatarUrl: string;
+  level: number;
+  militaryRank: number;
+  role: 'leader' | 'commander' | 'manager' | 'soldier';
+  isLeader: boolean;
+  isCommander: boolean;
+  isManager: boolean;
+  health: {
+    current: number;
+    max: number;
+    hourlyRegen: number;
+  };
+  hunger: {
+    current: number;
+    max: number;
+    hourlyRegen: number;
+  };
+  pillStatus: 'ready' | 'buff' | 'debuff';
+  pillExpiresAt: string | null;
+  buffCodes: string[];
+  skillsReset: {
+    freeReset: number;
+    lastSkillsResetAt: string | null;
+  };
+  totalDamage: number;
+  weeklyDamage: number;
+  dailyDamage: number;
+}
+
+export interface CombatTelemetryData {
+  muInfo: {
+    id: string;
+    name: string;
+    memberCount: number;
+    leaderId: string;
+  };
+  resources: {
+    health: {
+      current: number;
+      max: number;
+      percentage: number;
+    };
+    hunger: {
+      current: number;
+      max: number;
+      percentage: number;
+    };
+  };
+  pillOverview: {
+    readyCount: number;
+    buffCount: number;
+    debuffCount: number;
+    total: number;
+  };
+  dailyDamageInfo?: {
+    totalDailyDamage: number;
+    baselineDate: string;
+    baselineTimestamp: number;
+    calculationRule: string;
+  };
+  members: CombatMemberTelemetry[];
+  generatedAt: string;
+}
+
+export interface CombatTelemetryResponse {
+  success: boolean;
+  data?: CombatTelemetryData;
+  error?: string;
+}
+
+export interface DailyDamageSnapshotItem {
+  date: string;
+  timestamp: number;
+  iso: string;
+  armies: Record<
+    string,
+    {
+      name: string;
+      muId: string;
+      armyTotalWeeklyDamage: number;
+      memberCount: number;
+      members: Record<string, { username: string; weeklyDamage: number }>;
+    }
+  >;
+}
+
+export interface DailyDamageSnapshotsResponse {
+  success: boolean;
+  latestDate: string;
+  previousDate: string | null;
+  totalSnapshots: number;
+  dates: string[];
+  snapshots: Record<string, DailyDamageSnapshotItem>;
+  error?: string;
+}
+
+
+

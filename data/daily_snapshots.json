@@ -1,0 +1,545 @@
+{
+  "2026-10-03": {
+    "date": "2026-10-03",
+    "timestamp": 1791041771741,
+    "iso": "2026-10-03T15:36:11.741Z",
+    "armies": {
+      "69c229c4449287ea1a26a5b3": {
+        "name": "Turkic Tribe",
+        "muId": "69c229c4449287ea1a26a5b3",
+        "armyTotalWeeklyDamage": 47136427,
+        "memberCount": 21,
+        "members": {
+          "69d01b350ebd7dee647efbde": {
+            "username": "xiec",
+            "weeklyDamage": 1517382
+          },
+          "6a040d4a33eb1de5bbccc2d4": {
+            "username": "Nanoxcr",
+            "weeklyDamage": 2782602
+          },
+          "69df37f88f56e81801a8c7d0": {
+            "username": "HasnMert",
+            "weeklyDamage": 753213
+          },
+          "6a13740b9be11c48c9965a63": {
+            "username": "Fly_Engineer",
+            "weeklyDamage": 1092499
+          },
+          "6a22b4db8ec9d909eaf33c2f": {
+            "username": "GrayWorm",
+            "weeklyDamage": 2791724
+          },
+          "6983c6f2cf7661b16466f70b": {
+            "username": "FSM-",
+            "weeklyDamage": 5113765
+          },
+          "6a286550fe3daa958e73fd12": {
+            "username": "Pulsar",
+            "weeklyDamage": 38112
+          },
+          "687fd64b25e5dc8b0d451866": {
+            "username": "donuz",
+            "weeklyDamage": 3007928
+          },
+          "68dedb33bfb55b688be1589a": {
+            "username": "dSokre",
+            "weeklyDamage": 5273183
+          },
+          "69dd6cc10fb8f235288cfaa6": {
+            "username": "TurkTenHag",
+            "weeklyDamage": 3162520
+          },
+          "69da179ff7cc0387adb1a663": {
+            "username": "Mutlu_adam",
+            "weeklyDamage": 4230130
+          },
+          "68305110bbd6e3b4179f0110": {
+            "username": "Muhtarr",
+            "weeklyDamage": 6491529
+          },
+          "68f889a75a43363f0ea08069": {
+            "username": "Shija",
+            "weeklyDamage": 254222
+          },
+          "6a1091f0e3a6ce962169c32f": {
+            "username": "Delka",
+            "weeklyDamage": 1368353
+          },
+          "69dc88bab088fc9a0ed56e68": {
+            "username": "Dayi",
+            "weeklyDamage": 0
+          },
+          "6a6cb4d85cc6549cfe975715": {
+            "username": "Zagren",
+            "weeklyDamage": 2881358
+          },
+          "698d8c25047c3931079aa1fa": {
+            "username": "-TENGRI-",
+            "weeklyDamage": 3643903
+          },
+          "6a55f9875e6fbd6acdc6db42": {
+            "username": "IBARONI",
+            "weeklyDamage": 1447872
+          },
+          "697e17c9e57f6f1cb1311c08": {
+            "username": "ensar8",
+            "weeklyDamage": 8780
+          },
+          "6a5a9e1a3efd99de23a03385": {
+            "username": "HARZEMSAH",
+            "weeklyDamage": 2387617
+          },
+          "6a9084dc21edac8e130f06c6": {
+            "username": "mrxenpia",
+            "weeklyDamage": 20112
+          }
+        }
+      },
+      "689f69064e095b8b9f1b885a": {
+        "name": "ASHINA",
+        "muId": "689f69064e095b8b9f1b885a",
+        "armyTotalWeeklyDamage": 94050353,
+        "memberCount": 17,
+        "members": {
+          "689f6d47b152b65a15c7718a": {
+            "username": "cicovingo",
+            "weeklyDamage": 723557
+          },
+          "6939b721d7890d7960419038": {
+            "username": "KhaosTR",
+            "weeklyDamage": 44694
+          },
+          "699a2e7fe50b91f994724422": {
+            "username": "Fame08",
+            "weeklyDamage": 2797346
+          },
+          "694d60a4704d37cd1a46c4a8": {
+            "username": "RevenqeTheGreat",
+            "weeklyDamage": 3665729
+          },
+          "69d68896328deca637082820": {
+            "username": "Yato",
+            "weeklyDamage": 11858658
+          },
+          "681f630b1353a30ceefec393": {
+            "username": "Monarch",
+            "weeklyDamage": 11210122
+          },
+          "68b877ff62d780659aa5c63f": {
+            "username": "erryanx",
+            "weeklyDamage": 10545985
+          },
+          "68b35d57dc0665b08f8d39c5": {
+            "username": "Mrt",
+            "weeklyDamage": 10441998
+          },
+          "68dd1cf99312ba8f018f5fc2": {
+            "username": "Grimmjow",
+            "weeklyDamage": 5608266
+          },
+          "68adb15efb9ced3a126a569e": {
+            "username": "Messiah_of_tengri",
+            "weeklyDamage": 4266483
+          },
+          "69922b5761587aa17be18605": {
+            "username": "HAYDEBRE",
+            "weeklyDamage": 12646361
+          },
+          "699216c460e5bc94b0e43d58": {
+            "username": "Kezerothos",
+            "weeklyDamage": 7121040
+          },
+          "688fb4d576391af3ceb235ad": {
+            "username": "Bolahenk",
+            "weeklyDamage": 7299169
+          },
+          "6905ff840530934325d1b73c": {
+            "username": "-Zero-",
+            "weeklyDamage": 3390557
+          },
+          "68dc17459312ba8f01605944": {
+            "username": "Normhan",
+            "weeklyDamage": 792008
+          },
+          "69237d1bc6bbe2053f6e51fc": {
+            "username": "Majestic",
+            "weeklyDamage": 7983707
+          },
+          "6890ab106cba96d54ae2c58b": {
+            "username": "Escapist",
+            "weeklyDamage": 130351
+          }
+        }
+      },
+      "68bc9bcb4870c8e343e42855": {
+        "name": "ASHINA Reserve",
+        "muId": "68bc9bcb4870c8e343e42855",
+        "armyTotalWeeklyDamage": 716437,
+        "memberCount": 13,
+        "members": {
+          "6904ab5cadaa1813cc2bfff8": {
+            "username": "xPasha",
+            "weeklyDamage": 55267
+          },
+          "6ab7696363f4be8143730b30": {
+            "username": "Artistmi",
+            "weeklyDamage": 31989
+          },
+          "69d2606dc47aafe708ccd830": {
+            "username": "sSvetovid",
+            "weeklyDamage": 62249
+          },
+          "6930510e4f2a9f403d914ae1": {
+            "username": "Strausser",
+            "weeklyDamage": 43485
+          },
+          "6a16e30ff72e0d36a78d8d1a": {
+            "username": "Lexx00",
+            "weeklyDamage": 47976
+          },
+          "68f871ba20c9f17c03b21ebd": {
+            "username": "FallenAnakin",
+            "weeklyDamage": 35902
+          },
+          "68bb32daf4a4135deb827cef": {
+            "username": "jose_",
+            "weeklyDamage": 2725
+          },
+          "6aa1a93574d176f183221284": {
+            "username": "KaanUlubey",
+            "weeklyDamage": 37579
+          },
+          "68fb9f4097f7a72934cd9240": {
+            "username": "Waldoo",
+            "weeklyDamage": 29157
+          },
+          "6892521832c6fcd3f41ec95e": {
+            "username": "TurkishDeIight",
+            "weeklyDamage": 68292
+          },
+          "68a24413aa94f1d0f775ffa1": {
+            "username": "Celebrimbor",
+            "weeklyDamage": 14851
+          },
+          "68db3d335c21d6748408ed22": {
+            "username": "Erken",
+            "weeklyDamage": 21472
+          },
+          "6a576050db54ac1535d5c7f0": {
+            "username": "LemiGalip",
+            "weeklyDamage": 0
+          }
+        }
+      },
+      "690088ce4864a132a2d92d07": {
+        "name": "Legio Panthera",
+        "muId": "690088ce4864a132a2d92d07",
+        "armyTotalWeeklyDamage": 8936508,
+        "memberCount": 25,
+        "members": {
+          "6aa31eb3eb6523751cc4fd08": {
+            "username": "CITIRCIK-CiTOZ",
+            "weeklyDamage": 3916
+          },
+          "6ab4de45bd17ed8b1ee23114": {
+            "username": "Grave",
+            "weeklyDamage": 8099
+          },
+          "6ab1652103200ed0bd051a54": {
+            "username": "KakaGurmesi66",
+            "weeklyDamage": 0
+          },
+          "6a972f697c674c7cb9131e8e": {
+            "username": "Tahir_Akbulut",
+            "weeklyDamage": 185164
+          },
+          "69752a2237c8a5424d02a3f9": {
+            "username": "JALENLEKTEC",
+            "weeklyDamage": 1083799
+          },
+          "68e782c776890a8325c776c3": {
+            "username": "abc_defg",
+            "weeklyDamage": 0
+          },
+          "698493ae74ed5d90ee0eec49": {
+            "username": "LICH",
+            "weeklyDamage": 30657
+          },
+          "69dacafd6eccf5f15a501d35": {
+            "username": "Pomparelli53",
+            "weeklyDamage": 19199
+          },
+          "69dd1b356e69016f8739b784": {
+            "username": "Kajmeran",
+            "weeklyDamage": 68639
+          },
+          "69d97b47f5419ebd5bd7d4c7": {
+            "username": "Korhan",
+            "weeklyDamage": 0
+          },
+          "69de79ae86f55440dc71f306": {
+            "username": "ReaLch0ice",
+            "weeklyDamage": 32879
+          },
+          "69050336e693317b343f2e12": {
+            "username": "Ozel",
+            "weeklyDamage": 432932
+          },
+          "6a04d81a372d6767159e9fc1": {
+            "username": "Battal",
+            "weeklyDamage": 0
+          },
+          "698cde146c79fb3fde1d3501": {
+            "username": "Sayli",
+            "weeklyDamage": 59357
+          },
+          "68dad1fe9312ba8f012e373a": {
+            "username": "GandaIf",
+            "weeklyDamage": 874963
+          },
+          "6a2326782debd13f91115094": {
+            "username": "DNX",
+            "weeklyDamage": 23499
+          },
+          "68e053d633b859de7daf7699": {
+            "username": "Kilicdaroglu",
+            "weeklyDamage": 4241
+          },
+          "69da208ef43cb65c92b165f3": {
+            "username": "ElTurcoGrande",
+            "weeklyDamage": 997930
+          },
+          "699987d4eb646c78ea8351f1": {
+            "username": "Lannister",
+            "weeklyDamage": 2065577
+          },
+          "6a68a57d13ac8762411b3c1a": {
+            "username": "Azreath",
+            "weeklyDamage": 6033
+          },
+          "69f92499e0a8ebbd61b994c9": {
+            "username": "GUZEL_ADAM",
+            "weeklyDamage": 974989
+          },
+          "6a675538bcfca7e78bc964a7": {
+            "username": "MomenAvci",
+            "weeklyDamage": 2382804
+          },
+          "6a7076e9ad8fc369bf974928": {
+            "username": "RecepIvedik",
+            "weeklyDamage": 2856
+          },
+          "6a96e8acd03c79e35145973b": {
+            "username": "_Replay_",
+            "weeklyDamage": 680752
+          },
+          "6a0a1b719c3fb9c4eb99c2a1": {
+            "username": "Sayanora",
+            "weeklyDamage": 38250
+          }
+        }
+      },
+      "6902269a560184d196a6fba8": {
+        "name": "BEASTs",
+        "muId": "6902269a560184d196a6fba8",
+        "armyTotalWeeklyDamage": 16424894,
+        "memberCount": 22,
+        "members": {
+          "6a949ab20958f04de9a61937": {
+            "username": "InvictusManeo",
+            "weeklyDamage": 49691
+          },
+          "68e63b0e85dd361742b88ea2": {
+            "username": "SagaciousLion",
+            "weeklyDamage": 77312
+          },
+          "69a713dd1616e100b04141b6": {
+            "username": "Turkuaz",
+            "weeklyDamage": 22754
+          },
+          "6a99c9afb01f2357a0109080": {
+            "username": "AddictedToMoney",
+            "weeklyDamage": 28638
+          },
+          "6a95271f5b36fbefecda1903": {
+            "username": "1453",
+            "weeklyDamage": 0
+          },
+          "6946ea36e4b1f948b224ad82": {
+            "username": "OghuzKhan",
+            "weeklyDamage": 66615
+          },
+          "6890b4c1ac8e8066fc70b725": {
+            "username": "OmerFaruk1",
+            "weeklyDamage": 47776
+          },
+          "6a8c19586d5d37169d31dd7b": {
+            "username": "Guetamola",
+            "weeklyDamage": 43135
+          },
+          "6a8cb808995de1cb71b9e7d5": {
+            "username": "ErtugrulBey_",
+            "weeklyDamage": 39314
+          },
+          "6abd810f5191d327be5df256": {
+            "username": "vhAsx",
+            "weeklyDamage": 22088
+          },
+          "6abd2d3a9fa2252d52b8ae68": {
+            "username": "_Root",
+            "weeklyDamage": 32040
+          },
+          "6abd6a1b7399fe2496cb039c": {
+            "username": "kraltr1",
+            "weeklyDamage": 19942
+          },
+          "69fbc71f64e88230d2c3c6b4": {
+            "username": "Langa",
+            "weeklyDamage": 44322
+          },
+          "6a35d29c7afdd46caea7427a": {
+            "username": "Godsmurf",
+            "weeklyDamage": 54573
+          },
+          "6a88145c5c9a46d4d567ad1e": {
+            "username": "Zapkinus",
+            "weeklyDamage": 64313
+          },
+          "68a57b3b33fde25535eff631": {
+            "username": "Felis_Leo",
+            "weeklyDamage": 63867
+          },
+          "6a8818d15c8711e9ab1d5fd1": {
+            "username": "SamsunLu",
+            "weeklyDamage": 76796
+          },
+          "6a8c1d0a3873d9fefc90ebd2": {
+            "username": "Kemsam",
+            "weeklyDamage": 22808
+          },
+          "6a8c21f60fec59967e71ec40": {
+            "username": "BaykusR",
+            "weeklyDamage": 47743
+          },
+          "6a94a2774458094c7f5a22cd": {
+            "username": "SarumanWhite",
+            "weeklyDamage": 28041
+          },
+          "689a63a1e7c74552d8fb60e9": {
+            "username": "Countdown",
+            "weeklyDamage": 6404064
+          },
+          "6a95cb4d5afe0cfb9389878e": {
+            "username": "Bav",
+            "weeklyDamage": 46235
+          }
+        }
+      },
+      "6a0f1495478fe2a58d2868d6": {
+        "name": "Deliler",
+        "muId": "6a0f1495478fe2a58d2868d6",
+        "armyTotalWeeklyDamage": 30650230,
+        "memberCount": 24,
+        "members": {
+          "6a9b17a1a67a91d187091feb": {
+            "username": "AquaNoX",
+            "weeklyDamage": 1414762
+          },
+          "6a158d5626640a2a8131fae5": {
+            "username": "DonCorleone61",
+            "weeklyDamage": 3619189
+          },
+          "6a944d770595be3303fe58e5": {
+            "username": "VitaRovine",
+            "weeklyDamage": 1907143
+          },
+          "6a21f5e8a78955565cf822cc": {
+            "username": "nklq",
+            "weeklyDamage": 454606
+          },
+          "68de128e82c1ae97c8716248": {
+            "username": "Rusty",
+            "weeklyDamage": 1626653
+          },
+          "69fe2c789684ced1de3be552": {
+            "username": "sharpie",
+            "weeklyDamage": 1030978
+          },
+          "69d9379dfd0b49813f025fb2": {
+            "username": "Vic_Rattlehead",
+            "weeklyDamage": 341403
+          },
+          "69fcc7775fd1a309fb4621a8": {
+            "username": "hasan4411",
+            "weeklyDamage": 1860456
+          },
+          "6a3a49ab4169acbd500e8f64": {
+            "username": "Hellfihgter",
+            "weeklyDamage": 2058
+          },
+          "6897c472c0dfe322765cefac": {
+            "username": "Redis",
+            "weeklyDamage": 1477266
+          },
+          "68de88fab82846f4e677c465": {
+            "username": "Multihead03",
+            "weeklyDamage": 0
+          },
+          "6a5298c90747dc0aa15e9763": {
+            "username": "100kalibre",
+            "weeklyDamage": 131761
+          },
+          "6a15ee658641689142e1f6a7": {
+            "username": "Ertek",
+            "weeklyDamage": 2197405
+          },
+          "6a60aacac273541e94c373fc": {
+            "username": "MrWorldwide",
+            "weeklyDamage": 138570
+          },
+          "69fc1414530eb416db389e1e": {
+            "username": "BahtsizPiyade",
+            "weeklyDamage": 2103287
+          },
+          "69f39c8f074be48e20962019": {
+            "username": "Bulut",
+            "weeklyDamage": 44826
+          },
+          "6a08a5ce1577462c0aef388c": {
+            "username": "unihm89",
+            "weeklyDamage": 4004022
+          },
+          "6a342c67db7dea9e86ea35c8": {
+            "username": "Stormblessed",
+            "weeklyDamage": 56783
+          },
+          "6a10a0de4bfb7d7d921659f8": {
+            "username": "Forzakedi",
+            "weeklyDamage": 3959810
+          },
+          "69da449608b7bb6497ec97c3": {
+            "username": "Turan_Khan",
+            "weeklyDamage": 3038774
+          },
+          "6973694706c01daec6609159": {
+            "username": "ben_yemicem",
+            "weeklyDamage": 71373
+          },
+          "68e3757b286193edec4204e5": {
+            "username": "Utku_Pasha",
+            "weeklyDamage": 1023140
+          },
+          "68ddd68fc559682828417ff8": {
+            "username": "AKA",
+            "weeklyDamage": 128691
+          },
+          "6a322aa4fcbdece87635ede3": {
+            "username": "PaxOttomana",
+            "weeklyDamage": 1168
+          }
+        }
+      }
+    }
+  }
+}

@@ -67,14 +67,14 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
       <div
         id="card-mu-selector"
         ref={dropdownRef}
-        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-[#3282B8]/25 hover:border-[#3282B8]/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full relative shadow-lg shadow-black/25 group"
+        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full relative shadow-lg shadow-black/25 group"
       >
         <div>
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono">
               Askeri Birlik (Ordu)
             </span>
-            <div className="w-8 h-8 rounded-lg bg-[#0F4C75]/25 text-[#3282B8] flex items-center justify-center border border-[#3282B8]/30 group-hover:border-[#3282B8]/60 transition-colors">
+            <div className="w-8 h-8 rounded-lg bg-emerald-950/40 text-emerald-400 flex items-center justify-center border border-emerald-500/30 group-hover:border-emerald-500/60 transition-colors">
               <Shield className="w-4 h-4" />
             </div>
           </div>
@@ -84,7 +84,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
             id="mu-dropdown-trigger"
             type="button"
             onClick={() => setIsDropdownOpen((prev) => !prev)}
-            className="w-full flex items-center justify-between p-2.5 rounded-lg border border-[#3282B8]/30 hover:border-[#3282B8]/60 bg-[#141C21]/80 hover:bg-[#141C21] transition-all text-left cursor-pointer shadow-inner"
+            className="w-full flex items-center justify-between p-2.5 rounded-lg border border-emerald-500/30 hover:border-emerald-500/60 bg-[#141C21]/80 hover:bg-[#141C21] transition-all text-left cursor-pointer shadow-inner"
             title="Başka bir ordu seçin"
           >
             <div className="flex items-center gap-3 min-w-0">
@@ -92,16 +92,16 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
                 <img
                   src={currentAvatarUrl}
                   alt={currentDisplayName}
-                  className="w-9 h-9 rounded-lg object-cover border border-[#3282B8]/40 shrink-0 shadow-sm"
+                  className="w-9 h-9 rounded-lg object-cover border border-emerald-500/40 shrink-0 shadow-sm"
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-9 h-9 rounded-lg bg-[#0F4C75]/30 flex items-center justify-center text-[#3282B8] shrink-0 border border-[#3282B8]/40">
+                <div className="w-9 h-9 rounded-lg bg-emerald-950/50 flex items-center justify-center text-emerald-400 shrink-0 border border-emerald-500/40">
                   <Shield className="w-4 h-4" />
                 </div>
               )}
               <div className="min-w-0">
-                <div className="text-sm font-bold text-white truncate group-hover:text-[#BBE1FA] transition-colors">
+                <div className="text-sm font-bold text-white truncate group-hover:text-emerald-300 transition-colors">
                   {currentDisplayName}
                 </div>
                 <div className="text-[11px] text-[#BBE1FA]/60 font-mono flex items-center gap-1.5 mt-0.5">
@@ -117,7 +117,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
             </div>
 
             <ChevronDown
-              className={`w-4 h-4 text-[#3282B8] transition-transform duration-200 shrink-0 ml-2 ${
+              className={`w-4 h-4 text-emerald-400 transition-transform duration-200 shrink-0 ml-2 ${
                 isDropdownOpen ? 'rotate-180 text-white' : ''
               }`}
             />
@@ -128,11 +128,11 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
         {isDropdownOpen && (
           <div
             id="mu-dropdown-menu"
-            className="absolute left-0 right-0 top-full mt-2 bg-[#182329] rounded-xl border border-[#3282B8]/50 p-2 shadow-2xl z-50 max-h-72 overflow-y-auto backdrop-blur-xl"
+            className="absolute left-0 right-0 top-full mt-2 bg-[#182329] rounded-xl border border-emerald-500/50 p-2 shadow-2xl z-50 max-h-72 overflow-y-auto backdrop-blur-xl"
           >
-            <div className="px-3 py-1.5 border-b border-[#3282B8]/20 mb-1 flex items-center justify-between">
+            <div className="px-3 py-1.5 border-b border-emerald-500/20 mb-1 flex items-center justify-between">
               <span className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                <Building2 className="w-3.5 h-3.5 text-[#3282B8]" />
+                <Building2 className="w-3.5 h-3.5 text-emerald-400" />
                 Kayıtlı Ordular
               </span>
               <span className="text-[10px] text-[#BBE1FA]/70 font-mono">
@@ -151,7 +151,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
                     onClick={() => handleSelectMu(unit.id)}
                     className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-[#0F4C75]/60 text-white border border-[#3282B8]/60 shadow-sm'
+                        ? 'bg-emerald-950/70 text-white border border-emerald-500/60 shadow-sm'
                         : 'hover:bg-[#141C21] text-[#BBE1FA] hover:text-white border border-transparent'
                     }`}
                   >
@@ -159,7 +159,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
                       <img
                         src={unit.avatarUrl}
                         alt={unit.name}
-                        className="w-7 h-7 rounded-md object-cover border border-[#3282B8]/30 shrink-0"
+                        className="w-7 h-7 rounded-md object-cover border border-emerald-500/30 shrink-0"
                         referrerPolicy="no-referrer"
                       />
                       <div className="min-w-0">
@@ -175,7 +175,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
                     </div>
 
                     {isSelected && (
-                      <div className="w-4 h-4 rounded-full bg-[#3282B8] text-white flex items-center justify-center shrink-0">
+                      <div className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
                         <Check className="w-2.5 h-2.5 stroke-[3]" />
                       </div>
                     )}
@@ -190,14 +190,14 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
       {/* 2. Aktif Asker */}
       <div
         id="metric-active-soldiers"
-        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-[#3282B8]/25 hover:border-[#3282B8]/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
+        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
       >
         <div>
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono">
               Aktif Asker
             </span>
-            <div className="w-8 h-8 rounded-lg bg-[#0F4C75]/25 text-emerald-400 flex items-center justify-center border border-[#3282B8]/30 group-hover:border-[#3282B8]/60 transition-colors">
+            <div className="w-8 h-8 rounded-lg bg-emerald-950/40 text-emerald-400 flex items-center justify-center border border-emerald-500/30 group-hover:border-emerald-500/60 transition-colors">
               <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
@@ -212,9 +212,9 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
         </div>
 
         <div>
-          <div className="w-full bg-[#141C21] rounded-full h-2 mt-3 overflow-hidden border border-[#3282B8]/15">
+          <div className="w-full bg-[#141C21] rounded-full h-2 mt-3 overflow-hidden border border-emerald-500/20">
             <div
-              className="bg-gradient-to-r from-[#0F4C75] via-emerald-500 to-emerald-300 h-2 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+              className="bg-gradient-to-r from-emerald-700 via-emerald-500 to-emerald-300 h-2 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
               style={{ width: `${Math.min(100, activeRate)}%` }}
             />
           </div>
@@ -224,14 +224,14 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
       {/* 3. Aktif Fabrika */}
       <div
         id="metric-active-factories"
-        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-[#3282B8]/25 hover:border-[#3282B8]/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
+        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
       >
         <div>
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono">
               Aktif Fabrika
             </span>
-            <div className="w-8 h-8 rounded-lg bg-[#0F4C75]/25 text-[#3282B8] flex items-center justify-center border border-[#3282B8]/30 group-hover:border-[#3282B8]/60 transition-colors">
+            <div className="w-8 h-8 rounded-lg bg-emerald-950/40 text-emerald-400 flex items-center justify-center border border-emerald-500/30 group-hover:border-emerald-500/60 transition-colors">
               <Building2 className="w-4 h-4" />
             </div>
           </div>
@@ -253,14 +253,14 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
       {/* 4. Aktif Motor Gücü */}
       <div
         id="metric-active-engine-power"
-        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-[#3282B8]/25 hover:border-[#3282B8]/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
+        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
       >
         <div>
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono">
               Aktif Motor Gücü
             </span>
-            <div className="w-8 h-8 rounded-lg bg-[#0F4C75]/25 text-amber-300 flex items-center justify-center border border-[#3282B8]/30 group-hover:border-[#3282B8]/60 transition-colors">
+            <div className="w-8 h-8 rounded-lg bg-emerald-950/40 text-amber-300 flex items-center justify-center border border-emerald-500/30 group-hover:border-emerald-500/60 transition-colors">
               <Cpu className="w-4 h-4" />
             </div>
           </div>
@@ -268,7 +268,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
             <div className="text-3xl font-extrabold text-white font-mono tracking-tight">
               {totalActiveEnginePower}
             </div>
-            <span className="text-xs font-bold text-amber-300 bg-[#0F4C75]/40 px-2 py-0.5 rounded border border-[#3282B8]/30 uppercase font-mono tracking-wider">
+            <span className="text-xs font-bold text-amber-300 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 uppercase font-mono tracking-wider">
               Lv
             </span>
           </div>

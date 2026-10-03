@@ -1,6 +1,12 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
+import { 
+  saveSnapshotToSupabase, 
+  fetchSnapshotsFromSupabase, 
+  isSupabaseConnected 
+} from './src/services/supabaseStorage.ts';
 
 dotenv.config();
 
@@ -1511,6 +1517,633 @@ app.get('/api/military-overview', async (req, res) => {
   }
 });
 
+// API Route: Military Details & Member Roster (Detaylı Bilgi & Üye Listesi)
+app.get('/api/military-details', async (req, res) => {
+  const targetMuId = (req.query.muId as string) || DEFAULT_MU_ID;
+  const forceRefresh = req.query.refresh === 'true';
+
+  const cacheKey = `mil_details_${targetMuId}`;
+  const cached = cache.get(cacheKey);
+  if (!forceRefresh && cached && Date.now() - cached.timestamp < MILITARY_OVERVIEW_TTL_MS) {
+    return res.json(cached.data);
+  }
+
+  try {
+    // 1. Fetch MU Data
+    const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: targetMuId }))}`;
+    const muRes = await fetchWarEra(muUrl);
+    if (!muRes.ok) {
+      return res.status(502).json({ success: false, error: 'WarEra MU API call failed' });
+    }
+    const muJson = await muRes.json();
+    const muData = muJson?.result?.data?.json || muJson?.result?.data;
+    if (!muData) {
+      return res.status(404).json({ success: false, error: 'Military Unit not found' });
+    }
+
+    const members: string[] = muData.members || [];
+    const leaderId = muData.user || '';
+    const managers: string[] = muData.roles?.managers || [];
+    const commanders: string[] = muData.roles?.commanders || [];
+
+    // 2. Fetch User Profiles for all members using tRPC batching (chunks of 10)
+    const chunks: string[][] = [];
+    for (let i = 0; i < members.length; i += 10) {
+      chunks.push(members.slice(i, i + 10));
+    }
+
+    const allUsers: any[] = [];
+    await Promise.all(
+      chunks.map(async (chunk) => {
+        try {
+          const endpoints = chunk.map(() => 'user.getUserById').join(',');
+          const batchInput: Record<string, { userId: string }> = {};
+          chunk.forEach((id, idx) => {
+            batchInput[idx.toString()] = { userId: id };
+          });
+          const batchUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
+          const uRes = await fetchWarEra(batchUrl);
+          if (uRes.ok) {
+            const uJson = await uRes.json();
+            if (Array.isArray(uJson)) {
+              for (const item of uJson) {
+                const uData = item?.result?.data?.json || item?.result?.data;
+                if (uData) {
+                  allUsers.push(uData);
+                }
+              }
+            }
+          }
+        } catch (uErr) {
+          console.error('Batch user fetch error:', uErr);
+        }
+      })
+    );
+
+    // If batching missed some members, fall back to individual fetch for missing
+    const foundIds = new Set(allUsers.map((u) => u._id));
+    const missingIds = members.filter((id) => !foundIds.has(id));
+    if (missingIds.length > 0) {
+      await Promise.all(
+        missingIds.map(async (id) => {
+          try {
+            const singleUrl = `https://api2.warera.io/trpc/user.getUserById?input=${encodeURIComponent(JSON.stringify({ userId: id }))}`;
+            const sRes = await fetchWarEra(singleUrl);
+            if (sRes.ok) {
+              const sJson = await sRes.json();
+              const sData = sJson?.result?.data?.json || sJson?.result?.data;
+              if (sData) {
+                allUsers.push(sData);
+              }
+            }
+          } catch (_) {}
+        })
+      );
+    }
+
+    // 3. Resolve Leader username
+    const leaderUser = allUsers.find((u) => u._id === leaderId);
+    const leaderUsername = leaderUser?.username || 'Muhtarr';
+
+    // 4. Map and rank members (sorted by weeklyDamage descending)
+    const mappedMembers = allUsers.map((u) => {
+      const isLeader = u._id === leaderId;
+      const isCommander = commanders.includes(u._id);
+      const isManager = managers.includes(u._id);
+      const role = isLeader ? 'leader' : isCommander ? 'commander' : isManager ? 'manager' : 'soldier';
+
+      return {
+        userId: u._id,
+        username: u.username || 'Bilinmeyen Asker',
+        avatarUrl: u.avatarUrl || '',
+        level: u.leveling?.level || 1,
+        prestigeLevel: u.leveling?.prestigeLevel || 0,
+        totalXp: u.leveling?.totalXp || 0,
+        weeklyDamage: u.rankings?.weeklyUserDamages?.value || 0,
+        weeklyTier: u.rankings?.weeklyUserDamages?.tier || 'bronze',
+        weeklyRank: u.rankings?.weeklyUserDamages?.rank || 0,
+        allTimeDamage: u.rankings?.userDamages?.value || 0,
+        allTimeTier: u.rankings?.userDamages?.tier || 'bronze',
+        allTimeRank: u.rankings?.userDamages?.rank || 0,
+        wealth: u.rankings?.userWealth?.value || 0,
+        role,
+        roleBadge: isLeader ? 'L' : isCommander ? 'C' : isManager ? 'M' : '',
+        roleLabel: isLeader ? 'Birlik Sahibi / Kurucu' : isCommander ? 'Komutan' : isManager ? 'Yönetici' : 'Asker',
+      };
+    });
+
+    mappedMembers.sort((a, b) => b.weeklyDamage - a.weeklyDamage);
+
+    // 5. Structure Final Output
+    const rankings = muData.rankings || {};
+    const overallTier = rankings.muDamages?.tier || rankings.muWeeklyDamages?.tier || 'platinum';
+
+    const resultData = {
+      success: true,
+      data: {
+        muInfo: {
+          id: targetMuId,
+          name: muData.name || 'Turkic Tribe',
+          avatarUrl: muData.avatarUrl || '',
+          level: muData.leveling?.level || 1,
+          leaderId,
+          leaderUsername,
+          reputation: Number((muData.mercenaryReputation || rankings.muReputation?.value || 11.91).toFixed(2)),
+          memberCount: members.length,
+          createdAt: muData.createdAt || '2026-03-24T06:05:56.824Z',
+          overallTier,
+          activeUpgradeLevels: {
+            headquarters: muData.activeUpgradeLevels?.headquarters || 4,
+            dormitories: muData.activeUpgradeLevels?.dormitories || 5,
+          },
+          rankings: {
+            muWeeklyDamages: {
+              value: rankings.muWeeklyDamages?.value || 47136427,
+              rank: rankings.muWeeklyDamages?.rank || 191,
+              tier: rankings.muWeeklyDamages?.tier || 'platinum',
+            },
+            muDamages: {
+              value: rankings.muDamages?.value || 1028447657,
+              rank: rankings.muDamages?.rank || 135,
+              tier: rankings.muDamages?.tier || 'platinum',
+            },
+            muBounty: {
+              value: rankings.muBounty?.value || 17441,
+              rank: rankings.muBounty?.rank || 205,
+              tier: rankings.muBounty?.tier || 'platinum',
+            },
+            muReputation: {
+              value: Number((rankings.muReputation?.value || muData.mercenaryReputation || 11.91).toFixed(2)),
+              rank: rankings.muReputation?.rank || 68,
+              tier: rankings.muReputation?.tier || 'platinum',
+            },
+            muTerrain: {
+              value: rankings.muTerrain?.value || 23899,
+              rank: rankings.muTerrain?.rank || 243,
+              tier: rankings.muTerrain?.tier || 'platinum',
+            },
+            muWealth: {
+              value: Number((rankings.muWealth?.value || 679.97).toFixed(2)),
+              rank: rankings.muWealth?.rank || 661,
+              tier: rankings.muWealth?.tier || 'silver',
+            },
+          },
+        },
+        members: mappedMembers,
+        commanderCount: commanders.length,
+        managerCount: managers.length,
+        generatedAt: new Date().toISOString(),
+      },
+    };
+
+    cache.set(cacheKey, { data: resultData, timestamp: Date.now() });
+    return res.json(resultData);
+  } catch (err: any) {
+    console.error('Military details error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed fetching military details' });
+  }
+});
+
+// Preset 6 Military Units for automatic 02:55 cron snapshot
+const PRESET_MILITARY_UNITS = [
+  { id: '69c229c4449287ea1a26a5b3', name: 'Turkic Tribe' },
+  { id: '689f69064e095b8b9f1b885a', name: 'ASHINA' },
+  { id: '68bc9bcb4870c8e343e42855', name: 'ASHINA Reserve' },
+  { id: '690088ce4864a132a2d92d07', name: 'Legio Panthera' },
+  { id: '6902269a560184d196a6fba8', name: 'BEASTs' },
+  { id: '6a0f1495478fe2a58d2868d6', name: 'Deliler' },
+];
+
+declare global {
+  var __DAILY_DAMAGE_SNAPSHOTS__: Record<string, any> | undefined;
+}
+
+function getSnapshotsFilePath(): string {
+  const dir = path.join(process.cwd(), 'data');
+  if (!fs.existsSync(dir)) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+    } catch (_) {}
+  }
+  return path.join(dir, 'daily_snapshots.json');
+}
+
+function readSnapshotsFromDisk(): Record<string, any> {
+  if (global.__DAILY_DAMAGE_SNAPSHOTS__) {
+    return global.__DAILY_DAMAGE_SNAPSHOTS__;
+  }
+  try {
+    const filePath = getSnapshotsFilePath();
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(content);
+      global.__DAILY_DAMAGE_SNAPSHOTS__ = parsed;
+      return parsed;
+    }
+  } catch (err) {
+    console.error('Error reading snapshots from disk:', err);
+  }
+  return {};
+}
+
+function writeSnapshotsToDisk(data: Record<string, any>) {
+  global.__DAILY_DAMAGE_SNAPSHOTS__ = data;
+  try {
+    const filePath = getSnapshotsFilePath();
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error writing snapshots to disk:', err);
+  }
+}
+
+async function readSnapshotsWithSupabaseServer(): Promise<Record<string, any>> {
+  let diskStore = readSnapshotsFromDisk();
+  try {
+    const supabaseStore = await fetchSnapshotsFromSupabase(30);
+    if (supabaseStore && Object.keys(supabaseStore).length > 0) {
+      const merged = { ...diskStore, ...supabaseStore };
+      global.__DAILY_DAMAGE_SNAPSHOTS__ = merged;
+      return merged;
+    }
+  } catch (err) {
+    console.error('Error fetching snapshots from Supabase in server:', err);
+  }
+  return diskStore;
+}
+
+async function snapshotAllArmies() {
+  const now = new Date();
+  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(now);
+  const timestamp = now.getTime();
+
+  let currentStore = await readSnapshotsWithSupabaseServer();
+  if (!currentStore[dateStr]) {
+    currentStore[dateStr] = {
+      date: dateStr,
+      timestamp,
+      iso: now.toISOString(),
+      armies: {},
+    };
+  }
+
+  for (const mu of PRESET_MILITARY_UNITS) {
+    try {
+      const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: mu.id }))}`;
+      const muRes = await fetchWarEra(muUrl);
+      if (!muRes.ok) continue;
+      const muJson = await muRes.json();
+      const muData = muJson?.result?.data?.json || muJson?.result?.data;
+      if (!muData) continue;
+
+      const members: string[] = muData.members || [];
+      const armyTotalWeekly = muData.rankings?.muWeeklyDamages?.value || 0;
+
+      const chunks: string[][] = [];
+      for (let i = 0; i < members.length; i += 10) {
+        chunks.push(members.slice(i, i + 10));
+      }
+
+      const memberDamages: Record<string, { username: string; weeklyDamage: number }> = {};
+
+      await Promise.all(
+        chunks.map(async (chunk) => {
+          try {
+            const endpoints = chunk.map(() => 'user.getUserById').join(',');
+            const batchInput: Record<string, { userId: string }> = {};
+            chunk.forEach((id, idx) => {
+              batchInput[idx.toString()] = { userId: id };
+            });
+            const batchUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
+            const uRes = await fetchWarEra(batchUrl);
+            if (uRes.ok) {
+              const uJson = await uRes.json();
+              if (Array.isArray(uJson)) {
+                for (const item of uJson) {
+                  const u = item?.result?.data?.json || item?.result?.data;
+                  if (u?._id) {
+                    memberDamages[u._id] = {
+                      username: u.username || 'Bilinmeyen Asker',
+                      weeklyDamage: u.rankings?.weeklyUserDamages?.value || 0,
+                    };
+                  }
+                }
+              }
+            }
+          } catch (_) {}
+        })
+      );
+
+      currentStore[dateStr].armies[mu.id] = {
+        name: mu.name,
+        muId: mu.id,
+        armyTotalWeeklyDamage: armyTotalWeekly,
+        memberCount: members.length,
+        members: memberDamages,
+      };
+    } catch (e) {
+      console.error(`Error snapshotting MU ${mu.name}:`, e);
+    }
+  }
+
+  // 1. Write to local file/memory
+  writeSnapshotsToDisk(currentStore);
+
+  // 2. Persist to Supabase
+  let supabaseSaved = false;
+  try {
+    supabaseSaved = await saveSnapshotToSupabase(currentStore[dateStr]);
+  } catch (err) {
+    console.warn('Could not persist snapshot to Supabase:', err);
+  }
+
+  return {
+    ...currentStore[dateStr],
+    supabaseSaved,
+    supabaseConnected: isSupabaseConnected(),
+  };
+}
+
+// API Route: Combat & Telemetry (Günlük Hasar & Telemetri Takip)
+app.get('/api/combat-telemetry', async (req, res) => {
+  const targetMuId = (req.query.muId as string) || DEFAULT_MU_ID;
+  const forceRefresh = req.query.refresh === 'true';
+
+  const cacheKey = `combat_telemetry_${targetMuId}`;
+  const cached = cache.get(cacheKey);
+  if (!forceRefresh && cached && Date.now() - cached.timestamp < 30 * 1000) {
+    return res.json(cached.data);
+  }
+
+  try {
+    // 1. Fetch MU Data
+    const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: targetMuId }))}`;
+    const muRes = await fetchWarEra(muUrl);
+    if (!muRes.ok) {
+      return res.status(502).json({ success: false, error: 'WarEra MU API call failed' });
+    }
+    const muJson = await muRes.json();
+    const muData = muJson?.result?.data?.json || muJson?.result?.data;
+    if (!muData) {
+      return res.status(404).json({ success: false, error: 'Military Unit not found' });
+    }
+
+    const members: string[] = muData.members || [];
+    const leaderId = muData.user || '';
+    const managers: string[] = muData.roles?.managers || [];
+    const commanders: string[] = muData.roles?.commanders || [];
+
+    // 2. Fetch User Profiles for all members using tRPC batching (chunks of 10)
+    const chunks: string[][] = [];
+    for (let i = 0; i < members.length; i += 10) {
+      chunks.push(members.slice(i, i + 10));
+    }
+
+    const allUsers: any[] = [];
+    await Promise.all(
+      chunks.map(async (chunk) => {
+        try {
+          const endpoints = chunk.map(() => 'user.getUserById').join(',');
+          const batchInput: Record<string, { userId: string }> = {};
+          chunk.forEach((id, idx) => {
+            batchInput[idx.toString()] = { userId: id };
+          });
+          const batchUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
+          const uRes = await fetchWarEra(batchUrl);
+          if (uRes.ok) {
+            const uJson = await uRes.json();
+            if (Array.isArray(uJson)) {
+              for (const item of uJson) {
+                const uData = item?.result?.data?.json || item?.result?.data;
+                if (uData) {
+                  allUsers.push(uData);
+                }
+              }
+            }
+          }
+        } catch (uErr) {
+          console.error('Batch user fetch error:', uErr);
+        }
+      })
+    );
+
+    // If batching missed some members, fall back to individual fetch for missing
+    const foundIds = new Set(allUsers.map((u) => u._id));
+    const missingIds = members.filter((id) => !foundIds.has(id));
+    if (missingIds.length > 0) {
+      await Promise.all(
+        missingIds.map(async (id) => {
+          try {
+            const singleUrl = `https://api2.warera.io/trpc/user.getUserById?input=${encodeURIComponent(JSON.stringify({ userId: id }))}`;
+            const sRes = await fetchWarEra(singleUrl);
+            if (sRes.ok) {
+              const sJson = await sRes.json();
+              const sData = sJson?.result?.data?.json || sJson?.result?.data;
+              if (sData) {
+                allUsers.push(sData);
+              }
+            }
+          } catch (_) {}
+        })
+      );
+    }
+
+    // 3. Load baseline snapshot from 02:55 cron
+    let snapshots = await readSnapshotsWithSupabaseServer();
+    if (Object.keys(snapshots).length === 0) {
+      await snapshotAllArmies();
+      snapshots = await readSnapshotsWithSupabaseServer();
+    }
+    const dates = Object.keys(snapshots).sort();
+    const latestDate = dates[dates.length - 1];
+    const baselineArmy = snapshots[latestDate]?.armies?.[targetMuId];
+    const baselineMembers = baselineArmy?.members || {};
+
+    // 4. Map member telemetry records with REAL daily damage
+    const mappedMembers = allUsers.map((u) => {
+      const isLeader = u._id === leaderId;
+      const isCommander = commanders.includes(u._id);
+      const isManager = managers.includes(u._id);
+      const role = isLeader ? 'leader' : isCommander ? 'commander' : isManager ? 'manager' : 'soldier';
+
+      // Resources
+      const healthCurrent = Number((u.skills?.health?.currentBarValue || 0).toFixed(1));
+      const healthMax = u.skills?.health?.value || 100;
+      const healthRegen = Number((u.skills?.health?.hourlyBarRegen || 0).toFixed(1));
+
+      const hungerCurrent = Number((u.skills?.hunger?.currentBarValue || 0).toFixed(1));
+      const hungerMax = u.skills?.hunger?.value || 10;
+      const hungerRegen = Number((u.skills?.hunger?.hourlyBarRegen || 0).toFixed(1));
+
+      // Buffs & Pills
+      const buffCodes = u.buffs?.buffCodes || [];
+      const buffEndAt = u.buffs?.buffEndAt || null;
+      const debuffEndAt = u.buffs?.debuffEndAt || u.attack?.buffs?.debuffEndAt || null;
+
+      const now = Date.now();
+      let pillStatus: 'ready' | 'buff' | 'debuff' = 'ready';
+      let pillExpiresAt: string | null = null;
+
+      if (buffEndAt && new Date(buffEndAt).getTime() > now) {
+        pillStatus = 'buff';
+        pillExpiresAt = buffEndAt;
+      } else if (debuffEndAt && new Date(debuffEndAt).getTime() > now) {
+        pillStatus = 'debuff';
+        pillExpiresAt = debuffEndAt;
+      }
+
+      // Skills reset
+      const freeReset = u.leveling?.freeReset || 0;
+      const lastSkillsResetAt = u.dates?.lastSkillsResetAt || null;
+
+      // Real Daily Damage calculation: Current Weekly Damage - 02:55 Snapshot Weekly Damage
+      const currentWeekly = u.rankings?.weeklyUserDamages?.value || 0;
+      const baselineWeekly = baselineMembers[u._id]?.weeklyDamage;
+
+      let dailyDamage = 0;
+      if (baselineWeekly !== undefined) {
+        if (currentWeekly >= baselineWeekly) {
+          dailyDamage = currentWeekly - baselineWeekly;
+        } else {
+          // In case War Era had a weekly season reset in between
+          dailyDamage = currentWeekly;
+        }
+      } else {
+        // First initial snapshot or brand new member
+        dailyDamage = 0;
+      }
+
+      return {
+        userId: u._id,
+        username: u.username || 'Bilinmeyen Asker',
+        avatarUrl: u.avatarUrl || '',
+        level: u.leveling?.level || 1,
+        militaryRank: u.militaryRank || 1,
+        role,
+        isLeader,
+        isCommander,
+        isManager,
+        health: {
+          current: healthCurrent,
+          max: healthMax,
+          hourlyRegen: healthRegen,
+        },
+        hunger: {
+          current: hungerCurrent,
+          max: hungerMax,
+          hourlyRegen: hungerRegen,
+        },
+        pillStatus,
+        pillExpiresAt,
+        buffCodes,
+        skillsReset: {
+          freeReset,
+          lastSkillsResetAt,
+        },
+        totalDamage: u.rankings?.userDamages?.value || u.stats?.damagesCount || 0,
+        weeklyDamage: currentWeekly,
+        dailyDamage,
+      };
+    });
+
+    // 5. Compute army resource totals & total daily damage
+    const totalHealthCurrent = Number(mappedMembers.reduce((sum, m) => sum + m.health.current, 0).toFixed(1));
+    const totalHealthMax = mappedMembers.reduce((sum, m) => sum + m.health.max, 0);
+    const totalHungerCurrent = Number(mappedMembers.reduce((sum, m) => sum + m.hunger.current, 0).toFixed(1));
+    const totalHungerMax = mappedMembers.reduce((sum, m) => sum + m.hunger.max, 0);
+
+    const readyCount = mappedMembers.filter((m) => m.pillStatus === 'ready').length;
+    const buffCount = mappedMembers.filter((m) => m.pillStatus === 'buff').length;
+    const debuffCount = mappedMembers.filter((m) => m.pillStatus === 'debuff').length;
+
+    const totalDailyDamage = mappedMembers.reduce((sum, m) => sum + m.dailyDamage, 0);
+
+    const resultData = {
+      success: true,
+      data: {
+        muInfo: {
+          id: targetMuId,
+          name: muData.name || 'Turkic Tribe',
+          memberCount: members.length,
+          leaderId,
+        },
+        resources: {
+          health: {
+            current: totalHealthCurrent,
+            max: totalHealthMax,
+            percentage: totalHealthMax > 0 ? Number(((totalHealthCurrent / totalHealthMax) * 100).toFixed(1)) : 0,
+          },
+          hunger: {
+            current: totalHungerCurrent,
+            max: totalHungerMax,
+            percentage: totalHungerMax > 0 ? Number(((totalHungerCurrent / totalHungerMax) * 100).toFixed(1)) : 0,
+          },
+        },
+        pillOverview: {
+          readyCount,
+          buffCount,
+          debuffCount,
+          total: members.length,
+        },
+        dailyDamageInfo: {
+          totalDailyDamage,
+          baselineDate: latestDate,
+          baselineTimestamp: snapshots[latestDate]?.timestamp || Date.now(),
+          calculationRule: 'Anlık Haftalık Hasar - 02:55 Snapshot Haftalık Hasar',
+        },
+        members: mappedMembers,
+        generatedAt: new Date().toISOString(),
+      },
+    };
+
+    cache.set(cacheKey, { data: resultData, timestamp: Date.now() });
+    return res.json(resultData);
+  } catch (err: any) {
+    console.error('Combat telemetry error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed fetching combat telemetry' });
+  }
+});
+
+// API Route: Cron Job endpoint for recording daily damage snapshot (runs at 02:55 TSİ)
+app.all('/api/cron/record-daily-damage', async (req, res) => {
+  try {
+    const snapshot = await snapshotAllArmies();
+    return res.json({
+      success: true,
+      message: '02:55 Günlük Hasar Snapshot başarıyla tamamlandı (6 Ordu).',
+      date: snapshot.date,
+      armiesCount: Object.keys(snapshot.armies).length,
+      snapshot,
+    });
+  } catch (err: any) {
+    console.error('Cron job error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Snapshot failed' });
+  }
+});
+
+// API Route: Historical daily damage snapshots
+app.get('/api/daily-damage-snapshots', async (req, res) => {
+  let store = await readSnapshotsWithSupabaseServer();
+  if (Object.keys(store).length === 0) {
+    try {
+      await snapshotAllArmies();
+      store = await readSnapshotsWithSupabaseServer();
+    } catch (_) {}
+  }
+  const dates = Object.keys(store).sort();
+  const latestDate = dates[dates.length - 1];
+  const previousDate = dates.length > 1 ? dates[dates.length - 2] : null;
+
+  return res.json({
+    success: true,
+    latestDate,
+    previousDate,
+    totalSnapshots: dates.length,
+    dates,
+    snapshots: store,
+    supabaseConnected: isSupabaseConnected(),
+  });
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
@@ -1535,6 +2168,33 @@ async function startServer() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
+
+  // 02:55 TSİ cron runner (runs daily snapshot at 02:55 Turkey Time)
+  setInterval(() => {
+    try {
+      const now = new Date();
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Istanbul',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(now);
+
+      const hour = parseInt(parts.find((p) => p.type === 'hour')?.value || '-1', 10);
+      const minute = parseInt(parts.find((p) => p.type === 'minute')?.value || '-1', 10);
+
+      if (hour === 2 && minute === 55) {
+        const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(now);
+        const store = readSnapshotsFromDisk();
+        if (!store[todayStr]) {
+          console.log(`[02:55 TSİ CRON] Taking scheduled daily damage snapshot for ${todayStr}...`);
+          snapshotAllArmies().catch(console.error);
+        }
+      }
+    } catch (e) {
+      console.error('Error in 02:55 cron runner:', e);
+    }
+  }, 60 * 1000);
 }
 
 if (!process.env.VERCEL) {

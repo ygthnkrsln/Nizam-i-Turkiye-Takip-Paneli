@@ -136,7 +136,7 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
         <div
           id="card-mu-selector"
           ref={dropdownRef}
-          className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-[#3282B8]/25 hover:border-[#3282B8]/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full relative shadow-lg shadow-black/25 group"
+          className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-rose-500/25 hover:border-rose-500/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full relative shadow-lg shadow-black/25 group"
         >
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -219,7 +219,7 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
           {isDropdownOpen && (
             <div
               id="mu-dropdown-menu"
-              className="absolute left-0 right-0 top-full mt-2 bg-[#182329] rounded-xl border border-[#3282B8]/50 p-2 shadow-2xl z-50 max-h-72 overflow-y-auto backdrop-blur-xl animate-in fade-in duration-150"
+              className="absolute left-0 right-0 top-full mt-2 bg-[#182329] rounded-xl border border-rose-500/40 p-2 shadow-2xl z-50 max-h-72 overflow-y-auto backdrop-blur-xl animate-in fade-in duration-150"
             >
               <div className="px-3 py-1.5 border-b border-[#3282B8]/20 mb-1 flex items-center justify-between">
                 <span className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
@@ -298,7 +298,7 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
         </div>
 
         {/* 3. TOPLAM HASAR Kartı */}
-        <div className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-amber-500/25 hover:border-amber-500/50 rounded-xl p-5 transition-all shadow-lg flex flex-col justify-between h-full group">
+        <div className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-rose-500/25 hover:border-rose-500/50 rounded-xl p-5 transition-all shadow-lg flex flex-col justify-between h-full group">
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-amber-400">
@@ -318,7 +318,7 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
             </p>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-amber-500/15 flex items-center justify-between text-[11px] font-mono">
+          <div className="mt-4 pt-3 border-t border-rose-500/15 flex items-center justify-between text-[11px] font-mono">
             <span className="text-[#BBE1FA]/60">Tüm Zamanlar:</span>
             <span className="font-bold text-amber-400 truncate max-w-[140px]" title={data?.mvps?.allTimeDamageLeader?.username}>
               {data?.mvps?.allTimeDamageLeader?.username || '-'}
@@ -327,7 +327,7 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
         </div>
 
         {/* 4. TOPLAM SERVET Kartı */}
-        <div className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-yellow-500/25 hover:border-yellow-500/50 rounded-xl p-5 transition-all shadow-lg flex flex-col justify-between h-full group">
+        <div className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-rose-500/25 hover:border-rose-500/50 rounded-xl p-5 transition-all shadow-lg flex flex-col justify-between h-full group">
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-amber-300">
@@ -359,10 +359,10 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
       {/* 3. SATIR: Liderlik Kadrosu, Birlik Öncüleri (MVP), Seviye Spektrumu */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Sütun 1: LİDERLİK KADROSU */}
-        <div className="rounded-2xl bg-[#182329]/90 border border-[#3282B8]/25 p-5 flex flex-col justify-between shadow-xl">
+        <div className="rounded-2xl bg-[#182329]/90 border border-rose-500/25 hover:border-rose-500/40 p-5 flex flex-col justify-between shadow-xl transition-all">
           <div>
             {/* Kart Başlığı */}
-            <div className="flex items-center justify-between pb-3.5 border-b border-[#3282B8]/15 mb-4">
+            <div className="flex items-center justify-between pb-3.5 border-b border-rose-500/15 mb-4">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
                   <Crown className="w-4 h-4" />
@@ -380,7 +380,7 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
               <button
                 type="button"
                 onClick={() => setIsMembersModalOpen(true)}
-                className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 font-mono font-semibold transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 font-mono font-semibold transition-colors cursor-pointer"
               >
                 <span>Tüm Üyeler</span>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -463,11 +463,11 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
         </div>
 
         {/* Sütun 2: BİRLİK ÖNCÜLERİ (MVP) */}
-        <div className="rounded-2xl bg-[#182329]/90 border border-[#3282B8]/25 p-5 flex flex-col justify-between shadow-xl">
+        <div className="rounded-2xl bg-[#182329]/90 border border-rose-500/25 hover:border-rose-500/40 p-5 flex flex-col justify-between shadow-xl transition-all">
           <div>
             {/* Kart Başlığı */}
-            <div className="flex items-center gap-2.5 pb-3.5 border-b border-[#3282B8]/15 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+            <div className="flex items-center gap-2.5 pb-3.5 border-b border-rose-500/15 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
                 <Medal className="w-4 h-4" />
               </div>
               <div>
@@ -576,10 +576,10 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
         </div>
 
         {/* Sütun 3: SEVİYE SPEKTRUMU */}
-        <div className="rounded-2xl bg-[#182329]/90 border border-[#3282B8]/25 p-5 flex flex-col justify-between shadow-xl">
+        <div className="rounded-2xl bg-[#182329]/90 border border-rose-500/25 hover:border-rose-500/40 p-5 flex flex-col justify-between shadow-xl transition-all">
           <div>
             {/* Kart Başlığı */}
-            <div className="flex items-center gap-2.5 pb-3.5 border-b border-[#3282B8]/15 mb-4">
+            <div className="flex items-center gap-2.5 pb-3.5 border-b border-rose-500/15 mb-4">
               <div className="w-8 h-8 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
                 <BarChart3 className="w-4 h-4" />
               </div>
@@ -665,9 +665,9 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
       {/* Tüm Üyeler Modal */}
       {isMembersModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-2xl max-h-[85vh] bg-[#182329] border border-[#3282B8]/40 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+          <div className="relative w-full max-w-2xl max-h-[85vh] bg-[#182329] border border-rose-500/40 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="p-4 border-b border-[#3282B8]/20 flex items-center justify-between bg-[#141C21]/80">
+            <div className="p-4 border-b border-rose-500/20 flex items-center justify-between bg-[#141C21]/80">
               <div className="flex items-center gap-2.5">
                 <Users className="w-5 h-5 text-cyan-400" />
                 <div>

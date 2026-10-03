@@ -6,7 +6,12 @@ import {
   FactoryItem, 
   CountryStatsResponse,
   MilitaryOverviewResponse,
-  MilitaryOverviewData
+  MilitaryOverviewData,
+  MilitaryDetailsResponse,
+  MilitaryDetailsData,
+  CombatTelemetryResponse,
+  CombatTelemetryData,
+  DailyDamageSnapshotsResponse
 } from '../types';
 
 export const DEFAULT_MU_ID = '69c229c4449287ea1a26a5b3';
@@ -1425,3 +1430,135 @@ export async function fetchMilitaryOverview(
 
   return json.data;
 }
+
+const MILITARY_DETAILS_STORAGE_KEY_PREFIX = 'warera_mil_details_';
+
+export function getCachedMilitaryDetails(muId: string = DEFAULT_MU_ID): MilitaryDetailsData | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`${MILITARY_DETAILS_STORAGE_KEY_PREFIX}${muId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.data) {
+      return parsed.data;
+    }
+  } catch (e) {}
+  return null;
+}
+
+export async function fetchMilitaryDetails(
+  muId: string = DEFAULT_MU_ID,
+  forceRefresh = false
+): Promise<MilitaryDetailsData> {
+  const cacheKey = `${MILITARY_DETAILS_STORAGE_KEY_PREFIX}${muId}`;
+  
+  if (!forceRefresh) {
+    const cached = getCachedMilitaryDetails(muId);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const endpoint = `/api/military-details?muId=${encodeURIComponent(muId)}${forceRefresh ? '&refresh=true' : ''}`;
+  const res = await fetch(endpoint);
+  if (!res.ok) {
+    throw new Error(`Ordu detaylı bilgileri alınamadı (${res.status})`);
+  }
+  const json: MilitaryDetailsResponse = await res.json();
+  if (!json.success || !json.data) {
+    throw new Error(json.error || 'Ordu detay bilgileri yüklenemedi');
+  }
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify({ data: json.data, timestamp: Date.now() }));
+  } catch (e) {}
+
+  return json.data;
+}
+
+const COMBAT_TELEMETRY_STORAGE_KEY_PREFIX = 'warera_combat_telemetry_';
+
+export function getCachedCombatTelemetry(muId: string = DEFAULT_MU_ID): CombatTelemetryData | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`${COMBAT_TELEMETRY_STORAGE_KEY_PREFIX}${muId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.data) {
+      return parsed.data;
+    }
+  } catch (e) {}
+  return null;
+}
+
+export async function fetchCombatTelemetry(
+  muId: string = DEFAULT_MU_ID,
+  forceRefresh = false
+): Promise<CombatTelemetryData> {
+  const cacheKey = `${COMBAT_TELEMETRY_STORAGE_KEY_PREFIX}${muId}`;
+  
+  if (!forceRefresh) {
+    const cached = getCachedCombatTelemetry(muId);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const endpoint = `/api/combat-telemetry?muId=${encodeURIComponent(muId)}${forceRefresh ? '&refresh=true' : ''}`;
+  const res = await fetch(endpoint);
+  if (!res.ok) {
+    throw new Error(`Ordu telemetri bilgileri alınamadı (${res.status})`);
+  }
+  const json: CombatTelemetryResponse = await res.json();
+  if (!json.success || !json.data) {
+    throw new Error(json.error || 'Ordu telemetri bilgileri yüklenemedi');
+  }
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify({ data: json.data, timestamp: Date.now() }));
+  } catch (e) {}
+
+  return json.data;
+}
+
+// Daily Baseline Damage Engine - Calculated strictly against 02:55 snapshot
+export function getDailyDamageForMember(
+  userId: string,
+  currentWeeklyDamage: number,
+  baselineWeeklyDamage?: number
+): number {
+  if (baselineWeeklyDamage === undefined) {
+    return 0; // Starts strictly at 0 DMG
+  }
+  if (currentWeeklyDamage >= baselineWeeklyDamage) {
+    return currentWeeklyDamage - baselineWeeklyDamage;
+  }
+  return currentWeeklyDamage;
+}
+
+export async function fetchDailyDamageSnapshots(): Promise<DailyDamageSnapshotsResponse> {
+  try {
+    const res = await fetch('/api/daily-damage-snapshots');
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (_) {}
+
+  // Fallback to Vercel Serverless cron route with action=list
+  const resFallback = await fetch('/api/cron/record-daily-damage?action=list');
+  if (!resFallback.ok) {
+    throw new Error('Snapshot verileri alınamadı');
+  }
+  return resFallback.json();
+}
+
+export async function triggerDailySnapshotCron(): Promise<any> {
+  const res = await fetch('/api/cron/record-daily-damage', { method: 'POST' });
+  if (!res.ok) {
+    throw new Error('Snapshot cron tetiklenemedi');
+  }
+  return res.json();
+}
+
+
+
