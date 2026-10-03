@@ -20,8 +20,59 @@ import {
 } from './services/wareraApi';
 import { AlertCircle } from 'lucide-react';
 
+export type ActiveTab = 'donations' | 'armyStats' | 'countryStats';
+
+export const TAB_TO_SLUG: Record<ActiveTab, string> = {
+  donations: 'bagis-takip',
+  armyStats: 'ordu-istatistikleri',
+  countryStats: 'ulke-istatistikleri',
+};
+
+const TAB_TITLES: Record<ActiveTab, string> = {
+  donations: 'War Era - Bağış Takip Paneli',
+  armyStats: 'War Era - Ordu İstatistikleri',
+  countryStats: 'War Era - Ülke İstatistikleri',
+};
+
+export function getTabFromUrl(): ActiveTab {
+  if (typeof window === 'undefined') return 'donations';
+  
+  // Normalize pathname: e.g. "/ordu-istatistikleri" -> "ordu-istatistikleri"
+  const path = window.location.pathname.toLowerCase().replace(/^\/+|\/+$/g, '');
+  const hash = window.location.hash.toLowerCase().replace(/^#\/?/, '');
+  const segment = path || hash;
+
+  if (
+    segment === 'ordu-istatistikleri' ||
+    segment === 'ordu' ||
+    segment === 'army-stats' ||
+    segment === 'armystats' ||
+    segment === 'army'
+  ) {
+    return 'armyStats';
+  }
+  if (
+    segment === 'ulke-istatistikleri' ||
+    segment === 'ulke' ||
+    segment === 'country-stats' ||
+    segment === 'countrystats' ||
+    segment === 'country'
+  ) {
+    return 'countryStats';
+  }
+  if (
+    segment === 'bagis-takip' ||
+    segment === 'bagis' ||
+    segment === 'donations' ||
+    segment === 'donation'
+  ) {
+    return 'donations';
+  }
+  return 'donations';
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'donations' | 'armyStats' | 'countryStats'>('donations');
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => getTabFromUrl());
   const [muId, setMuId] = useState(() => {
     return getCookie('warera_last_mu') || DEFAULT_MU_ID;
   });
@@ -81,6 +132,47 @@ export default function App() {
     }
     return false;
   });
+
+  // Switch tab and synchronize browser URL without page reload
+  const handleTabChange = useCallback((newTab: ActiveTab) => {
+    setActiveTab(newTab);
+    const slug = TAB_TO_SLUG[newTab];
+    const newPath = `/${slug}${window.location.search}`;
+    if (window.location.pathname !== `/${slug}`) {
+      window.history.pushState({ tab: newTab }, '', newPath);
+    }
+    if (TAB_TITLES[newTab]) {
+      document.title = TAB_TITLES[newTab];
+    }
+  }, []);
+
+  // Listen for browser Back/Forward (popstate) navigation & sync URL
+  useEffect(() => {
+    const onPopState = () => {
+      const tab = getTabFromUrl();
+      setActiveTab(tab);
+      if (TAB_TITLES[tab]) {
+        document.title = TAB_TITLES[tab];
+      }
+    };
+
+    window.addEventListener('popstate', onPopState);
+
+    // Initial page title sync
+    const currentTab = getTabFromUrl();
+    if (TAB_TITLES[currentTab]) {
+      document.title = TAB_TITLES[currentTab];
+    }
+
+    // If loaded on root "/", gracefully update URL to "/bagis-takip" so the panel name is visible
+    const currentPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
+    const currentSlug = TAB_TO_SLUG[currentTab];
+    if (currentPath === '') {
+      window.history.replaceState({ tab: currentTab }, '', `/${currentSlug}${window.location.search}`);
+    }
+
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   // Sync dark mode class on html tag
   useEffect(() => {
@@ -203,8 +295,8 @@ export default function App() {
       {/* Ambient background glow matching the color scheme */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0F4C75]/20 via-transparent to-transparent pointer-events-none" />
 
-      {/* Top Header - With Tab Switcher (Bağış Takip Paneli & Ordu İstatistikleri) */}
-      <Header activeTab={activeTab} onTabChange={setActiveTab} />
+      {/* Top Header - With Tab Switcher (Bağış Takip Paneli, Ordu İstatistikleri, Ülke İstatistikleri) */}
+      <Header activeTab={activeTab} onTabChange={handleTabChange} />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 relative z-10">

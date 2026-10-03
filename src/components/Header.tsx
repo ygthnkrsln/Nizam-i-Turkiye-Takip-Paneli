@@ -12,7 +12,11 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           {/* Left: Brand Emblem & Title */}
-          <div className="flex items-center gap-3">
+          <div 
+            onClick={() => onTabChange('donations')}
+            className="flex items-center gap-3 cursor-pointer group select-none"
+            title="Ana Sayfa (Bağış Takip Paneli)"
+          >
             <div className="relative group shrink-0">
               <div className="absolute -inset-0.5 rounded-full bg-gradient-to-r from-[#0F4C75] via-[#3282B8] to-[#BBE1FA] opacity-50 blur-[2px] group-hover:opacity-80 transition duration-300" />
               <img
