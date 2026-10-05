@@ -334,12 +334,12 @@ export const MilitaryDetailsSection: React.FC<MilitaryDetailsSectionProps> = ({
             <div className="flex items-baseline justify-between pt-1">
               <div className="flex items-baseline gap-1 font-mono">
                 <span className="text-2xl font-black text-white">
-                  {formatDamage(mu?.rankings?.muWeeklyDamages?.value ?? 47136427)}
+                  {formatDamage(mu?.rankings?.muWeeklyDamages?.value ?? 0)}
                 </span>
                 <span className="text-[10px] text-[#BBE1FA]/60 font-bold">DMG</span>
               </div>
               <div className="px-2 py-0.5 rounded bg-[#141C21] border border-rose-500/30 text-[11px] font-mono text-rose-300">
-                Rank: <span className="font-bold">#{mu?.rankings?.muWeeklyDamages?.rank ?? 191}</span>
+                Rank: <span className="font-bold">#{mu?.rankings?.muWeeklyDamages?.rank ?? 0}</span>
               </div>
             </div>
           </div>

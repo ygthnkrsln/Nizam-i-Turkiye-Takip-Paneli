@@ -2084,7 +2084,7 @@ export async function fetchCountryStats(
   }
 }
 
-const MILITARY_OVERVIEW_STORAGE_KEY_PREFIX = "warera_mil_overview_";
+const MILITARY_OVERVIEW_STORAGE_KEY_PREFIX = "warera_mil_overview_v2_";
 
 export function getCachedMilitaryOverview(
   muId: string = DEFAULT_MU_ID,
@@ -2136,7 +2136,7 @@ export async function fetchMilitaryOverview(
   return json.data;
 }
 
-const MILITARY_DETAILS_STORAGE_KEY_PREFIX = "warera_mil_details_";
+const MILITARY_DETAILS_STORAGE_KEY_PREFIX = "warera_mil_details_v2_";
 
 export function getCachedMilitaryDetails(
   muId: string = DEFAULT_MU_ID,

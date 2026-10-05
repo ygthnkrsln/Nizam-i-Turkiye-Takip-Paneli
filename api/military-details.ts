@@ -35,7 +35,7 @@ export default async function handler(req: any, res: any) {
   const targetMuId = (req.query?.muId as string) || DEFAULT_MU_ID;
   const forceRefresh = req.query?.refresh === 'true';
 
-  const cacheKey = `mil_details_${targetMuId}`;
+  const cacheKey = `mil_details_v2_${targetMuId}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return res.status(200).json(cached.data);
@@ -172,8 +172,8 @@ export default async function handler(req: any, res: any) {
           },
           rankings: {
             muWeeklyDamages: {
-              value: rankings.muWeeklyDamages?.value || 47136427,
-              rank: rankings.muWeeklyDamages?.rank || 191,
+              value: rankings.muWeeklyDamages?.value ?? 0,
+              rank: rankings.muWeeklyDamages?.rank ?? 0,
               tier: rankings.muWeeklyDamages?.tier || 'platinum',
             },
             muDamages: {
