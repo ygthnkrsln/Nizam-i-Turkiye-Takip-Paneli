@@ -1,7 +1,11 @@
 // Vercel Serverless Function: GET /api/daily-damage-snapshots
 // Returns recorded daily damage snapshots and baseline calculations.
 
-import { readSnapshotsFromDisk, snapshotAllArmies } from './cron/record-daily-damage';
+import {
+  isSupabaseConnected,
+  readSnapshotsWithSupabase,
+  snapshotAllArmies,
+} from '../src/server/services/daily-damage.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,13 +17,13 @@ export default async function handler(req: any, res: any) {
   }
 
   const muId = req.query?.muId as string;
-  let store = readSnapshotsFromDisk();
+  let store = await readSnapshotsWithSupabase();
 
   // If no snapshots exist at all yet, take an initial baseline snapshot now
   if (Object.keys(store).length === 0) {
     try {
       await snapshotAllArmies();
-      store = readSnapshotsFromDisk();
+      store = await readSnapshotsWithSupabase();
     } catch (_) {}
   }
 
@@ -35,5 +39,6 @@ export default async function handler(req: any, res: any) {
     totalSnapshots: dates.length,
     dates,
     snapshots: store,
+    supabaseConnected: isSupabaseConnected(),
   });
 }

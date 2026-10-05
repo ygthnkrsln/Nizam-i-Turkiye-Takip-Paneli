@@ -1,7 +1,7 @@
 // Vercel Serverless Function: GET /api/combat-telemetry
 // Fetches daily combat telemetry: resources (HP, hunger, hourly regen), buffs/pills, skill resets, and real-time live daily damage calculated against 02:55 snapshot.
 
-import { readSnapshotsWithSupabase } from "../../../api/cron/record-daily-damage";
+import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
 
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
 import {

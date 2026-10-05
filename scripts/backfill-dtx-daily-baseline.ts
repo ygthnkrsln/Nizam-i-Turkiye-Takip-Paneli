@@ -6,7 +6,7 @@ import { getNextWarEraToken } from "../src/lib/wareraTokens.js";
 import {
   readSnapshotsWithSupabase,
   writeSnapshotsToDisk,
-} from "../api/cron/record-daily-damage.js";
+} from "../src/server/services/daily-damage.js";
 
 const DTX_MU_ID = "693d20605669127e9d45f9b8";
 const DTX_NAME = "DTX";

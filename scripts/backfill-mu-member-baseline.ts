@@ -6,7 +6,7 @@ import { getNextWarEraToken } from "../src/lib/wareraTokens.js";
 import {
   readSnapshotsWithSupabase,
   writeSnapshotsToDisk,
-} from "../api/cron/record-daily-damage.js";
+} from "../src/server/services/daily-damage.js";
 import { getCurrentWeeklyDamage } from "../src/lib/dailyDamage.js";
 
 const [muId, userId, snapshotDate = "2026-10-03"] = process.argv.slice(2);

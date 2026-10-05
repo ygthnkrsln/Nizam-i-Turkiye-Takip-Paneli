@@ -7,7 +7,7 @@ import {
   findBaselineForCurrentCycle,
   getCurrentWeeklyDamage,
 } from "../../lib/dailyDamage.js";
-import { readSnapshotsWithSupabase } from "../../../api/cron/record-daily-damage.js";
+import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
 
 export const PRESET_8_ARMIES = [
   {

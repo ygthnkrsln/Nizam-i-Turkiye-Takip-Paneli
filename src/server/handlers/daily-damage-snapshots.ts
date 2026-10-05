@@ -4,7 +4,7 @@
 import {
   readSnapshotsFromDisk,
   snapshotAllArmies,
-} from "../../../api/cron/record-daily-damage";
+} from "../services/daily-damage.js";
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
