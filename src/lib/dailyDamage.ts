@@ -16,6 +16,17 @@ export function getCurrentWeeklyDamage(user: any): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+/** Read the authoritative weekly total from a WarEra military unit profile. */
+export function getMilitaryUnitWeeklyDamage(militaryUnit: any): number {
+  const value = Number(
+    militaryUnit?.rankings?.muWeeklyDamages?.value ??
+      militaryUnit?.weeklyDamage ??
+      militaryUnit?.rankings?.weeklyDamage?.value ??
+      0,
+  );
+  return Number.isFinite(value) ? value : 0;
+}
+
 /**
  * Daily damage is the live weekly total minus the saved reset baseline.
  * Missing baselines are unknown, not a zero baseline, so they contribute 0.

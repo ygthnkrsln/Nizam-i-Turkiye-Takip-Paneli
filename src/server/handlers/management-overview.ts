@@ -12,6 +12,7 @@ import {
   calculateDailyDamageFromSnapshot,
   findBaselineForCurrentCycle,
   getCurrentWeeklyDamage,
+  getMilitaryUnitWeeklyDamage,
 } from "../../lib/dailyDamage.js";
 import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
 
@@ -317,7 +318,7 @@ async function processSingleArmy(
     let totalHungerMax = 0;
 
     let armyDailyDamage = 0;
-    let armyWeeklyDamage = 0;
+    const armyWeeklyDamage = getMilitaryUnitWeeklyDamage(muData);
 
     let targetDonationSum = 0;
     let collectedDonationSum = 0;
@@ -345,7 +346,6 @@ async function processSingleArmy(
 
       // Damage
       const weeklyDmg = getCurrentWeeklyDamage(u);
-      armyWeeklyDamage += weeklyDmg;
 
       const baselineDmg = armyBaseline[uid]?.weeklyDamage;
       const todayDmg = calculateDailyDamageFromSnapshot(weeklyDmg, baselineDmg);
@@ -548,7 +548,7 @@ export default async function handler(req: any, res: any) {
       ? targetDateQuery
       : todayDateStr;
 
-  const cacheKey = `mgmt_overview_v5_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v6_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return res.status(200).json(cached.data);

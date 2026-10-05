@@ -6,6 +6,7 @@ import {
   calculateDailyDamageFromSnapshot,
   findBaselineForCurrentCycle,
   getCurrentWeeklyDamage,
+  getMilitaryUnitWeeklyDamage,
 } from "../../lib/dailyDamage.js";
 import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
 
@@ -123,7 +124,7 @@ export default async function handler(req: any, res: any) {
 
           // Baseline for this army
           // Fetch member userLite for current weekly damages in parallel batches
-          let armyWeeklyDamage = 0;
+          const armyWeeklyDamage = getMilitaryUnitWeeklyDamage(muData);
           let armyTodayDamage = 0;
           let topStriker = { username: "Yok", damage: 0, weeklyDamage: 0 };
           const batchSize = 6;
@@ -158,7 +159,6 @@ export default async function handler(req: any, res: any) {
               const uid = userData.id || userData._id;
               const username = userData.username || "Asker";
               const weeklyDmg = getCurrentWeeklyDamage(userData);
-              armyWeeklyDamage += weeklyDmg;
 
               const baselineDmg = armyBaseline[uid]?.weeklyDamage;
               const todayDmg = calculateDailyDamageFromSnapshot(

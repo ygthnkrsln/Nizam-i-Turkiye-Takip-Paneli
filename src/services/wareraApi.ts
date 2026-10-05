@@ -14,6 +14,10 @@ import {
   DailyDamageSnapshotsResponse,
 } from "../types";
 import { calculateDailyDamageFromSnapshot } from "../lib/dailyDamage.js";
+import {
+  COUNTRY_STATS_ARMIES,
+  includesRequiredCountryStatsArmies,
+} from "../config/countryStatsArmies.js";
 
 export const DEFAULT_MU_ID = "69c229c4449287ea1a26a5b3";
 const CACHE_KEY_PREFIX = "warera_mu_cache_";
@@ -1780,7 +1784,7 @@ export async function fetchMilitaryUnitData(
 }
 
 /**
- * Fetches country-wide statistics across the 6 armies
+ * Fetches country-wide statistics across the 8 tracked armies
  * 1. Checks localStorage cache
  * 2. Tries /api/country-stats
  * 3. Falls back to direct WarEra batch fetch in parallel
@@ -1788,7 +1792,7 @@ export async function fetchMilitaryUnitData(
 export async function fetchCountryStats(
   forceRefresh = false,
 ): Promise<CountryStatsResponse> {
-  const cacheKey = "warera_country_stats_cache_v4";
+  const cacheKey = "warera_country_stats_cache_v5";
   if (!forceRefresh) {
     try {
       const stored = localStorage.getItem(cacheKey);
@@ -1796,7 +1800,8 @@ export async function fetchCountryStats(
         const parsed = JSON.parse(stored);
         if (
           Date.now() - parsed.timestamp < 3600 * 1000 &&
-          parsed.data?.levelStats?.[0]?.combatCount !== undefined
+          parsed.data?.levelStats?.[0]?.combatCount !== undefined &&
+          includesRequiredCountryStatsArmies(parsed.data?.armies)
         ) {
           return parsed.data;
         }
@@ -1825,7 +1830,8 @@ export async function fetchCountryStats(
         json.success &&
         Array.isArray(json.levelStats) &&
         json.levelStats.length > 0 &&
-        json.levelStats[0].combatCount !== undefined
+        json.levelStats[0].combatCount !== undefined &&
+        includesRequiredCountryStatsArmies(json.armies)
       ) {
         try {
           localStorage.setItem(
@@ -1844,57 +1850,7 @@ export async function fetchCountryStats(
   }
 
   // 2. Direct client fetch fallback across the 6 armies in parallel
-  const armies = [
-    {
-      id: "69c229c4449287ea1a26a5b3",
-      name: "Turkic Tribe",
-      memberCount: 21,
-      avatarUrl:
-        "https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png",
-    },
-    {
-      id: "689f69064e095b8b9f1b885a",
-      name: "ASHINA",
-      memberCount: 13,
-      avatarUrl:
-        "https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png",
-    },
-    {
-      id: "68bc9bcb4870c8e343e42855",
-      name: "ASHINA Reserve",
-      memberCount: 16,
-      avatarUrl:
-        "https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png",
-    },
-    {
-      id: "690088ce4864a132a2d92d07",
-      name: "Legio Panthera",
-      memberCount: 25,
-      avatarUrl:
-        "https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png",
-    },
-    {
-      id: "6902269a560184d196a6fba8",
-      name: "BEASTs",
-      memberCount: 25,
-      avatarUrl:
-        "https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg",
-    },
-    {
-      id: "6a0f1495478fe2a58d2868d6",
-      name: "Deliler",
-      memberCount: 24,
-      avatarUrl:
-        "https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png",
-    },
-    {
-      id: "68e0f3b86351b310a982d79e",
-      name: "WAVVE",
-      memberCount: 20,
-      avatarUrl:
-        "https://media.warera.io/avatars/mu/mu-68e0f3b86351b310a982d79e-1786113114746-rr3s4yb3.png",
-    },
-  ];
+  const armies = [...COUNTRY_STATS_ARMIES];
 
   try {
     const muPromises = armies.map(async (army) => {
@@ -1942,7 +1898,13 @@ export async function fetchCountryStats(
       isEconomy: boolean;
     }[] = [];
 
-    batchResults.flat().forEach((u: any) => {
+    const uniqueUsers = new Map<string, any>();
+    for (const user of batchResults.flat()) {
+      const userId = user?._id || user?.id;
+      if (userId) uniqueUsers.set(userId, user);
+    }
+
+    uniqueUsers.forEach((u: any) => {
       const level = Number(u.leveling?.level || 1);
       const comp = u.skills?.companies;
       const factoryLimit = Number(

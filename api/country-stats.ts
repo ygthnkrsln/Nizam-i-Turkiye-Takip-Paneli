@@ -1,5 +1,10 @@
 // Vercel Serverless Function: GET /api/country-stats
-// Aggregates military unit & factory statistics across the 6 major Turkish armies
+// Aggregates military unit & factory statistics across the 8 tracked Turkish armies
+
+import {
+  COUNTRY_STATS_ARMIES,
+  includesRequiredCountryStatsArmies,
+} from '../src/config/countryStatsArmies.js';
 
 const BUILTIN_WARERA_TOKENS = [
   'wae_7cddb132963e57ee7ee9bd9663f57460b5dabe2746531019f6abdd1056d023ef',
@@ -40,7 +45,7 @@ async function fetchWarEra(url: string, init?: RequestInit, userToken?: string):
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const COUNTRY_STATS_CACHE_KEY = 'warera_country_stats_6_armies_v5';
+const COUNTRY_STATS_CACHE_KEY = 'warera_country_stats_8_armies_v6';
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour cache
 
@@ -60,19 +65,13 @@ export default async function handler(req: any, res: any) {
     !forceRefresh &&
     cached &&
     Date.now() - cached.timestamp < CACHE_TTL_MS &&
-    cached.data?.levelStats?.[0]?.combatFactories !== undefined
+    cached.data?.levelStats?.[0]?.combatFactories !== undefined &&
+    includesRequiredCountryStatsArmies(cached.data?.armies)
   ) {
     return res.json(cached.data);
   }
 
-  const armiesConfig = [
-    { id: '69c229c4449287ea1a26a5b3', name: 'Turkic Tribe', avatarUrl: 'https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png' },
-    { id: '689f69064e095b8b9f1b885a', name: 'ASHINA', avatarUrl: 'https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png' },
-    { id: '68bc9bcb4870c8e343e42855', name: 'ASHINA Reserve', avatarUrl: 'https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png' },
-    { id: '690088ce4864a132a2d92d07', name: 'Legio Panthera', avatarUrl: 'https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png' },
-    { id: '6902269a560184d196a6fba8', name: 'BEASTs', avatarUrl: 'https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg' },
-    { id: '6a0f1495478fe2a58d2868d6', name: 'Deliler', avatarUrl: 'https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png' },
-  ];
+  const armiesConfig = COUNTRY_STATS_ARMIES;
 
   try {
     const armyInfoList: { id: string; name: string; memberCount: number; avatarUrl?: string }[] = [];
@@ -134,7 +133,12 @@ export default async function handler(req: any, res: any) {
     });
 
     const batchResults = await Promise.all(batchPromises);
-    const allUsers = batchResults.flat();
+    const allUsersById = new Map<string, any>();
+    for (const user of batchResults.flat()) {
+      const userId = user?._id || user?.id;
+      if (userId) allUsersById.set(userId, user);
+    }
+    const allUsers = Array.from(allUsersById.values());
     allUsers.forEach((u: any) => {
       const level = Number(u.leveling?.level || 1);
       const compSkill = u.skills?.companies;

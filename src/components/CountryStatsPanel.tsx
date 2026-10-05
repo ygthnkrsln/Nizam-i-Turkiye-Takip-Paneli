@@ -14,16 +14,10 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { exportCountryStatsToPDF } from '../utils/exportCountryPdf';
-
-const PRESET_ARMIES = [
-  { id: '69c229c4449287ea1a26a5b3', name: 'Turkic Tribe', memberCount: 21, avatarUrl: 'https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png' },
-  { id: '689f69064e095b8b9f1b885a', name: 'ASHINA', memberCount: 13, avatarUrl: 'https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png' },
-  { id: '68bc9bcb4870c8e343e42855', name: 'ASHINA Reserve', memberCount: 16, avatarUrl: 'https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png' },
-  { id: '690088ce4864a132a2d92d07', name: 'Legio Panthera', memberCount: 25, avatarUrl: 'https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png' },
-  { id: '6902269a560184d196a6fba8', name: 'BEASTs', memberCount: 25, avatarUrl: 'https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg' },
-  { id: '6a0f1495478fe2a58d2868d6', name: 'Deliler', memberCount: 24, avatarUrl: 'https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png' },
-  { id: '68e0f3b86351b310a982d79e', name: 'WAVVE', memberCount: 20, avatarUrl: 'https://media.warera.io/avatars/mu/mu-68e0f3b86351b310a982d79e-1786113114746-rr3s4yb3.png' },
-];
+import {
+  COUNTRY_STATS_ARMIES,
+  includesRequiredCountryStatsArmies,
+} from '../config/countryStatsArmies.js';
 
 let sessionCountryStatsCache: CountryStatsResponse | null = null;
 
@@ -257,7 +251,8 @@ export const CountryStatsPanel: React.FC = () => {
   const [data, setData] = useState<CountryStatsResponse | null>(() => {
     if (
       sessionCountryStatsCache &&
-      sessionCountryStatsCache.levelStats?.[0]?.combatFactories !== undefined
+      sessionCountryStatsCache.levelStats?.[0]?.combatFactories !== undefined &&
+      includesRequiredCountryStatsArmies(sessionCountryStatsCache.armies)
     ) {
       return sessionCountryStatsCache;
     }
@@ -265,7 +260,8 @@ export const CountryStatsPanel: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState<boolean>(
     !sessionCountryStatsCache ||
-    sessionCountryStatsCache.levelStats?.[0]?.combatFactories === undefined
+    sessionCountryStatsCache.levelStats?.[0]?.combatFactories === undefined ||
+    !includesRequiredCountryStatsArmies(sessionCountryStatsCache.armies)
   );
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -289,7 +285,11 @@ export const CountryStatsPanel: React.FC = () => {
 
     fetchCountryStats(force)
       .then((json) => {
-        if (json && json.success) {
+        if (
+          json &&
+          json.success &&
+          includesRequiredCountryStatsArmies(json.armies)
+        ) {
           sessionCountryStatsCache = json;
           setData(json);
         }
@@ -304,13 +304,17 @@ export const CountryStatsPanel: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!sessionCountryStatsCache || sessionCountryStatsCache.levelStats?.[0]?.combatFactories === undefined) {
+    if (
+      !sessionCountryStatsCache ||
+      sessionCountryStatsCache.levelStats?.[0]?.combatFactories === undefined ||
+      !includesRequiredCountryStatsArmies(sessionCountryStatsCache.armies)
+    ) {
       loadData(false);
     }
   }, []);
 
   const stats = data?.levelStats || [];
-  const armies = data?.armies || PRESET_ARMIES;
+  const armies = data?.armies || COUNTRY_STATS_ARMIES;
   const totalPlayers = data?.totalPlayers || 0;
 
   const totalCombat = data?.totalCombatPlayers ?? stats.reduce((sum, s) => sum + (s.combatCount || 0), 0);
@@ -413,7 +417,7 @@ export const CountryStatsPanel: React.FC = () => {
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-[#3282B8]" />
-                Ülke İstatistikleri (6 Askeri Ordu Dağılımı)
+                Ülke İstatistikleri (8 Askeri Ordu Dağılımı)
               </h2>
 
               {/* Gece / Gündüz mantığıyla çalışan Savaş vs. Ekonomi Modu Geçiş Butonu */}

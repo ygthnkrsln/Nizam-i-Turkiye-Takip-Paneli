@@ -1,6 +1,8 @@
 // Vercel Serverless Function: GET /api/military-overview
 // Fetches full military unit overview: Troop strength, leadership, MVPs, spectrum, and combat stats
 
+import { getMilitaryUnitWeeklyDamage } from '../src/lib/dailyDamage.js';
+
 const BUILTIN_WARERA_TOKENS = [
   'wae_7cddb132963e57ee7ee9bd9663f57460b5dabe2746531019f6abdd1056d023ef',
   'wae_76b0af852e1c19d6155b955eb566c2ed6b285d097785ce34c08d339b64eaee44',
@@ -150,7 +152,7 @@ export default async function handler(req: any, res: any) {
 
     // 4. Compute Statistics
     const memberCount = members.length;
-    const totalWeeklyDamage = allUsers.reduce((sum, u) => sum + (u.rankings?.weeklyUserDamages?.value || 0), 0);
+    const totalWeeklyDamage = getMilitaryUnitWeeklyDamage(muData);
     const totalAllTimeDamage = allUsers.reduce((sum, u) => sum + (u.rankings?.userDamages?.value || 0), 0);
     const totalWealth = allUsers.reduce((sum, u) => sum + (u.rankings?.userWealth?.value || 0), 0);
     const avgLevel = memberCount > 0 

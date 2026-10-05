@@ -2,6 +2,7 @@
 // Fetches full military unit overview: Troop strength, leadership, MVPs, spectrum, and combat stats
 
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
+import { getMilitaryUnitWeeklyDamage } from "../../lib/dailyDamage.js";
 
 const DEFAULT_MU_ID = "69c229c4449287ea1a26a5b3";
 
@@ -161,10 +162,7 @@ export default async function handler(req: any, res: any) {
 
     // 4. Compute Statistics
     const memberCount = members.length;
-    const totalWeeklyDamage = allUsers.reduce(
-      (sum, u) => sum + (u.rankings?.weeklyUserDamages?.value || 0),
-      0,
-    );
+    const totalWeeklyDamage = getMilitaryUnitWeeklyDamage(muData);
     const totalAllTimeDamage = allUsers.reduce(
       (sum, u) => sum + (u.rankings?.userDamages?.value || 0),
       0,
