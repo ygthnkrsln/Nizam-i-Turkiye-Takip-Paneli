@@ -5,7 +5,7 @@ export interface DonationItem {
   timestamp: string;
   description?: string;
   type?: string;
-  target?: 'country' | 'mu';
+  target?: "country" | "mu";
   targetName?: string;
   targetAvatarUrl?: string;
   countryCode?: string;
@@ -20,35 +20,53 @@ export interface MilitaryUnitPreset {
 
 export const PRESET_MILITARY_UNITS: MilitaryUnitPreset[] = [
   {
-    id: '69c229c4449287ea1a26a5b3',
-    name: 'Turkic Tribe',
-    avatarUrl: 'https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png',
+    id: "69c229c4449287ea1a26a5b3",
+    name: "Turkic Tribe",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png",
     isDefault: true,
   },
   {
-    id: '689f69064e095b8b9f1b885a',
-    name: 'ASHINA',
-    avatarUrl: 'https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png',
+    id: "689f69064e095b8b9f1b885a",
+    name: "ASHINA",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png",
   },
   {
-    id: '68bc9bcb4870c8e343e42855',
-    name: 'ASHINA Reserve',
-    avatarUrl: 'https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png',
+    id: "68bc9bcb4870c8e343e42855",
+    name: "ASHINA Reserve",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png",
   },
   {
-    id: '690088ce4864a132a2d92d07',
-    name: 'Legio Panthera',
-    avatarUrl: 'https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png',
+    id: "690088ce4864a132a2d92d07",
+    name: "Legio Panthera",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png",
   },
   {
-    id: '6902269a560184d196a6fba8',
-    name: 'BEASTs',
-    avatarUrl: 'https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg',
+    id: "6902269a560184d196a6fba8",
+    name: "BEASTs",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg",
   },
   {
-    id: '6a0f1495478fe2a58d2868d6',
-    name: 'Deliler',
-    avatarUrl: 'https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png',
+    id: "6a0f1495478fe2a58d2868d6",
+    name: "Deliler",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png",
+  },
+  {
+    id: "68e0f3b86351b310a982d79e",
+    name: "WAVVE",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-68e0f3b86351b310a982d79e-1786113114746-rr3s4yb3.png",
+  },
+  {
+    id: "693d20605669127e9d45f9b8",
+    name: "DTX",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-693d20605669127e9d45f9b8-1777019037251-2qmzl25l.png",
   },
 ];
 
@@ -58,16 +76,16 @@ export interface FactoryItem {
   itemCode: string;
   production: number;
   automatedLevel: number; // Otomasyon Motoru Seviyesi (Motor Gücü / Engine Level)
-  storageLevel: number;   // Depo Seviyesi
+  storageLevel: number; // Depo Seviyesi
   breakRoomLevel?: number; // Mola Odası Seviyesi
   workerCount: number;
   estimatedValue?: number;
-  region?: string;        // Fabrikanın bulunduğu bölge
-  status?: string;        // 'active' | 'inactive'
+  region?: string; // Fabrikanın bulunduğu bölge
+  status?: string; // 'active' | 'inactive'
   isActiveFactory?: boolean; // Oyuncunun beceri limitine göre aktif olan fabrika mı?
 }
 
-export type PlayerMode = 'economy' | 'combat';
+export type PlayerMode = "economy" | "combat";
 
 export interface PlayerStats {
   userId: string;
@@ -78,17 +96,17 @@ export interface PlayerStats {
   totalDamages: number;
   weeklyDamages: number;
   wealth: number;
-  role: 'Leader' | 'Commander' | 'Manager' | 'Member';
+  role: "Leader" | "Commander" | "Manager" | "Member";
   lastActive: string;
-  isActive?: boolean;     // Son 3 gün içinde aktif mi
-  isCitizen?: boolean;    // Aktif ve Seviye >= 10
+  isActive?: boolean; // Son 3 gün içinde aktif mi
+  isCitizen?: boolean; // Aktif ve Seviye >= 10
   latestDonations: DonationItem[];
   totalDonations: number;
   donationCount: number;
-  factoryLimit?: number;  // Beceriye bağlı aktif fabrika limiti (2 taban + yetenek puanı + prestij)
+  factoryLimit?: number; // Beceriye bağlı aktif fabrika limiti (2 taban + yetenek puanı + prestij)
   activeFactoryCount?: number; // Aktif fabrika sayısı
   totalOwnedFactories?: number; // Toplam sahip olunan fabrika sayısı
-  factoryCount?: number;  // Gösterilecek aktif fabrika sayısı
+  factoryCount?: number; // Gösterilecek aktif fabrika sayısı
   totalAutomatedLevel?: number; // Aktif fabrikaların toplam motor gücü
   allFactoriesAutomatedLevel?: number; // Tüm fabrikaların toplam motor gücü
   factories?: FactoryItem[];
@@ -136,14 +154,14 @@ export interface ApiResponse {
 }
 
 export type SortField =
-  | 'username'
-  | 'level'
-  | 'totalDonations'
-  | 'latestDonation'
-  | 'target'
-  | 'wealth';
+  | "username"
+  | "level"
+  | "totalDonations"
+  | "latestDonation"
+  | "target"
+  | "wealth";
 
-export type SortDirection = 'asc' | 'desc';
+export type SortDirection = "asc" | "desc";
 
 export interface LevelStatItem {
   level: number;
@@ -179,7 +197,12 @@ export interface CountryStatsResponse {
   totalPlayers: number;
   totalCombatPlayers?: number;
   totalEconomyPlayers?: number;
-  armies: { id: string; name: string; memberCount: number; avatarUrl?: string }[];
+  armies: {
+    id: string;
+    name: string;
+    memberCount: number;
+    avatarUrl?: string;
+  }[];
   levelStats: LevelStatItem[];
   generatedAt: string;
 }
@@ -188,7 +211,7 @@ export interface MilitaryLeaderItem {
   userId: string;
   username: string;
   avatarUrl: string;
-  role: 'leader' | 'manager' | 'commander';
+  role: "leader" | "manager" | "commander";
   roleLabel: string;
   level: number;
 }
@@ -278,7 +301,7 @@ export interface MilitaryDetailMember {
   allTimeTier: string;
   allTimeRank: number;
   wealth: number;
-  role: 'leader' | 'commander' | 'manager' | 'soldier';
+  role: "leader" | "commander" | "manager" | "soldier";
   roleBadge: string;
   roleLabel: string;
 }
@@ -326,7 +349,7 @@ export interface CombatMemberTelemetry {
   avatarUrl: string;
   level: number;
   militaryRank: number;
-  role: 'leader' | 'commander' | 'manager' | 'soldier';
+  role: "leader" | "commander" | "manager" | "soldier";
   isLeader: boolean;
   isCommander: boolean;
   isManager: boolean;
@@ -340,7 +363,7 @@ export interface CombatMemberTelemetry {
     max: number;
     hourlyRegen: number;
   };
-  pillStatus: 'ready' | 'buff' | 'debuff';
+  pillStatus: "ready" | "buff" | "debuff";
   pillExpiresAt: string | null;
   buffCodes: string[];
   skillsReset: {
@@ -418,6 +441,3 @@ export interface DailyDamageSnapshotsResponse {
   snapshots: Record<string, DailyDamageSnapshotItem>;
   error?: string;
 }
-
-
-

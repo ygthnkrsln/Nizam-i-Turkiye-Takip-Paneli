@@ -1,12 +1,17 @@
-import express from 'express';
-import path from 'path';
-import fs from 'fs';
-import dotenv from 'dotenv';
-import { 
-  saveSnapshotToSupabase, 
-  fetchSnapshotsFromSupabase, 
-  isSupabaseConnected 
-} from './src/services/supabaseStorage.ts';
+import express from "express";
+import path from "path";
+import fs from "fs";
+import dotenv from "dotenv";
+import {
+  saveSnapshotToSupabase,
+  fetchSnapshotsFromSupabase,
+  isSupabaseConnected,
+} from "./src/lib/supabaseStorage.js";
+import {
+  calculateDailyDamageFromSnapshot,
+  findBaselineForCurrentCycle,
+  getCurrentWeeklyDamage,
+} from "./src/lib/dailyDamage.ts";
 
 dotenv.config();
 
@@ -17,21 +22,19 @@ app.use(express.json());
 
 // Enable permissive CORS for iframe and preview environments
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  if (req.method === 'OPTIONS') {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept",
+  );
+  if (req.method === "OPTIONS") {
     return res.sendStatus(200);
   }
   next();
 });
 
-// Built-in WarEra API tokens with sequential rotation to respect 200 req/token limits
-const BUILTIN_WARERA_TOKENS = [
-  'wae_7cddb132963e57ee7ee9bd9663f57460b5dabe2746531019f6abdd1056d023ef',
-  'wae_76b0af852e1c19d6155b955eb566c2ed6b285d097785ce34c08d339b64eaee44',
-];
-
+// WarEra API tokens loaded exclusively from environment variables (.env)
 interface TokenState {
   token: string;
   masked: string;
@@ -52,12 +55,11 @@ class TokenManager {
 
   public refreshTokens() {
     const envTokens = [
-      ...(process.env.WARERA_API_TOKENS || '').split(','),
-      process.env.WARERA_API_TOKEN || '',
-      ...BUILTIN_WARERA_TOKENS,
+      ...(process.env.WARERA_API_TOKENS || "").split(","),
+      process.env.WARERA_API_TOKEN || "",
     ]
       .map((t) => t.trim())
-      .filter((t) => t.length > 0);
+      .filter((t) => t.startsWith("wae_"));
 
     const uniqueTokens = Array.from(new Set(envTokens));
     this.tokens = uniqueTokens.map((token) => ({
@@ -72,7 +74,7 @@ class TokenManager {
 
   // Sequential round-robin rotation across available healthy tokens
   public getNextToken(): string {
-    if (this.tokens.length === 0) return '';
+    if (this.tokens.length === 0) return "";
     const now = Date.now();
 
     for (let attempts = 0; attempts < this.tokens.length; attempts++) {
@@ -116,7 +118,9 @@ class TokenManager {
     if (found) {
       found.rateLimitUntil = Date.now() + cooldownSec * 1000;
       found.requestCount = this.maxRequestsPerToken;
-      console.warn(`[TokenManager] Token ${found.masked} rate limited. Rotating to other tokens.`);
+      console.warn(
+        `[TokenManager] Token ${found.masked} rate limited. Rotating to other tokens.`,
+      );
     }
   }
 
@@ -128,22 +132,27 @@ class TokenManager {
 const tokenManager = new TokenManager();
 
 // Helper to make WarEra fetch with automatic token rotation and failover
-async function fetchWarEra(url: string, init?: RequestInit, userToken?: string): Promise<Response> {
+async function fetchWarEra(
+  url: string,
+  init?: RequestInit,
+  userToken?: string,
+): Promise<Response> {
   const maxAttempts = Math.max(2, tokenManager.hasTokens() ? 2 : 1);
   let lastRes: Response | null = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     // Attempt 0: if user provided custom token, try it first
-    const token = (attempt === 0 && userToken && userToken.trim())
-      ? userToken.trim()
-      : tokenManager.getNextToken();
+    const token =
+      attempt === 0 && userToken && userToken.trim()
+        ? userToken.trim()
+        : tokenManager.getNextToken();
 
     const headers: Record<string, string> = {
-      Accept: 'application/json',
+      Accept: "application/json",
       ...((init?.headers as Record<string, string>) || {}),
     };
     if (token) {
-      headers['X-API-Key'] = token;
+      headers["X-API-Key"] = token;
     }
 
     try {
@@ -169,7 +178,7 @@ function generateFallbackFactories(
   userId: string,
   username: string,
   level: number = 10,
-  wealth: number = 5000
+  wealth: number = 5000,
 ): UserFactoryData {
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
@@ -178,43 +187,79 @@ function generateFallbackFactories(
 
   // Allow realistic factory count exceeding 10 based on player level
   const factoryCount = Math.max(3, Math.floor(level / 2.4) + ((hash % 6) + 1));
-  const itemCodes = ['iron', 'grain', 'bread', 'oil', 'weapon', 'tank', 'ammo', 'fish', 'lead'];
-  const factories: UserFactoryData['factories'] = [];
+  const itemCodes = [
+    "iron",
+    "grain",
+    "bread",
+    "oil",
+    "weapon",
+    "tank",
+    "ammo",
+    "fish",
+    "lead",
+  ];
+  const factories: UserFactoryData["factories"] = [];
   let totalAutomatedLevel = 0;
 
   const itemNames: Record<string, string> = {
-    fish: 'Balık Çiftliği',
-    lead: 'Kurşun Madeni',
-    iron: 'Demir Madeni',
-    grain: 'Tahıl Ambarı',
-    bread: 'Ekmek Fırını',
-    oil: 'Petrol Rafinerisi',
-    tank: 'Tank Fabrikası',
-    weapon: 'Silah Sanayi',
-    ammo: 'Mühimmat Fabrikası',
+    fish: "Balık Çiftliği",
+    lead: "Kurşun Madeni",
+    iron: "Demir Madeni",
+    grain: "Tahıl Ambarı",
+    bread: "Ekmek Fırını",
+    oil: "Petrol Rafinerisi",
+    tank: "Tank Fabrikası",
+    weapon: "Silah Sanayi",
+    ammo: "Mühimmat Fabrikası",
   };
 
-  const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
+  const romanNumerals = [
+    "I",
+    "II",
+    "III",
+    "IV",
+    "V",
+    "VI",
+    "VII",
+    "VIII",
+    "IX",
+    "X",
+    "XI",
+    "XII",
+    "XIII",
+    "XIV",
+    "XV",
+    "XVI",
+    "XVII",
+    "XVIII",
+    "XIX",
+    "XX",
+  ];
 
   for (let i = 0; i < factoryCount; i++) {
     const itemCode = itemCodes[(hash + i * 3) % itemCodes.length];
-    const baseAuto = Math.max(1, Math.min(10, Math.floor(level / 5) + ((hash + i) % 4)));
+    const baseAuto = Math.max(
+      1,
+      Math.min(10, Math.floor(level / 5) + ((hash + i) % 4)),
+    );
     totalAutomatedLevel += baseAuto;
     const storageLevel = Math.max(1, Math.min(6, 2 + ((hash + i * 2) % 4)));
     const workerCount = (hash + i) % 3;
-    const production = Number((12 + ((hash + i * 7) % 30) + baseAuto * 2.8).toFixed(1));
+    const production = Number(
+      (12 + ((hash + i * 7) % 30) + baseAuto * 2.8).toFixed(1),
+    );
 
     factories.push({
       id: `f-${userId.slice(-6)}-${i + 1}`,
-      name: `${username} ${itemNames[itemCode] || 'Üretim Tesisi'} ${romanNumerals[i % romanNumerals.length]}`,
+      name: `${username} ${itemNames[itemCode] || "Üretim Tesisi"} ${romanNumerals[i % romanNumerals.length]}`,
       itemCode,
-      region: 'TR-06',
+      region: "TR-06",
       automatedLevel: baseAuto,
       storageLevel,
       breakRoomLevel: Math.max(0, Math.min(5, Math.floor(baseAuto / 2))),
       workerCount,
       production,
-      status: 'active',
+      status: "active",
     });
   }
 
@@ -237,41 +282,57 @@ const CACHE_TTL_MS = 45 * 1000; // 45 seconds
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const KNOWN_COUNTRIES: Record<string, { name: string; code: string }> = {
-  '683ddd2c24b5a2e114af15b5': { name: 'Birleşik Arap Emirlikleri', code: 'AE' },
-  '6813b6d446e731854c7ac7eb': { name: 'Türkiye', code: 'TR' },
-  '6813b6d546e731854c7ac8d1': { name: 'Azerbaycan', code: 'AZ' },
-  '6873d0ea1758b40e712b5ef5': { name: 'Kamerun', code: 'CM' },
+  "683ddd2c24b5a2e114af15b5": { name: "Birleşik Arap Emirlikleri", code: "AE" },
+  "6813b6d446e731854c7ac7eb": { name: "Türkiye", code: "TR" },
+  "6813b6d546e731854c7ac8d1": { name: "Azerbaycan", code: "AZ" },
+  "6873d0ea1758b40e712b5ef5": { name: "Kamerun", code: "CM" },
 };
 
 const KNOWN_MUS: Record<string, { name: string; avatarUrl: string }> = {
-  '69c229c4449287ea1a26a5b3': {
-    name: 'Turkic Tribe',
-    avatarUrl: 'https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png',
+  "69c229c4449287ea1a26a5b3": {
+    name: "Turkic Tribe",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png",
   },
-  '689f69064e095b8b9f1b885a': {
-    name: 'ASHINA',
-    avatarUrl: 'https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png',
+  "689f69064e095b8b9f1b885a": {
+    name: "ASHINA",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png",
   },
-  '68bc9bcb4870c8e343e42855': {
-    name: 'ASHINA Reserve',
-    avatarUrl: 'https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png',
+  "68bc9bcb4870c8e343e42855": {
+    name: "ASHINA Reserve",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png",
   },
-  '690088ce4864a132a2d92d07': {
-    name: 'Legio Panthera',
-    avatarUrl: 'https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png',
+  "690088ce4864a132a2d92d07": {
+    name: "Legio Panthera",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png",
   },
-  '6902269a560184d196a6fba8': {
-    name: 'BEASTs',
-    avatarUrl: 'https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg',
+  "6902269a560184d196a6fba8": {
+    name: "BEASTs",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg",
   },
-  '6a0f1495478fe2a58d2868d6': {
-    name: 'Deliler',
-    avatarUrl: 'https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png',
+  "6a0f1495478fe2a58d2868d6": {
+    name: "Deliler",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png",
+  },
+  "68e0f3b86351b310a982d79e": {
+    name: "WAVVE",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-68e0f3b86351b310a982d79e-1786113114746-rr3s4yb3.png",
+  },
+  "693d20605669127e9d45f9b8": {
+    name: "DTX",
+    avatarUrl:
+      "https://media.warera.io/avatars/mu/mu-693d20605669127e9d45f9b8-1777019037251-2qmzl25l.png",
   },
 };
 
 const muAvatarCache = new Map<string, { name: string; avatarUrl: string }>(
-  Object.entries(KNOWN_MUS)
+  Object.entries(KNOWN_MUS),
 );
 
 // Helper to resolve Military Unit avatar & name from WarEra API
@@ -286,7 +347,7 @@ async function resolveMuInfo(targetMuId: string) {
       const json = await res.json();
       const d = json?.result?.data;
       if (d) {
-        const info = { name: d.name || 'Ordu', avatarUrl: d.avatarUrl || '' };
+        const info = { name: d.name || "Ordu", avatarUrl: d.avatarUrl || "" };
         muAvatarCache.set(targetMuId, info);
         return info;
       }
@@ -294,7 +355,7 @@ async function resolveMuInfo(targetMuId: string) {
   } catch (err) {
     console.error(`Error resolving MU info for ${targetMuId}:`, err);
   }
-  return { name: 'Ordu', avatarUrl: '' };
+  return { name: "Ordu", avatarUrl: "" };
 }
 
 interface UserFactoryData {
@@ -315,7 +376,10 @@ interface UserFactoryData {
   }[];
 }
 
-const companyCache = new Map<string, { data: UserFactoryData; timestamp: number }>();
+const companyCache = new Map<
+  string,
+  { data: UserFactoryData; timestamp: number }
+>();
 
 // Helper to fetch user factories/companies in single batch request with perPage: 100
 async function fetchUserCompanies(userId: string): Promise<UserFactoryData> {
@@ -334,7 +398,7 @@ async function fetchUserCompanies(userId: string): Promise<UserFactoryData> {
       if (cursor) inputObj.cursor = cursor;
 
       const cUrl = `https://api2.warera.io/trpc/company.getCompanies?input=${encodeURIComponent(
-        JSON.stringify(inputObj)
+        JSON.stringify(inputObj),
       )}`;
       const cRes = await fetchWarEra(cUrl);
       if (!cRes.ok) break;
@@ -349,13 +413,17 @@ async function fetchUserCompanies(userId: string): Promise<UserFactoryData> {
     }
 
     if (allItems.length === 0) {
-      const emptyResult: UserFactoryData = { factoryCount: 0, totalAutomatedLevel: 0, factories: [] };
+      const emptyResult: UserFactoryData = {
+        factoryCount: 0,
+        totalAutomatedLevel: 0,
+        factories: [],
+      };
       companyCache.set(userId, { data: emptyResult, timestamp: Date.now() });
       return emptyResult;
     }
 
     // Fetch all companies in batches of 50
-    const factories: UserFactoryData['factories'] = [];
+    const factories: UserFactoryData["factories"] = [];
     let totalAutomatedLevel = 0;
     const chunkSize = 50;
 
@@ -366,8 +434,8 @@ async function fetchUserCompanies(userId: string): Promise<UserFactoryData> {
         batchInput[String(idx)] = { companyId: id };
       });
 
-      const batchUrl = `https://api2.warera.io/trpc/${chunk.map(() => 'company.getById').join(',')}?batch=1&input=${encodeURIComponent(
-        JSON.stringify(batchInput)
+      const batchUrl = `https://api2.warera.io/trpc/${chunk.map(() => "company.getById").join(",")}?batch=1&input=${encodeURIComponent(
+        JSON.stringify(batchInput),
       )}`;
 
       const bRes = await fetchWarEra(batchUrl);
@@ -378,30 +446,30 @@ async function fetchUserCompanies(userId: string): Promise<UserFactoryData> {
           const d = item?.result?.data;
           const autoLevel = Number(
             d?.activeUpgradeLevels?.automatedEngine ??
-            d?.upgradesV2?.upgrades?.automatedEngine?.level ??
-            0
+              d?.upgradesV2?.upgrades?.automatedEngine?.level ??
+              0,
           );
           totalAutomatedLevel += autoLevel;
           const storageLevel = Number(
             d?.activeUpgradeLevels?.storage ??
-            d?.upgradesV2?.upgrades?.storage?.level ??
-            1
+              d?.upgradesV2?.upgrades?.storage?.level ??
+              1,
           );
           const breakRoomLevel = Number(
             d?.activeUpgradeLevels?.breakRoom ??
-            d?.upgradesV2?.upgrades?.breakRoom?.level ??
-            0
+              d?.upgradesV2?.upgrades?.breakRoom?.level ??
+              0,
           );
           const status = String(
             d?.upgradesV2?.upgrades?.storage?.status ??
-            (d?.isOperational !== false ? 'active' : 'inactive')
+              (d?.isOperational !== false ? "active" : "inactive"),
           );
 
           factories.push({
-            id: d?._id || '',
-            name: d?.name || 'Fabrika',
-            itemCode: d?.itemCode || 'general',
-            region: d?.region || '',
+            id: d?._id || "",
+            name: d?.name || "Fabrika",
+            itemCode: d?.itemCode || "general",
+            region: d?.region || "",
             production: Number(d?.production || 0),
             automatedLevel: autoLevel,
             storageLevel,
@@ -438,8 +506,8 @@ function generateFallbackDonations(
   userId: string,
   wealth: number = 5000,
   level: number = 10,
-  muName: string = 'Turkic Tribe',
-  muAvatarUrl?: string
+  muName: string = "Turkic Tribe",
+  muAvatarUrl?: string,
 ) {
   // Simple hash of userId string to generate consistent values
   let hash = 0;
@@ -469,109 +537,112 @@ function generateFallbackDonations(
   ];
 
   const amounts = [
-    Math.max(100, Math.round(baseScales[0] * (0.8 + ((hash % 17) / 40)))),
-    Math.max(80, Math.round(baseScales[1] * (0.7 + (((hash >> 4) % 19) / 40)))),
-    Math.max(50, Math.round(baseScales[2] * (0.9 + (((hash >> 8) % 23) / 40)))),
-    Math.max(90, Math.round(baseScales[3] * (0.75 + (((hash >> 12) % 21) / 40)))),
-    Math.max(60, Math.round(baseScales[4] * (0.85 + (((hash >> 16) % 18) / 40)))),
-    Math.max(110, Math.round(baseScales[5] * (0.8 + (((hash >> 20) % 22) / 40)))),
-    Math.max(45, Math.round(baseScales[6] * (0.95 + (((hash >> 24) % 15) / 40)))),
+    Math.max(100, Math.round(baseScales[0] * (0.8 + (hash % 17) / 40))),
+    Math.max(80, Math.round(baseScales[1] * (0.7 + ((hash >> 4) % 19) / 40))),
+    Math.max(50, Math.round(baseScales[2] * (0.9 + ((hash >> 8) % 23) / 40))),
+    Math.max(90, Math.round(baseScales[3] * (0.75 + ((hash >> 12) % 21) / 40))),
+    Math.max(60, Math.round(baseScales[4] * (0.85 + ((hash >> 16) % 18) / 40))),
+    Math.max(110, Math.round(baseScales[5] * (0.8 + ((hash >> 20) % 22) / 40))),
+    Math.max(45, Math.round(baseScales[6] * (0.95 + ((hash >> 24) % 15) / 40))),
   ];
 
   const profileType = hash % 4;
 
   return times.map((t, i) => {
-    let target: 'country' | 'mu' = 'country';
-    let targetName = 'Türkiye';
-    let countryCode: string | undefined = 'TR';
+    let target: "country" | "mu" = "country";
+    let targetName = "Türkiye";
+    let countryCode: string | undefined = "TR";
     let targetAvatarUrl: string | undefined = undefined;
-    let description = 'Türkiye Cumhuriyeti Devlet Hazinesi';
+    let description = "Türkiye Cumhuriyeti Devlet Hazinesi";
 
     if (profileType === 1) {
       // Primarily Ordu (Army)
       if (i === 5 && hash % 4 === 0) {
-        target = 'country';
-        targetName = 'Türkiye';
-        countryCode = 'TR';
-        description = 'Devlet Hazinesi Altın Katkısı';
+        target = "country";
+        targetName = "Türkiye";
+        countryCode = "TR";
+        description = "Devlet Hazinesi Altın Katkısı";
       } else {
-        target = 'mu';
-        targetName = muName || 'Turkic Tribe';
+        target = "mu";
+        targetName = muName || "Turkic Tribe";
         targetAvatarUrl = muAvatarUrl;
         countryCode = undefined;
-        description = i % 2 === 0 ? 'Ordu Karargah ve Teçhizat Katkısı' : 'Askeri Birlik Geliştirme Fonu';
+        description =
+          i % 2 === 0
+            ? "Ordu Karargah ve Teçhizat Katkısı"
+            : "Askeri Birlik Geliştirme Fonu";
       }
     } else if (profileType === 2) {
       // UAE & Mixed
       if (i % 2 === 0) {
-        target = 'country';
-        targetName = 'Birleşik Arap Emirlikleri';
-        countryCode = 'AE';
-        description = 'BAE Devlet Hazinesi Katkısı';
+        target = "country";
+        targetName = "Birleşik Arap Emirlikleri";
+        countryCode = "AE";
+        description = "BAE Devlet Hazinesi Katkısı";
       } else if (i === 3) {
-        target = 'mu';
-        targetName = muName || 'Turkic Tribe';
+        target = "mu";
+        targetName = muName || "Turkic Tribe";
         targetAvatarUrl = muAvatarUrl;
         countryCode = undefined;
-        description = 'Ordu Lojistik ve İkmal Desteği';
+        description = "Ordu Lojistik ve İkmal Desteği";
       } else {
-        target = 'country';
-        targetName = 'Türkiye';
-        countryCode = 'TR';
-        description = 'Milli Savunma ve Savaş Fonu';
+        target = "country";
+        targetName = "Türkiye";
+        countryCode = "TR";
+        description = "Milli Savunma ve Savaş Fonu";
       }
     } else if (profileType === 3) {
       // Azerbaijan / Cameroon
       if (i % 3 === 0) {
-        target = 'country';
-        targetName = 'Azerbaycan';
-        countryCode = 'AZ';
-        description = 'Azerbaycan Savunma Fonu';
+        target = "country";
+        targetName = "Azerbaycan";
+        countryCode = "AZ";
+        description = "Azerbaycan Savunma Fonu";
       } else if (i === 4 && hash % 2 === 0) {
-        target = 'country';
-        targetName = 'Kamerun';
-        countryCode = 'CM';
-        description = 'Kamerun Hazinesi Katkısı';
+        target = "country";
+        targetName = "Kamerun";
+        countryCode = "CM";
+        description = "Kamerun Hazinesi Katkısı";
       } else if (i === 1) {
-        target = 'mu';
-        targetName = muName || 'Turkic Tribe';
+        target = "mu";
+        targetName = muName || "Turkic Tribe";
         targetAvatarUrl = muAvatarUrl;
         countryCode = undefined;
-        description = 'Ordu Geliştirme Katkısı';
+        description = "Ordu Geliştirme Katkısı";
       } else {
-        target = 'country';
-        targetName = 'Türkiye';
-        countryCode = 'TR';
-        description = 'Ülke Hazinesi Altın Katkısı';
+        target = "country";
+        targetName = "Türkiye";
+        countryCode = "TR";
+        description = "Ülke Hazinesi Altın Katkısı";
       }
     } else {
       // Primarily Turkey
       if (i === 4 && hash % 3 === 0) {
-        target = 'mu';
-        targetName = muName || 'Turkic Tribe';
+        target = "mu";
+        targetName = muName || "Turkic Tribe";
         targetAvatarUrl = muAvatarUrl;
         countryCode = undefined;
-        description = 'Birlik Cephanelik ve Savunma Desteği';
+        description = "Birlik Cephanelik ve Savunma Desteği";
       } else if (i === 2 && hash % 3 === 1) {
-        target = 'country';
-        targetName = 'Birleşik Arap Emirlikleri';
-        countryCode = 'AE';
-        description = 'Devlet Hazinesi Katkısı';
+        target = "country";
+        targetName = "Birleşik Arap Emirlikleri";
+        countryCode = "AE";
+        description = "Devlet Hazinesi Katkısı";
       } else {
-        target = 'country';
-        targetName = 'Türkiye';
-        countryCode = 'TR';
-        description = 'Ülke Hazinesi Altın Katkısı';
+        target = "country";
+        targetName = "Türkiye";
+        countryCode = "TR";
+        description = "Ülke Hazinesi Altın Katkısı";
       }
     }
 
     return {
       id: `tx-${userId}-${i + 1}`,
       amount: amounts[i],
-      currency: 'Gold',
+      currency: "Gold",
       timestamp: new Date(t).toISOString(),
       description,
-      type: 'donation',
+      type: "donation",
       target,
       targetName,
       targetAvatarUrl,
@@ -581,10 +652,11 @@ function generateFallbackDonations(
 }
 
 // API Route: Fetch Military Unit and Player Stats + Donations
-app.get('/api/mu-data', async (req, res) => {
-  const muId = (req.query.muId as string) || '69c229c4449287ea1a26a5b3';
-  const forceRefresh = req.query.refresh === 'true';
-  const userApiKey = (req.headers['x-user-api-key'] as string) || (req.query.apiKey as string);
+app.get("/api/mu-data", async (req, res) => {
+  const muId = (req.query.muId as string) || "69c229c4449287ea1a26a5b3";
+  const forceRefresh = req.query.refresh === "true";
+  const userApiKey =
+    (req.headers["x-user-api-key"] as string) || (req.query.apiKey as string);
   const cacheKey = `mu_v4_${muId}`;
 
   const cached = cache.get(cacheKey);
@@ -602,7 +674,7 @@ app.get('/api/mu-data', async (req, res) => {
   try {
     // 1. Fetch MU Data
     const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(
-      JSON.stringify({ muId })
+      JSON.stringify({ muId }),
     )}`;
 
     const muResponse = await fetchWarEra(muUrl, undefined, userApiKey);
@@ -621,12 +693,14 @@ app.get('/api/mu-data', async (req, res) => {
     if (!muData) {
       return res.status(404).json({
         success: false,
-        error: 'Military Unit not found',
+        error: "Military Unit not found",
       });
     }
 
-    const memberIds: string[] = Array.isArray(muData.members) ? muData.members : [];
-    const leaderId: string = muData.user || '';
+    const memberIds: string[] = Array.isArray(muData.members)
+      ? muData.members
+      : [];
+    const leaderId: string = muData.user || "";
     const commanders: string[] = muData.roles?.commanders || [];
     const managers: string[] = muData.roles?.managers || [];
 
@@ -646,7 +720,7 @@ app.get('/api/mu-data', async (req, res) => {
         // Fetch User Lite using token rotation
         try {
           const userUrl = `https://api2.warera.io/trpc/user.getUserLite?input=${encodeURIComponent(
-            JSON.stringify({ userId })
+            JSON.stringify({ userId }),
           )}`;
           const userRes = await fetchWarEra(userUrl);
           if (userRes.ok) {
@@ -660,7 +734,7 @@ app.get('/api/mu-data', async (req, res) => {
         // Fetch User Donations using token rotation
         try {
           const txUrl = `https://api2.warera.io/trpc/transaction.getPaginatedTransactions?input=${encodeURIComponent(
-            JSON.stringify({ userId, transactionType: 'donation' })
+            JSON.stringify({ userId, transactionType: "donation" }),
           )}`;
 
           const txRes = await fetchWarEra(txUrl);
@@ -674,33 +748,47 @@ app.get('/api/mu-data', async (req, res) => {
               if (items.length > 0) {
                 isLiveDonations = true;
                 calculatedTotal = items.reduce(
-                  (sum: number, item: any) => sum + Number(item.money ?? item.amount ?? item.value ?? 0),
-                  0
+                  (sum: number, item: any) =>
+                    sum + Number(item.money ?? item.amount ?? item.value ?? 0),
+                  0,
                 );
 
                 const sorted = [...items].sort(
-                  (a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+                  (a: any, b: any) =>
+                    new Date(b.createdAt || 0).getTime() -
+                    new Date(a.createdAt || 0).getTime(),
                 );
 
                 donations = sorted.slice(0, 7).map((item: any, idx: number) => {
-                  const targetType = String(item.targetType || item.recipientType || '').toLowerCase();
-                  const desc = String(item.description || item.title || '').toLowerCase();
-                  const sellerMuId = String(item.sellerMuId || '');
-                  const isMU = Boolean(sellerMuId) || targetType.includes('mu') || targetType.includes('military') || desc.includes('military unit') || desc.includes('birlik') || desc.includes('dormitor') || desc.includes('headquarters');
+                  const targetType = String(
+                    item.targetType || item.recipientType || "",
+                  ).toLowerCase();
+                  const desc = String(
+                    item.description || item.title || "",
+                  ).toLowerCase();
+                  const sellerMuId = String(item.sellerMuId || "");
+                  const isMU =
+                    Boolean(sellerMuId) ||
+                    targetType.includes("mu") ||
+                    targetType.includes("military") ||
+                    desc.includes("military unit") ||
+                    desc.includes("birlik") ||
+                    desc.includes("dormitor") ||
+                    desc.includes("headquarters");
 
-                  const sellerCountryId = String(item.sellerCountryId || '');
-                  let countryName = 'Türkiye';
-                  let countryCode: string | undefined = 'TR';
+                  const sellerCountryId = String(item.sellerCountryId || "");
+                  let countryName = "Türkiye";
+                  let countryCode: string | undefined = "TR";
 
                   if (KNOWN_COUNTRIES[sellerCountryId]) {
                     countryName = KNOWN_COUNTRIES[sellerCountryId].name;
                     countryCode = KNOWN_COUNTRIES[sellerCountryId].code;
                   } else if (item.countryName) {
                     countryName = item.countryName;
-                    countryCode = item.countryCode || 'TR';
+                    countryCode = item.countryCode || "TR";
                   }
 
-                  let armyName = muData.name || 'Turkic Tribe';
+                  let armyName = muData.name || "Turkic Tribe";
                   let armyAvatarUrl = muData.avatarUrl;
                   if (sellerMuId && KNOWN_MUS[sellerMuId]) {
                     armyName = KNOWN_MUS[sellerMuId].name;
@@ -713,12 +801,18 @@ app.get('/api/mu-data', async (req, res) => {
 
                   return {
                     id: item._id || `tx-${userId}-${idx}`,
-                    amount: Number(item.money ?? item.amount ?? item.value ?? 0),
-                    currency: item.currency || item.itemCode || 'Gold',
+                    amount: Number(
+                      item.money ?? item.amount ?? item.value ?? 0,
+                    ),
+                    currency: item.currency || item.itemCode || "Gold",
                     timestamp: item.createdAt || new Date().toISOString(),
-                    description: item.description || (isMU ? `${armyName} Fonu Katkısı` : `${countryName} Hazinesi Bağışı`),
-                    type: item.transactionType || item.type || 'donation',
-                    target: isMU ? ('mu' as const) : ('country' as const),
+                    description:
+                      item.description ||
+                      (isMU
+                        ? `${armyName} Fonu Katkısı`
+                        : `${countryName} Hazinesi Bağışı`),
+                    type: item.transactionType || item.type || "donation",
+                    target: isMU ? ("mu" as const) : ("country" as const),
                     targetName: isMU ? armyName : countryName,
                     targetAvatarUrl: isMU ? armyAvatarUrl : undefined,
                     countryCode,
@@ -741,30 +835,36 @@ app.get('/api/mu-data', async (req, res) => {
         // Only generate fallback donations if live API was completely unqueried (e.g. no API token)
         // AND only for some players so players without donations are realistically represented
         if (donations.length === 0 && !hasQueriedLive && !hasValidToken) {
-          const hashVal = userId.charCodeAt(0) + userId.charCodeAt(userId.length - 1);
+          const hashVal =
+            userId.charCodeAt(0) + userId.charCodeAt(userId.length - 1);
           // If hashVal is even, generate donations; if odd, leave with 0 donations
           if (hashVal % 2 === 0) {
             donations = generateFallbackDonations(
               userId,
               wealth,
               level,
-              muData?.name || 'Turkic Tribe',
-              muData?.avatarUrl
+              muData?.name || "Turkic Tribe",
+              muData?.avatarUrl,
             );
           }
         }
 
-        const totalDonations = calculatedTotal > 0
-          ? calculatedTotal
-          : donations.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+        const totalDonations =
+          calculatedTotal > 0
+            ? calculatedTotal
+            : donations.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
 
-        let role: 'Leader' | 'Commander' | 'Manager' | 'Member' = 'Member';
-        if (userId === leaderId) role = 'Leader';
-        else if (commanders.includes(userId)) role = 'Commander';
-        else if (managers.includes(userId)) role = 'Manager';
+        let role: "Leader" | "Commander" | "Manager" | "Member" = "Member";
+        if (userId === leaderId) role = "Leader";
+        else if (commanders.includes(userId)) role = "Commander";
+        else if (managers.includes(userId)) role = "Manager";
 
         // Fetch user companies & automated factory levels
-        let companyData: UserFactoryData = { factoryCount: 0, totalAutomatedLevel: 0, factories: [] };
+        let companyData: UserFactoryData = {
+          factoryCount: 0,
+          totalAutomatedLevel: 0,
+          factories: [],
+        };
         try {
           companyData = await fetchUserCompanies(userId);
         } catch (e) {
@@ -776,15 +876,19 @@ app.get('/api/mu-data', async (req, res) => {
             userId,
             userProfile?.username || `Player_${userId.slice(-5)}`,
             level,
-            wealth
+            wealth,
           );
         }
 
-        const lastActive = userProfile?.dates?.lastConnectionAt || userProfile?.updatedAt || new Date().toISOString();
+        const lastActive =
+          userProfile?.dates?.lastConnectionAt ||
+          userProfile?.updatedAt ||
+          new Date().toISOString();
         const lastActiveMs = new Date(lastActive).getTime();
         const isActive = Boolean(
           userProfile?.isActive === true ||
-          (!isNaN(lastActiveMs) && Date.now() - lastActiveMs <= 3 * 24 * 60 * 60 * 1000)
+          (!isNaN(lastActiveMs) &&
+            Date.now() - lastActiveMs <= 3 * 24 * 60 * 60 * 1000),
         );
         const isCitizen = isActive && level >= 10;
 
@@ -792,7 +896,7 @@ app.get('/api/mu-data', async (req, res) => {
         const companiesSkill = userProfile?.skills?.companies;
         const factoryLimit = Number(
           companiesSkill?.total ??
-          (2 + (companiesSkill?.level || 0) + (companiesSkill?.prestige || 0))
+            2 + (companiesSkill?.level || 0) + (companiesSkill?.prestige || 0),
         );
 
         const totalOwnedFactories = companyData.factories.length;
@@ -825,7 +929,13 @@ app.get('/api/mu-data', async (req, res) => {
         });
 
         // Skills analysis: Check economy vs combat mode
-        const ecoSkillNames = ['entrepreneurship', 'energy', 'production', 'companies', 'management'];
+        const ecoSkillNames = [
+          "entrepreneurship",
+          "energy",
+          "production",
+          "companies",
+          "management",
+        ];
         let ecoSkillPoints = 0;
         if (userProfile?.skills) {
           for (const sName of ecoSkillNames) {
@@ -838,11 +948,13 @@ app.get('/api/mu-data', async (req, res) => {
         }
         const totalSkillPoints = Number(
           userProfile?.leveling?.spentSkillPoints ??
-          userProfile?.leveling?.totalSkillPoints ??
-          0
+            userProfile?.leveling?.totalSkillPoints ??
+            0,
         );
-        const effectiveTotalSP = totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
-        const playerMode: 'economy' | 'combat' = ecoSkillPoints > (effectiveTotalSP / 2) ? 'economy' : 'combat';
+        const effectiveTotalSP =
+          totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
+        const playerMode: "economy" | "combat" =
+          ecoSkillPoints > effectiveTotalSP / 2 ? "economy" : "combat";
 
         return {
           userId,
@@ -850,7 +962,10 @@ app.get('/api/mu-data', async (req, res) => {
           avatarUrl: userProfile?.avatarUrl,
           level,
           militaryRank: userProfile?.militaryRank || 0,
-          totalDamages: userProfile?.stats?.damagesCount || userProfile?.rankings?.userDamages?.value || 0,
+          totalDamages:
+            userProfile?.stats?.damagesCount ||
+            userProfile?.rankings?.userDamages?.value ||
+            0,
           weeklyDamages: userProfile?.rankings?.weeklyUserDamages?.value || 0,
           wealth,
           role,
@@ -884,13 +999,23 @@ app.get('/api/mu-data', async (req, res) => {
     }
 
     // Compute aggregated metrics
-    const totalDonations = playerStatsList.reduce((acc, p) => acc + p.totalDonations, 0);
-    const totalContributors = playerStatsList.filter((p) => p.totalDonations > 0).length;
-    const averageDonation = totalContributors > 0 ? Math.round(totalDonations / totalContributors) : 0;
+    const totalDonations = playerStatsList.reduce(
+      (acc, p) => acc + p.totalDonations,
+      0,
+    );
+    const totalContributors = playerStatsList.filter(
+      (p) => p.totalDonations > 0,
+    ).length;
+    const averageDonation =
+      totalContributors > 0
+        ? Math.round(totalDonations / totalContributors)
+        : 0;
 
     let topDonor = null;
     if (playerStatsList.length > 0) {
-      const sorted = [...playerStatsList].sort((a, b) => b.totalDonations - a.totalDonations);
+      const sorted = [...playerStatsList].sort(
+        (a, b) => b.totalDonations - a.totalDonations,
+      );
       if (sorted[0] && sorted[0].totalDonations > 0) {
         topDonor = {
           userId: sorted[0].userId,
@@ -908,7 +1033,7 @@ app.get('/api/mu-data', async (req, res) => {
       hasApiToken: hasValidToken,
       militaryUnit: {
         id: muData._id,
-        name: muData.name || 'Turkic Tribe',
+        name: muData.name || "Turkic Tribe",
         avatarUrl: muData.avatarUrl,
         level: muData.leveling?.level || 1,
         mercenaryReputation: muData.mercenaryReputation || 0,
@@ -933,7 +1058,7 @@ app.get('/api/mu-data', async (req, res) => {
     cache.set(cacheKey, { data: payload, timestamp: Date.now() });
     res.json(payload);
   } catch (error: any) {
-    console.error('API Error in /api/mu-data:', error);
+    console.error("API Error in /api/mu-data:", error);
     // Return stale cache if available
     const stale = cache.get(cacheKey);
     if (stale && stale.data) {
@@ -941,32 +1066,38 @@ app.get('/api/mu-data', async (req, res) => {
     }
     res.json({
       success: false,
-      error: error.message || 'Internal error while fetching WarEra data',
+      error: error.message || "Internal error while fetching WarEra data",
     });
   }
 });
 
 // API Route: Fetch individual player factories on demand
-app.get('/api/player-factories', async (req, res) => {
+app.get("/api/player-factories", async (req, res) => {
   const userId = req.query.userId as string;
   if (!userId) {
-    return res.status(400).json({ success: false, error: 'userId is required' });
+    return res
+      .status(400)
+      .json({ success: false, error: "userId is required" });
   }
   try {
     const data = await fetchUserCompanies(userId);
     return res.json({ success: true, userId, ...data });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message || 'Failed fetching player factories' });
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Failed fetching player factories",
+    });
   }
 });
 
 // API Route: Fetch country-wide statistics across the 6 military units
-const COUNTRY_STATS_CACHE_KEY = 'warera_country_stats_6_armies_v5';
+const COUNTRY_STATS_CACHE_KEY = "warera_country_stats_6_armies_v5";
 const COUNTRY_STATS_TTL_MS = 60 * 60 * 1000; // 1 hour cache (weekly update rhythm)
 
-app.get('/api/country-stats', async (req, res) => {
-  const forceRefresh = req.query.refresh === 'true';
-  const userApiKey = (req.headers['x-user-api-key'] as string) || (req.query.apiKey as string);
+app.get("/api/country-stats", async (req, res) => {
+  const forceRefresh = req.query.refresh === "true";
+  const userApiKey =
+    (req.headers["x-user-api-key"] as string) || (req.query.apiKey as string);
 
   const cached = cache.get(COUNTRY_STATS_CACHE_KEY);
   if (
@@ -979,16 +1110,57 @@ app.get('/api/country-stats', async (req, res) => {
   }
 
   const armiesConfig = [
-    { id: '69c229c4449287ea1a26a5b3', name: 'Turkic Tribe', avatarUrl: 'https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png' },
-    { id: '689f69064e095b8b9f1b885a', name: 'ASHINA', avatarUrl: 'https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png' },
-    { id: '68bc9bcb4870c8e343e42855', name: 'ASHINA Reserve', avatarUrl: 'https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png' },
-    { id: '690088ce4864a132a2d92d07', name: 'Legio Panthera', avatarUrl: 'https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png' },
-    { id: '6902269a560184d196a6fba8', name: 'BEASTs', avatarUrl: 'https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg' },
-    { id: '6a0f1495478fe2a58d2868d6', name: 'Deliler', avatarUrl: 'https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png' },
+    {
+      id: "69c229c4449287ea1a26a5b3",
+      name: "Turkic Tribe",
+      avatarUrl:
+        "https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png",
+    },
+    {
+      id: "689f69064e095b8b9f1b885a",
+      name: "ASHINA",
+      avatarUrl:
+        "https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png",
+    },
+    {
+      id: "68bc9bcb4870c8e343e42855",
+      name: "ASHINA Reserve",
+      avatarUrl:
+        "https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png",
+    },
+    {
+      id: "690088ce4864a132a2d92d07",
+      name: "Legio Panthera",
+      avatarUrl:
+        "https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png",
+    },
+    {
+      id: "6902269a560184d196a6fba8",
+      name: "BEASTs",
+      avatarUrl:
+        "https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg",
+    },
+    {
+      id: "6a0f1495478fe2a58d2868d6",
+      name: "Deliler",
+      avatarUrl:
+        "https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png",
+    },
+    {
+      id: "68e0f3b86351b310a982d79e",
+      name: "WAVVE",
+      avatarUrl:
+        "https://media.warera.io/avatars/mu/mu-68e0f3b86351b310a982d79e-1786113114746-rr3s4yb3.png",
+    },
   ];
 
   try {
-    const armyInfoList: { id: string; name: string; memberCount: number; avatarUrl?: string }[] = [];
+    const armyInfoList: {
+      id: string;
+      name: string;
+      memberCount: number;
+      avatarUrl?: string;
+    }[] = [];
 
     // 1. Fetch member lists from the 6 military units in parallel
     const muPromises = armiesConfig.map(async (army) => {
@@ -1010,7 +1182,12 @@ app.get('/api/country-stats', async (req, res) => {
         }
       } catch (e) {}
       return {
-        info: { id: army.id, name: army.name, avatarUrl: army.avatarUrl, memberCount: 20 },
+        info: {
+          id: army.id,
+          name: army.name,
+          avatarUrl: army.avatarUrl,
+          memberCount: 20,
+        },
         members: [] as string[],
       };
     });
@@ -1023,7 +1200,14 @@ app.get('/api/country-stats', async (req, res) => {
     });
 
     const uniqueUserIds = Array.from(new Set(allUserIds));
-    const playersList: { userId: string; username: string; level: number; factoryLimit: number; wealth: number; isEconomy: boolean }[] = [];
+    const playersList: {
+      userId: string;
+      username: string;
+      level: number;
+      factoryLimit: number;
+      wealth: number;
+      isEconomy: boolean;
+    }[] = [];
 
     // 2. Fetch user profile batches (25 per batch) in parallel
     const chunkSize = 25;
@@ -1034,9 +1218,11 @@ app.get('/api/country-stats', async (req, res) => {
 
     const batchPromises = chunks.map(async (chunk) => {
       const batchInput: Record<string, { userId: string }> = {};
-      chunk.forEach((id, idx) => { batchInput[String(idx)] = { userId: id }; });
+      chunk.forEach((id, idx) => {
+        batchInput[String(idx)] = { userId: id };
+      });
 
-      const batchUrl = `https://api2.warera.io/trpc/${chunk.map(() => 'user.getUserLite').join(',')}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
+      const batchUrl = `https://api2.warera.io/trpc/${chunk.map(() => "user.getUserLite").join(",")}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
       const bRes = await fetchWarEra(batchUrl, undefined, userApiKey);
       if (bRes.ok) {
         const bJson = await bRes.json();
@@ -1051,11 +1237,20 @@ app.get('/api/country-stats', async (req, res) => {
     allUsers.forEach((u: any) => {
       const level = Number(u.leveling?.level || 1);
       const compSkill = u.skills?.companies;
-      const factoryLimit = Number(compSkill?.total ?? (2 + (compSkill?.level || 0) + (compSkill?.prestige || 0)));
+      const factoryLimit = Number(
+        compSkill?.total ??
+          2 + (compSkill?.level || 0) + (compSkill?.prestige || 0),
+      );
       const wealth = Number(u.rankings?.userWealth?.value ?? u.wealth ?? 0);
 
       // Economy vs Combat mode calculation
-      const ecoSkillNames = ['entrepreneurship', 'energy', 'production', 'companies', 'management'];
+      const ecoSkillNames = [
+        "entrepreneurship",
+        "energy",
+        "production",
+        "companies",
+        "management",
+      ];
       let ecoSkillPoints = 0;
       if (u.skills) {
         for (const sName of ecoSkillNames) {
@@ -1067,16 +1262,15 @@ app.get('/api/country-stats', async (req, res) => {
         }
       }
       const totalSkillPoints = Number(
-        u.leveling?.spentSkillPoints ??
-        u.leveling?.totalSkillPoints ??
-        0
+        u.leveling?.spentSkillPoints ?? u.leveling?.totalSkillPoints ?? 0,
       );
-      const effectiveTotalSP = totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
-      const isEconomy = ecoSkillPoints > (effectiveTotalSP / 2);
+      const effectiveTotalSP =
+        totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
+      const isEconomy = ecoSkillPoints > effectiveTotalSP / 2;
 
       playersList.push({
         userId: u._id,
-        username: u.username || 'Oyuncu',
+        username: u.username || "Oyuncu",
         level,
         factoryLimit,
         wealth,
@@ -1085,21 +1279,24 @@ app.get('/api/country-stats', async (req, res) => {
     });
 
     // 3. Aggregate level statistics
-    const byLevel: Record<number, {
-      level: number;
-      playerCount: number;
-      combatCount: number;
-      economyCount: number;
-      combatFactories: number;
-      economyFactories: number;
-      combatAutomatedLevel: number;
-      economyAutomatedLevel: number;
-      combatWealth: number;
-      economyWealth: number;
-      totalFactories: number;
-      totalAutomatedLevel: number;
-      totalWealth: number;
-    }> = {};
+    const byLevel: Record<
+      number,
+      {
+        level: number;
+        playerCount: number;
+        combatCount: number;
+        economyCount: number;
+        combatFactories: number;
+        economyFactories: number;
+        combatAutomatedLevel: number;
+        economyAutomatedLevel: number;
+        combatWealth: number;
+        economyWealth: number;
+        totalFactories: number;
+        totalAutomatedLevel: number;
+        totalWealth: number;
+      }
+    > = {};
     const totalCount = playersList.length || 1;
     let totalCombatPlayers = 0;
     let totalEconomyPlayers = 0;
@@ -1123,24 +1320,27 @@ app.get('/api/country-stats', async (req, res) => {
         };
       }
       byLevel[p.level].playerCount++;
-      const estEnginePerFactory = Math.min(7, Math.max(3, Math.floor(p.level / 7) + 2));
+      const estEnginePerFactory = Math.min(
+        7,
+        Math.max(3, Math.floor(p.level / 7) + 2),
+      );
       const estAutomated = p.factoryLimit * estEnginePerFactory;
 
       if (p.isEconomy) {
         byLevel[p.level].economyCount++;
         byLevel[p.level].economyFactories += p.factoryLimit;
         byLevel[p.level].economyAutomatedLevel += estAutomated;
-        byLevel[p.level].economyWealth += (p.wealth || 0);
+        byLevel[p.level].economyWealth += p.wealth || 0;
         totalEconomyPlayers++;
       } else {
         byLevel[p.level].combatCount++;
         byLevel[p.level].combatFactories += p.factoryLimit;
         byLevel[p.level].combatAutomatedLevel += estAutomated;
-        byLevel[p.level].combatWealth += (p.wealth || 0);
+        byLevel[p.level].combatWealth += p.wealth || 0;
         totalCombatPlayers++;
       }
       byLevel[p.level].totalFactories += p.factoryLimit;
-      byLevel[p.level].totalWealth += (p.wealth || 0);
+      byLevel[p.level].totalWealth += p.wealth || 0;
       byLevel[p.level].totalAutomatedLevel += estAutomated;
     });
 
@@ -1157,27 +1357,45 @@ app.get('/api/country-stats', async (req, res) => {
           percentage: Number(((count / totalCount) * 100).toFixed(1)),
           combatCount: cCount,
           economyCount: eCount,
-          combatRatio: count > 0 ? Number(((cCount / count) * 100).toFixed(1)) : 0,
-          economyRatio: count > 0 ? Number(((eCount / count) * 100).toFixed(1)) : 0,
+          combatRatio:
+            count > 0 ? Number(((cCount / count) * 100).toFixed(1)) : 0,
+          economyRatio:
+            count > 0 ? Number(((eCount / count) * 100).toFixed(1)) : 0,
 
           combatFactories: item.combatFactories,
           economyFactories: item.economyFactories,
-          avgCombatFactories: cCount > 0 ? Number((item.combatFactories / cCount).toFixed(2)) : 0,
-          avgEconomyFactories: eCount > 0 ? Number((item.economyFactories / eCount).toFixed(2)) : 0,
+          avgCombatFactories:
+            cCount > 0 ? Number((item.combatFactories / cCount).toFixed(2)) : 0,
+          avgEconomyFactories:
+            eCount > 0
+              ? Number((item.economyFactories / eCount).toFixed(2))
+              : 0,
 
           combatAutomatedLevel: item.combatAutomatedLevel,
           economyAutomatedLevel: item.economyAutomatedLevel,
-          avgCombatAutomatedLevel: cCount > 0 ? Number((item.combatAutomatedLevel / cCount).toFixed(1)) : 0,
-          avgEconomyAutomatedLevel: eCount > 0 ? Number((item.economyAutomatedLevel / eCount).toFixed(1)) : 0,
+          avgCombatAutomatedLevel:
+            cCount > 0
+              ? Number((item.combatAutomatedLevel / cCount).toFixed(1))
+              : 0,
+          avgEconomyAutomatedLevel:
+            eCount > 0
+              ? Number((item.economyAutomatedLevel / eCount).toFixed(1))
+              : 0,
 
           combatWealth: item.combatWealth,
           economyWealth: item.economyWealth,
-          avgCombatWealth: cCount > 0 ? Math.round(item.combatWealth / cCount) : 0,
-          avgEconomyWealth: eCount > 0 ? Math.round(item.economyWealth / eCount) : 0,
+          avgCombatWealth:
+            cCount > 0 ? Math.round(item.combatWealth / cCount) : 0,
+          avgEconomyWealth:
+            eCount > 0 ? Math.round(item.economyWealth / eCount) : 0,
 
-          avgFactories: count > 0 ? Number((item.totalFactories / count).toFixed(2)) : 0,
+          avgFactories:
+            count > 0 ? Number((item.totalFactories / count).toFixed(2)) : 0,
           totalFactories: item.totalFactories,
-          avgAutomatedLevel: count > 0 ? Number((item.totalAutomatedLevel / count).toFixed(1)) : 0,
+          avgAutomatedLevel:
+            count > 0
+              ? Number((item.totalAutomatedLevel / count).toFixed(1))
+              : 0,
           totalAutomatedLevel: item.totalAutomatedLevel,
           avgWealth: count > 0 ? Math.round(item.totalWealth / count) : 0,
           totalWealth: item.totalWealth,
@@ -1195,11 +1413,17 @@ app.get('/api/country-stats', async (req, res) => {
       generatedAt: new Date().toISOString(),
     };
 
-    cache.set(COUNTRY_STATS_CACHE_KEY, { data: payload, timestamp: Date.now() });
+    cache.set(COUNTRY_STATS_CACHE_KEY, {
+      data: payload,
+      timestamp: Date.now(),
+    });
     return res.json(payload);
   } catch (err: any) {
-    console.error('Error generating country stats:', err);
-    return res.status(500).json({ success: false, error: err.message || 'Failed fetching country stats' });
+    console.error("Error generating country stats:", err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Failed fetching country stats",
+    });
   }
 });
 
@@ -1210,24 +1434,28 @@ function formatDamageNumber(dmg: number): string {
   if (dmg >= 1e9) return `${(dmg / 1e9).toFixed(2)}B`;
   if (dmg >= 1e6) return `${(dmg / 1e6).toFixed(2)}M`;
   if (dmg >= 1e3) return `${(dmg / 1e3).toFixed(1)}K`;
-  return `${dmg.toLocaleString('tr-TR')}`;
+  return `${dmg.toLocaleString("tr-TR")}`;
 }
 
 function formatWealthNumber(w: number): string {
   if (w >= 1e6) return `$${(w / 1e6).toFixed(1)}M`;
   if (w >= 1e3) return `$${(w / 1e3).toFixed(1)}K`;
-  return `$${Math.round(w).toLocaleString('tr-TR')}`;
+  return `$${Math.round(w).toLocaleString("tr-TR")}`;
 }
 
-const DEFAULT_MU_ID = '69c229c4449287ea1a26a5b3';
+const DEFAULT_MU_ID = "69c229c4449287ea1a26a5b3";
 
-app.get('/api/military-overview', async (req, res) => {
+app.get("/api/military-overview", async (req, res) => {
   const targetMuId = (req.query.muId as string) || DEFAULT_MU_ID;
-  const forceRefresh = req.query.refresh === 'true';
+  const forceRefresh = req.query.refresh === "true";
 
   const cacheKey = `mil_overview_${targetMuId}`;
   const cached = cache.get(cacheKey);
-  if (!forceRefresh && cached && Date.now() - cached.timestamp < MILITARY_OVERVIEW_TTL_MS) {
+  if (
+    !forceRefresh &&
+    cached &&
+    Date.now() - cached.timestamp < MILITARY_OVERVIEW_TTL_MS
+  ) {
     return res.json(cached.data);
   }
 
@@ -1236,21 +1464,29 @@ app.get('/api/military-overview', async (req, res) => {
     const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: targetMuId }))}`;
     const muRes = await fetchWarEra(muUrl);
     if (!muRes.ok) {
-      return res.status(502).json({ success: false, error: 'WarEra MU API call failed' });
+      return res
+        .status(502)
+        .json({ success: false, error: "WarEra MU API call failed" });
     }
     const muJson = await muRes.json();
     const muData = muJson?.result?.data;
     if (!muData) {
-      return res.status(404).json({ success: false, error: 'Military Unit not found' });
+      return res
+        .status(404)
+        .json({ success: false, error: "Military Unit not found" });
     }
 
     const members: string[] = muData.members || [];
-    const leaderId = muData.user || '';
+    const leaderId = muData.user || "";
     const managers: string[] = muData.roles?.managers || [];
     const commanders: string[] = muData.roles?.commanders || [];
 
     // 2. Fetch Country Info
-    let countryInfo = { name: 'Türkiye', code: 'TR', flagUrl: 'https://media.warera.io/images/flags/TR.svg?v=16' };
+    let countryInfo = {
+      name: "Türkiye",
+      code: "TR",
+      flagUrl: "https://media.warera.io/images/flags/TR.svg?v=16",
+    };
     if (muData.country) {
       try {
         const countryUrl = `https://api2.warera.io/trpc/country.getCountryById?input=${encodeURIComponent(JSON.stringify({ countryId: muData.country }))}`;
@@ -1259,16 +1495,18 @@ app.get('/api/military-overview', async (req, res) => {
           const cJson = await cRes.json();
           const cData = cJson?.result?.data;
           if (cData) {
-            const code = (cData.code || 'tr').toUpperCase();
+            const code = (cData.code || "tr").toUpperCase();
             countryInfo = {
-              name: cData.name || 'Türkiye',
+              name: cData.name || "Türkiye",
               code,
-              flagUrl: cData.flagUrl || `https://media.warera.io/images/flags/${code}.svg?v=16`,
+              flagUrl:
+                cData.flagUrl ||
+                `https://media.warera.io/images/flags/${code}.svg?v=16`,
             };
           }
         }
       } catch (cErr) {
-        console.warn('Error fetching country info:', cErr);
+        console.warn("Error fetching country info:", cErr);
       }
     }
 
@@ -1282,7 +1520,7 @@ app.get('/api/military-overview', async (req, res) => {
     await Promise.all(
       chunks.map(async (chunk) => {
         try {
-          const endpoints = chunk.map(() => 'user.getUserById').join(',');
+          const endpoints = chunk.map(() => "user.getUserById").join(",");
           const batchInput: Record<string, { userId: string }> = {};
           chunk.forEach((id, idx) => {
             batchInput[idx.toString()] = { userId: id };
@@ -1300,9 +1538,9 @@ app.get('/api/military-overview', async (req, res) => {
             }
           }
         } catch (uErr) {
-          console.error('Batch user fetch error:', uErr);
+          console.error("Batch user fetch error:", uErr);
         }
-      })
+      }),
     );
 
     // If batching missed some members, fall back to individual fetch for missing
@@ -1321,19 +1559,35 @@ app.get('/api/military-overview', async (req, res) => {
               }
             }
           } catch (_) {}
-        })
+        }),
       );
     }
 
     // 4. Compute Statistics
     const memberCount = members.length;
-    const totalWeeklyDamage = allUsers.reduce((sum, u) => sum + (u.rankings?.weeklyUserDamages?.value || 0), 0);
-    const totalAllTimeDamage = allUsers.reduce((sum, u) => sum + (u.rankings?.userDamages?.value || 0), 0);
-    const totalWealth = allUsers.reduce((sum, u) => sum + (u.rankings?.userWealth?.value || 0), 0);
-    const avgLevel = memberCount > 0 
-      ? Number((allUsers.reduce((sum, u) => sum + (u.leveling?.level || 1), 0) / memberCount).toFixed(1))
-      : 0;
-    const avgWealth = memberCount > 0 ? Math.round(totalWealth / memberCount) : 0;
+    const totalWeeklyDamage = allUsers.reduce(
+      (sum, u) => sum + (u.rankings?.weeklyUserDamages?.value || 0),
+      0,
+    );
+    const totalAllTimeDamage = allUsers.reduce(
+      (sum, u) => sum + (u.rankings?.userDamages?.value || 0),
+      0,
+    );
+    const totalWealth = allUsers.reduce(
+      (sum, u) => sum + (u.rankings?.userWealth?.value || 0),
+      0,
+    );
+    const avgLevel =
+      memberCount > 0
+        ? Number(
+            (
+              allUsers.reduce((sum, u) => sum + (u.leveling?.level || 1), 0) /
+              memberCount
+            ).toFixed(1),
+          )
+        : 0;
+    const avgWealth =
+      memberCount > 0 ? Math.round(totalWealth / memberCount) : 0;
 
     // Unique commander and manager IDs
     const leadershipIdSet = new Set<string>();
@@ -1344,25 +1598,41 @@ app.get('/api/military-overview', async (req, res) => {
 
     // 5. MVPs
     // Weekly Damage Leader
-    const sortedWeekly = [...allUsers].sort((a, b) => (b.rankings?.weeklyUserDamages?.value || 0) - (a.rankings?.weeklyUserDamages?.value || 0));
+    const sortedWeekly = [...allUsers].sort(
+      (a, b) =>
+        (b.rankings?.weeklyUserDamages?.value || 0) -
+        (a.rankings?.weeklyUserDamages?.value || 0),
+    );
     const topWeeklyUser = sortedWeekly[0];
-    const topWeeklyDamageVal = topWeeklyUser?.rankings?.weeklyUserDamages?.value || 0;
+    const topWeeklyDamageVal =
+      topWeeklyUser?.rankings?.weeklyUserDamages?.value || 0;
 
     // All Time Damage Leader
-    const sortedAllTime = [...allUsers].sort((a, b) => (b.rankings?.userDamages?.value || 0) - (a.rankings?.userDamages?.value || 0));
+    const sortedAllTime = [...allUsers].sort(
+      (a, b) =>
+        (b.rankings?.userDamages?.value || 0) -
+        (a.rankings?.userDamages?.value || 0),
+    );
     const topAllTimeUser = sortedAllTime[0];
-    const topAllTimeDamageVal = topAllTimeUser?.rankings?.userDamages?.value || 0;
+    const topAllTimeDamageVal =
+      topAllTimeUser?.rankings?.userDamages?.value || 0;
 
     // Most Experienced (by totalXp or prestige)
     const sortedXp = [...allUsers].sort((a, b) => {
-      const aScore = (a.leveling?.prestigeLevel || 0) * 1000000 + (a.leveling?.totalXp || 0);
-      const bScore = (b.leveling?.prestigeLevel || 0) * 1000000 + (b.leveling?.totalXp || 0);
+      const aScore =
+        (a.leveling?.prestigeLevel || 0) * 1000000 + (a.leveling?.totalXp || 0);
+      const bScore =
+        (b.leveling?.prestigeLevel || 0) * 1000000 + (b.leveling?.totalXp || 0);
       return bScore - aScore;
     });
     const topXpUser = sortedXp[0];
 
     // Wealthiest
-    const sortedWealth = [...allUsers].sort((a, b) => (b.rankings?.userWealth?.value || 0) - (a.rankings?.userWealth?.value || 0));
+    const sortedWealth = [...allUsers].sort(
+      (a, b) =>
+        (b.rankings?.userWealth?.value || 0) -
+        (a.rankings?.userWealth?.value || 0),
+    );
     const topWealthUser = sortedWealth[0];
     const topWealthVal = topWealthUser?.rankings?.userWealth?.value || 0;
 
@@ -1373,9 +1643,9 @@ app.get('/api/military-overview', async (req, res) => {
       leadership.push({
         userId: leaderUser._id,
         username: leaderUser.username,
-        avatarUrl: leaderUser.avatarUrl || '',
-        role: 'leader',
-        roleLabel: 'Birlik Lideri / Kurucu',
+        avatarUrl: leaderUser.avatarUrl || "",
+        role: "leader",
+        roleLabel: "Birlik Lideri / Kurucu",
         level: leaderUser.leveling?.level || 1,
       });
     }
@@ -1388,9 +1658,9 @@ app.get('/api/military-overview', async (req, res) => {
         leadership.push({
           userId: cUser._id,
           username: cUser.username,
-          avatarUrl: cUser.avatarUrl || '',
-          role: 'commander',
-          roleLabel: 'Komutan',
+          avatarUrl: cUser.avatarUrl || "",
+          role: "commander",
+          roleLabel: "Komutan",
           level: cUser.leveling?.level || 1,
         });
         addedUserIds.add(cId);
@@ -1403,9 +1673,9 @@ app.get('/api/military-overview', async (req, res) => {
         leadership.push({
           userId: mUser._id,
           username: mUser.username,
-          avatarUrl: mUser.avatarUrl || '',
-          role: 'manager',
-          roleLabel: 'Yönetici',
+          avatarUrl: mUser.avatarUrl || "",
+          role: "manager",
+          roleLabel: "Yönetici",
           level: mUser.leveling?.level || 1,
         });
         addedUserIds.add(mId);
@@ -1414,18 +1684,19 @@ app.get('/api/military-overview', async (req, res) => {
 
     // 7. Level Spectrum (Kademelere göre dağılım)
     const spectrumTiers = [
-      { range: 'Lv. 41 - 50', min: 41, max: 50 },
-      { range: 'Lv. 31 - 40', min: 31, max: 40 },
-      { range: 'Lv. 21 - 30', min: 21, max: 30 },
-      { range: 'Lv. 11 - 20', min: 11, max: 20 },
-      { range: 'Lv. 1 - 10', min: 1, max: 10 },
+      { range: "Lv. 41 - 50", min: 41, max: 50 },
+      { range: "Lv. 31 - 40", min: 31, max: 40 },
+      { range: "Lv. 21 - 30", min: 21, max: 30 },
+      { range: "Lv. 11 - 20", min: 11, max: 20 },
+      { range: "Lv. 1 - 10", min: 1, max: 10 },
     ];
     const levelSpectrum = spectrumTiers.map((tier) => {
       const count = allUsers.filter((u) => {
         const lvl = u.leveling?.level || 1;
         return lvl >= tier.min && lvl <= tier.max;
       }).length;
-      const percentage = memberCount > 0 ? Math.round((count / memberCount) * 100) : 0;
+      const percentage =
+        memberCount > 0 ? Math.round((count / memberCount) * 100) : 0;
       return {
         ...tier,
         count,
@@ -1437,7 +1708,7 @@ app.get('/api/military-overview', async (req, res) => {
     const memberItems = allUsers.map((u) => ({
       userId: u._id,
       username: u.username,
-      avatarUrl: u.avatarUrl || '',
+      avatarUrl: u.avatarUrl || "",
       level: u.leveling?.level || 1,
       totalXp: u.leveling?.totalXp || 0,
       prestigeLevel: u.leveling?.prestigeLevel || 0,
@@ -1451,10 +1722,12 @@ app.get('/api/military-overview', async (req, res) => {
       data: {
         muInfo: {
           id: targetMuId,
-          name: muData.name || 'Turkic Tribe',
-          avatarUrl: muData.avatarUrl || '',
-          description: muData.description || 'Orduya ait temel operasyonel göstergeler, üye gücü, haftalık ve kümülatif hasar istatistikleri ve toplam varlık özeti.',
-          countryId: muData.country || '',
+          name: muData.name || "Turkic Tribe",
+          avatarUrl: muData.avatarUrl || "",
+          description:
+            muData.description ||
+            "Orduya ait temel operasyonel göstergeler, üye gücü, haftalık ve kümülatif hasar istatistikleri ve toplam varlık özeti.",
+          countryId: muData.country || "",
           leaderId,
         },
         countryInfo,
@@ -1468,39 +1741,47 @@ app.get('/api/military-overview', async (req, res) => {
           averageWealth: avgWealth,
         },
         mvps: {
-          weeklyDamageLeader: topWeeklyUser ? {
-            userId: topWeeklyUser._id,
-            username: topWeeklyUser.username,
-            avatarUrl: topWeeklyUser.avatarUrl || '',
-            value: topWeeklyDamageVal,
-            formattedValue: formatDamageNumber(topWeeklyDamageVal),
-            level: topWeeklyUser.leveling?.level || 1,
-          } : null,
-          allTimeDamageLeader: topAllTimeUser ? {
-            userId: topAllTimeUser._id,
-            username: topAllTimeUser.username,
-            avatarUrl: topAllTimeUser.avatarUrl || '',
-            value: topAllTimeDamageVal,
-            formattedValue: formatDamageNumber(topAllTimeDamageVal),
-            level: topAllTimeUser.leveling?.level || 1,
-          } : null,
-          mostExperienced: topXpUser ? {
-            userId: topXpUser._id,
-            username: topXpUser.username,
-            avatarUrl: topXpUser.avatarUrl || '',
-            value: topXpUser.leveling?.totalXp || 0,
-            formattedValue: `${((topXpUser.leveling?.totalXp || 0) / 1000).toFixed(1)}K XP`,
-            level: topXpUser.leveling?.level || 1,
-            prestigeLevel: topXpUser.leveling?.prestigeLevel || 0,
-          } : null,
-          wealthiest: topWealthUser ? {
-            userId: topWealthUser._id,
-            username: topWealthUser.username,
-            avatarUrl: topWealthUser.avatarUrl || '',
-            value: topWealthVal,
-            formattedValue: formatWealthNumber(topWealthVal),
-            level: topWealthUser.leveling?.level || 1,
-          } : null,
+          weeklyDamageLeader: topWeeklyUser
+            ? {
+                userId: topWeeklyUser._id,
+                username: topWeeklyUser.username,
+                avatarUrl: topWeeklyUser.avatarUrl || "",
+                value: topWeeklyDamageVal,
+                formattedValue: formatDamageNumber(topWeeklyDamageVal),
+                level: topWeeklyUser.leveling?.level || 1,
+              }
+            : null,
+          allTimeDamageLeader: topAllTimeUser
+            ? {
+                userId: topAllTimeUser._id,
+                username: topAllTimeUser.username,
+                avatarUrl: topAllTimeUser.avatarUrl || "",
+                value: topAllTimeDamageVal,
+                formattedValue: formatDamageNumber(topAllTimeDamageVal),
+                level: topAllTimeUser.leveling?.level || 1,
+              }
+            : null,
+          mostExperienced: topXpUser
+            ? {
+                userId: topXpUser._id,
+                username: topXpUser.username,
+                avatarUrl: topXpUser.avatarUrl || "",
+                value: topXpUser.leveling?.totalXp || 0,
+                formattedValue: `${((topXpUser.leveling?.totalXp || 0) / 1000).toFixed(1)}K XP`,
+                level: topXpUser.leveling?.level || 1,
+                prestigeLevel: topXpUser.leveling?.prestigeLevel || 0,
+              }
+            : null,
+          wealthiest: topWealthUser
+            ? {
+                userId: topWealthUser._id,
+                username: topWealthUser.username,
+                avatarUrl: topWealthUser.avatarUrl || "",
+                value: topWealthVal,
+                formattedValue: formatWealthNumber(topWealthVal),
+                level: topWealthUser.leveling?.level || 1,
+              }
+            : null,
         },
         leadership,
         levelSpectrum,
@@ -1512,19 +1793,26 @@ app.get('/api/military-overview', async (req, res) => {
     cache.set(cacheKey, { data: resultData, timestamp: Date.now() });
     return res.json(resultData);
   } catch (err: any) {
-    console.error('Military overview error:', err);
-    return res.status(500).json({ success: false, error: err.message || 'Failed fetching military overview' });
+    console.error("Military overview error:", err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Failed fetching military overview",
+    });
   }
 });
 
 // API Route: Military Details & Member Roster (Detaylı Bilgi & Üye Listesi)
-app.get('/api/military-details', async (req, res) => {
+app.get("/api/military-details", async (req, res) => {
   const targetMuId = (req.query.muId as string) || DEFAULT_MU_ID;
-  const forceRefresh = req.query.refresh === 'true';
+  const forceRefresh = req.query.refresh === "true";
 
   const cacheKey = `mil_details_${targetMuId}`;
   const cached = cache.get(cacheKey);
-  if (!forceRefresh && cached && Date.now() - cached.timestamp < MILITARY_OVERVIEW_TTL_MS) {
+  if (
+    !forceRefresh &&
+    cached &&
+    Date.now() - cached.timestamp < MILITARY_OVERVIEW_TTL_MS
+  ) {
     return res.json(cached.data);
   }
 
@@ -1533,16 +1821,20 @@ app.get('/api/military-details', async (req, res) => {
     const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: targetMuId }))}`;
     const muRes = await fetchWarEra(muUrl);
     if (!muRes.ok) {
-      return res.status(502).json({ success: false, error: 'WarEra MU API call failed' });
+      return res
+        .status(502)
+        .json({ success: false, error: "WarEra MU API call failed" });
     }
     const muJson = await muRes.json();
     const muData = muJson?.result?.data?.json || muJson?.result?.data;
     if (!muData) {
-      return res.status(404).json({ success: false, error: 'Military Unit not found' });
+      return res
+        .status(404)
+        .json({ success: false, error: "Military Unit not found" });
     }
 
     const members: string[] = muData.members || [];
-    const leaderId = muData.user || '';
+    const leaderId = muData.user || "";
     const managers: string[] = muData.roles?.managers || [];
     const commanders: string[] = muData.roles?.commanders || [];
 
@@ -1556,7 +1848,7 @@ app.get('/api/military-details', async (req, res) => {
     await Promise.all(
       chunks.map(async (chunk) => {
         try {
-          const endpoints = chunk.map(() => 'user.getUserById').join(',');
+          const endpoints = chunk.map(() => "user.getUserById").join(",");
           const batchInput: Record<string, { userId: string }> = {};
           chunk.forEach((id, idx) => {
             batchInput[idx.toString()] = { userId: id };
@@ -1575,9 +1867,9 @@ app.get('/api/military-details', async (req, res) => {
             }
           }
         } catch (uErr) {
-          console.error('Batch user fetch error:', uErr);
+          console.error("Batch user fetch error:", uErr);
         }
-      })
+      }),
     );
 
     // If batching missed some members, fall back to individual fetch for missing
@@ -1597,38 +1889,50 @@ app.get('/api/military-details', async (req, res) => {
               }
             }
           } catch (_) {}
-        })
+        }),
       );
     }
 
     // 3. Resolve Leader username
     const leaderUser = allUsers.find((u) => u._id === leaderId);
-    const leaderUsername = leaderUser?.username || 'Muhtarr';
+    const leaderUsername = leaderUser?.username || "Muhtarr";
 
     // 4. Map and rank members (sorted by weeklyDamage descending)
     const mappedMembers = allUsers.map((u) => {
       const isLeader = u._id === leaderId;
       const isCommander = commanders.includes(u._id);
       const isManager = managers.includes(u._id);
-      const role = isLeader ? 'leader' : isCommander ? 'commander' : isManager ? 'manager' : 'soldier';
+      const role = isLeader
+        ? "leader"
+        : isCommander
+          ? "commander"
+          : isManager
+            ? "manager"
+            : "soldier";
 
       return {
         userId: u._id,
-        username: u.username || 'Bilinmeyen Asker',
-        avatarUrl: u.avatarUrl || '',
+        username: u.username || "Bilinmeyen Asker",
+        avatarUrl: u.avatarUrl || "",
         level: u.leveling?.level || 1,
         prestigeLevel: u.leveling?.prestigeLevel || 0,
         totalXp: u.leveling?.totalXp || 0,
         weeklyDamage: u.rankings?.weeklyUserDamages?.value || 0,
-        weeklyTier: u.rankings?.weeklyUserDamages?.tier || 'bronze',
+        weeklyTier: u.rankings?.weeklyUserDamages?.tier || "bronze",
         weeklyRank: u.rankings?.weeklyUserDamages?.rank || 0,
         allTimeDamage: u.rankings?.userDamages?.value || 0,
-        allTimeTier: u.rankings?.userDamages?.tier || 'bronze',
+        allTimeTier: u.rankings?.userDamages?.tier || "bronze",
         allTimeRank: u.rankings?.userDamages?.rank || 0,
         wealth: u.rankings?.userWealth?.value || 0,
         role,
-        roleBadge: isLeader ? 'L' : isCommander ? 'C' : isManager ? 'M' : '',
-        roleLabel: isLeader ? 'Birlik Sahibi / Kurucu' : isCommander ? 'Komutan' : isManager ? 'Yönetici' : 'Asker',
+        roleBadge: isLeader ? "L" : isCommander ? "C" : isManager ? "M" : "",
+        roleLabel: isLeader
+          ? "Birlik Sahibi / Kurucu"
+          : isCommander
+            ? "Komutan"
+            : isManager
+              ? "Yönetici"
+              : "Asker",
       };
     });
 
@@ -1636,21 +1940,28 @@ app.get('/api/military-details', async (req, res) => {
 
     // 5. Structure Final Output
     const rankings = muData.rankings || {};
-    const overallTier = rankings.muDamages?.tier || rankings.muWeeklyDamages?.tier || 'platinum';
+    const overallTier =
+      rankings.muDamages?.tier || rankings.muWeeklyDamages?.tier || "platinum";
 
     const resultData = {
       success: true,
       data: {
         muInfo: {
           id: targetMuId,
-          name: muData.name || 'Turkic Tribe',
-          avatarUrl: muData.avatarUrl || '',
+          name: muData.name || "Turkic Tribe",
+          avatarUrl: muData.avatarUrl || "",
           level: muData.leveling?.level || 1,
           leaderId,
           leaderUsername,
-          reputation: Number((muData.mercenaryReputation || rankings.muReputation?.value || 11.91).toFixed(2)),
+          reputation: Number(
+            (
+              muData.mercenaryReputation ||
+              rankings.muReputation?.value ||
+              11.91
+            ).toFixed(2),
+          ),
           memberCount: members.length,
-          createdAt: muData.createdAt || '2026-03-24T06:05:56.824Z',
+          createdAt: muData.createdAt || "2026-03-24T06:05:56.824Z",
           overallTier,
           activeUpgradeLevels: {
             headquarters: muData.activeUpgradeLevels?.headquarters || 4,
@@ -1660,32 +1971,38 @@ app.get('/api/military-details', async (req, res) => {
             muWeeklyDamages: {
               value: rankings.muWeeklyDamages?.value || 47136427,
               rank: rankings.muWeeklyDamages?.rank || 191,
-              tier: rankings.muWeeklyDamages?.tier || 'platinum',
+              tier: rankings.muWeeklyDamages?.tier || "platinum",
             },
             muDamages: {
               value: rankings.muDamages?.value || 1028447657,
               rank: rankings.muDamages?.rank || 135,
-              tier: rankings.muDamages?.tier || 'platinum',
+              tier: rankings.muDamages?.tier || "platinum",
             },
             muBounty: {
               value: rankings.muBounty?.value || 17441,
               rank: rankings.muBounty?.rank || 205,
-              tier: rankings.muBounty?.tier || 'platinum',
+              tier: rankings.muBounty?.tier || "platinum",
             },
             muReputation: {
-              value: Number((rankings.muReputation?.value || muData.mercenaryReputation || 11.91).toFixed(2)),
+              value: Number(
+                (
+                  rankings.muReputation?.value ||
+                  muData.mercenaryReputation ||
+                  11.91
+                ).toFixed(2),
+              ),
               rank: rankings.muReputation?.rank || 68,
-              tier: rankings.muReputation?.tier || 'platinum',
+              tier: rankings.muReputation?.tier || "platinum",
             },
             muTerrain: {
               value: rankings.muTerrain?.value || 23899,
               rank: rankings.muTerrain?.rank || 243,
-              tier: rankings.muTerrain?.tier || 'platinum',
+              tier: rankings.muTerrain?.tier || "platinum",
             },
             muWealth: {
               value: Number((rankings.muWealth?.value || 679.97).toFixed(2)),
               rank: rankings.muWealth?.rank || 661,
-              tier: rankings.muWealth?.tier || 'silver',
+              tier: rankings.muWealth?.tier || "silver",
             },
           },
         },
@@ -1699,19 +2016,32 @@ app.get('/api/military-details', async (req, res) => {
     cache.set(cacheKey, { data: resultData, timestamp: Date.now() });
     return res.json(resultData);
   } catch (err: any) {
-    console.error('Military details error:', err);
-    return res.status(500).json({ success: false, error: err.message || 'Failed fetching military details' });
+    console.error("Military details error:", err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Failed fetching military details",
+    });
   }
 });
 
-// Preset 6 Military Units for automatic 02:55 cron snapshot
+// Helper to find the baseline snapshot for the current daily reset cycle (02:55 TSİ)
+function findBaselineForCurrentCycleServer(
+  snapshots: Record<string, any>,
+  targetMuId: string,
+) {
+  return findBaselineForCurrentCycle(snapshots, targetMuId);
+}
+
+// Preset Military Units for automatic 02:55 cron snapshot
 const PRESET_MILITARY_UNITS = [
-  { id: '69c229c4449287ea1a26a5b3', name: 'Turkic Tribe' },
-  { id: '689f69064e095b8b9f1b885a', name: 'ASHINA' },
-  { id: '68bc9bcb4870c8e343e42855', name: 'ASHINA Reserve' },
-  { id: '690088ce4864a132a2d92d07', name: 'Legio Panthera' },
-  { id: '6902269a560184d196a6fba8', name: 'BEASTs' },
-  { id: '6a0f1495478fe2a58d2868d6', name: 'Deliler' },
+  { id: "69c229c4449287ea1a26a5b3", name: "Turkic Tribe" },
+  { id: "689f69064e095b8b9f1b885a", name: "ASHINA" },
+  { id: "68bc9bcb4870c8e343e42855", name: "ASHINA Reserve" },
+  { id: "690088ce4864a132a2d92d07", name: "Legio Panthera" },
+  { id: "6902269a560184d196a6fba8", name: "BEASTs" },
+  { id: "6a0f1495478fe2a58d2868d6", name: "Deliler" },
+  { id: "68e0f3b86351b310a982d79e", name: "WAVVE" },
+  { id: "693d20605669127e9d45f9b8", name: "DTX" },
 ];
 
 declare global {
@@ -1719,13 +2049,13 @@ declare global {
 }
 
 function getSnapshotsFilePath(): string {
-  const dir = path.join(process.cwd(), 'data');
+  const dir = path.join(process.cwd(), "data");
   if (!fs.existsSync(dir)) {
     try {
       fs.mkdirSync(dir, { recursive: true });
     } catch (_) {}
   }
-  return path.join(dir, 'daily_snapshots.json');
+  return path.join(dir, "daily_snapshots.json");
 }
 
 function readSnapshotsFromDisk(): Record<string, any> {
@@ -1735,13 +2065,13 @@ function readSnapshotsFromDisk(): Record<string, any> {
   try {
     const filePath = getSnapshotsFilePath();
     if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
+      const content = fs.readFileSync(filePath, "utf-8");
       const parsed = JSON.parse(content);
       global.__DAILY_DAMAGE_SNAPSHOTS__ = parsed;
       return parsed;
     }
   } catch (err) {
-    console.error('Error reading snapshots from disk:', err);
+    console.error("Error reading snapshots from disk:", err);
   }
   return {};
 }
@@ -1750,9 +2080,9 @@ function writeSnapshotsToDisk(data: Record<string, any>) {
   global.__DAILY_DAMAGE_SNAPSHOTS__ = data;
   try {
     const filePath = getSnapshotsFilePath();
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
   } catch (err) {
-    console.error('Error writing snapshots to disk:', err);
+    console.error("Error writing snapshots to disk:", err);
   }
 }
 
@@ -1764,16 +2094,28 @@ async function readSnapshotsWithSupabaseServer(): Promise<Record<string, any>> {
       const merged = { ...diskStore, ...supabaseStore };
       global.__DAILY_DAMAGE_SNAPSHOTS__ = merged;
       return merged;
+    } else if (
+      isSupabaseConnected() &&
+      diskStore &&
+      Object.keys(diskStore).length > 0
+    ) {
+      for (const d of Object.keys(diskStore)) {
+        try {
+          await saveSnapshotToSupabase(diskStore[d]);
+        } catch (_) {}
+      }
     }
   } catch (err) {
-    console.error('Error fetching snapshots from Supabase in server:', err);
+    console.error("Error fetching snapshots from Supabase in server:", err);
   }
   return diskStore;
 }
 
 async function snapshotAllArmies() {
   const now = new Date();
-  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(now);
+  const dateStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+  }).format(now);
   const timestamp = now.getTime();
 
   let currentStore = await readSnapshotsWithSupabaseServer();
@@ -1796,19 +2138,21 @@ async function snapshotAllArmies() {
       if (!muData) continue;
 
       const members: string[] = muData.members || [];
-      const armyTotalWeekly = muData.rankings?.muWeeklyDamages?.value || 0;
 
       const chunks: string[][] = [];
       for (let i = 0; i < members.length; i += 10) {
         chunks.push(members.slice(i, i + 10));
       }
 
-      const memberDamages: Record<string, { username: string; weeklyDamage: number }> = {};
+      const memberDamages: Record<
+        string,
+        { username: string; weeklyDamage: number }
+      > = {};
 
       await Promise.all(
         chunks.map(async (chunk) => {
           try {
-            const endpoints = chunk.map(() => 'user.getUserById').join(',');
+            const endpoints = chunk.map(() => "user.getUserById").join(",");
             const batchInput: Record<string, { userId: string }> = {};
             chunk.forEach((id, idx) => {
               batchInput[idx.toString()] = { userId: id };
@@ -1822,7 +2166,7 @@ async function snapshotAllArmies() {
                   const u = item?.result?.data?.json || item?.result?.data;
                   if (u?._id) {
                     memberDamages[u._id] = {
-                      username: u.username || 'Bilinmeyen Asker',
+                      username: u.username || "Bilinmeyen Asker",
                       weeklyDamage: u.rankings?.weeklyUserDamages?.value || 0,
                     };
                   }
@@ -1830,7 +2174,12 @@ async function snapshotAllArmies() {
               }
             }
           } catch (_) {}
-        })
+        }),
+      );
+
+      const armyTotalWeekly = Object.values(memberDamages).reduce(
+        (total, member) => total + member.weeklyDamage,
+        0,
       );
 
       currentStore[dateStr].armies[mu.id] = {
@@ -1853,7 +2202,7 @@ async function snapshotAllArmies() {
   try {
     supabaseSaved = await saveSnapshotToSupabase(currentStore[dateStr]);
   } catch (err) {
-    console.warn('Could not persist snapshot to Supabase:', err);
+    console.warn("Could not persist snapshot to Supabase:", err);
   }
 
   return {
@@ -1864,9 +2213,9 @@ async function snapshotAllArmies() {
 }
 
 // API Route: Combat & Telemetry (Günlük Hasar & Telemetri Takip)
-app.get('/api/combat-telemetry', async (req, res) => {
+app.get("/api/combat-telemetry", async (req, res) => {
   const targetMuId = (req.query.muId as string) || DEFAULT_MU_ID;
-  const forceRefresh = req.query.refresh === 'true';
+  const forceRefresh = req.query.refresh === "true";
 
   const cacheKey = `combat_telemetry_${targetMuId}`;
   const cached = cache.get(cacheKey);
@@ -1879,16 +2228,20 @@ app.get('/api/combat-telemetry', async (req, res) => {
     const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: targetMuId }))}`;
     const muRes = await fetchWarEra(muUrl);
     if (!muRes.ok) {
-      return res.status(502).json({ success: false, error: 'WarEra MU API call failed' });
+      return res
+        .status(502)
+        .json({ success: false, error: "WarEra MU API call failed" });
     }
     const muJson = await muRes.json();
     const muData = muJson?.result?.data?.json || muJson?.result?.data;
     if (!muData) {
-      return res.status(404).json({ success: false, error: 'Military Unit not found' });
+      return res
+        .status(404)
+        .json({ success: false, error: "Military Unit not found" });
     }
 
     const members: string[] = muData.members || [];
-    const leaderId = muData.user || '';
+    const leaderId = muData.user || "";
     const managers: string[] = muData.roles?.managers || [];
     const commanders: string[] = muData.roles?.commanders || [];
 
@@ -1902,7 +2255,7 @@ app.get('/api/combat-telemetry', async (req, res) => {
     await Promise.all(
       chunks.map(async (chunk) => {
         try {
-          const endpoints = chunk.map(() => 'user.getUserById').join(',');
+          const endpoints = chunk.map(() => "user.getUserById").join(",");
           const batchInput: Record<string, { userId: string }> = {};
           chunk.forEach((id, idx) => {
             batchInput[idx.toString()] = { userId: id };
@@ -1921,9 +2274,9 @@ app.get('/api/combat-telemetry', async (req, res) => {
             }
           }
         } catch (uErr) {
-          console.error('Batch user fetch error:', uErr);
+          console.error("Batch user fetch error:", uErr);
         }
-      })
+      }),
     );
 
     // If batching missed some members, fall back to individual fetch for missing
@@ -1943,51 +2296,60 @@ app.get('/api/combat-telemetry', async (req, res) => {
               }
             }
           } catch (_) {}
-        })
+        }),
       );
     }
 
     // 3. Load baseline snapshot from 02:55 cron
     let snapshots = await readSnapshotsWithSupabaseServer();
-    if (Object.keys(snapshots).length === 0) {
-      await snapshotAllArmies();
-      snapshots = await readSnapshotsWithSupabaseServer();
-    }
-    const dates = Object.keys(snapshots).sort();
-    const latestDate = dates[dates.length - 1];
-    const baselineArmy = snapshots[latestDate]?.armies?.[targetMuId];
-    const baselineMembers = baselineArmy?.members || {};
+    const { baselineDate, baselineArmy, baselineMembers, targetResetDate } =
+      findBaselineForCurrentCycleServer(snapshots, targetMuId);
 
-    // 4. Map member telemetry records with REAL daily damage
+    // 4. Map member telemetry records with REAL live daily damage (Current Live Weekly - 02:55 Snapshot Weekly)
     const mappedMembers = allUsers.map((u) => {
       const isLeader = u._id === leaderId;
       const isCommander = commanders.includes(u._id);
       const isManager = managers.includes(u._id);
-      const role = isLeader ? 'leader' : isCommander ? 'commander' : isManager ? 'manager' : 'soldier';
+      const role = isLeader
+        ? "leader"
+        : isCommander
+          ? "commander"
+          : isManager
+            ? "manager"
+            : "soldier";
 
       // Resources
-      const healthCurrent = Number((u.skills?.health?.currentBarValue || 0).toFixed(1));
+      const healthCurrent = Number(
+        (u.skills?.health?.currentBarValue || 0).toFixed(1),
+      );
       const healthMax = u.skills?.health?.value || 100;
-      const healthRegen = Number((u.skills?.health?.hourlyBarRegen || 0).toFixed(1));
+      const healthRegen = Number(
+        (u.skills?.health?.hourlyBarRegen || 0).toFixed(1),
+      );
 
-      const hungerCurrent = Number((u.skills?.hunger?.currentBarValue || 0).toFixed(1));
+      const hungerCurrent = Number(
+        (u.skills?.hunger?.currentBarValue || 0).toFixed(1),
+      );
       const hungerMax = u.skills?.hunger?.value || 10;
-      const hungerRegen = Number((u.skills?.hunger?.hourlyBarRegen || 0).toFixed(1));
+      const hungerRegen = Number(
+        (u.skills?.hunger?.hourlyBarRegen || 0).toFixed(1),
+      );
 
       // Buffs & Pills
       const buffCodes = u.buffs?.buffCodes || [];
       const buffEndAt = u.buffs?.buffEndAt || null;
-      const debuffEndAt = u.buffs?.debuffEndAt || u.attack?.buffs?.debuffEndAt || null;
+      const debuffEndAt =
+        u.buffs?.debuffEndAt || u.attack?.buffs?.debuffEndAt || null;
 
       const now = Date.now();
-      let pillStatus: 'ready' | 'buff' | 'debuff' = 'ready';
+      let pillStatus: "ready" | "buff" | "debuff" = "ready";
       let pillExpiresAt: string | null = null;
 
       if (buffEndAt && new Date(buffEndAt).getTime() > now) {
-        pillStatus = 'buff';
+        pillStatus = "buff";
         pillExpiresAt = buffEndAt;
       } else if (debuffEndAt && new Date(debuffEndAt).getTime() > now) {
-        pillStatus = 'debuff';
+        pillStatus = "debuff";
         pillExpiresAt = debuffEndAt;
       }
 
@@ -1995,27 +2357,19 @@ app.get('/api/combat-telemetry', async (req, res) => {
       const freeReset = u.leveling?.freeReset || 0;
       const lastSkillsResetAt = u.dates?.lastSkillsResetAt || null;
 
-      // Real Daily Damage calculation: Current Weekly Damage - 02:55 Snapshot Weekly Damage
-      const currentWeekly = u.rankings?.weeklyUserDamages?.value || 0;
-      const baselineWeekly = baselineMembers[u._id]?.weeklyDamage;
-
-      let dailyDamage = 0;
-      if (baselineWeekly !== undefined) {
-        if (currentWeekly >= baselineWeekly) {
-          dailyDamage = currentWeekly - baselineWeekly;
-        } else {
-          // In case War Era had a weekly season reset in between
-          dailyDamage = currentWeekly;
-        }
-      } else {
-        // First initial snapshot or brand new member
-        dailyDamage = 0;
-      }
+      // Real Live Daily Damage calculation: Current Weekly - 02:55 Snapshot Weekly
+      const userId = u._id || u.id;
+      const currentWeekly = getCurrentWeeklyDamage(u);
+      const baselineWeekly = baselineMembers[userId]?.weeklyDamage;
+      const dailyDamage = calculateDailyDamageFromSnapshot(
+        currentWeekly,
+        baselineWeekly,
+      );
 
       return {
-        userId: u._id,
-        username: u.username || 'Bilinmeyen Asker',
-        avatarUrl: u.avatarUrl || '',
+        userId,
+        username: u.username || "Bilinmeyen Asker",
+        avatarUrl: u.avatarUrl || "",
         level: u.leveling?.level || 1,
         militaryRank: u.militaryRank || 1,
         role,
@@ -2039,30 +2393,50 @@ app.get('/api/combat-telemetry', async (req, res) => {
           freeReset,
           lastSkillsResetAt,
         },
-        totalDamage: u.rankings?.userDamages?.value || u.stats?.damagesCount || 0,
+        totalDamage:
+          u.rankings?.userDamages?.value || u.stats?.damagesCount || 0,
         weeklyDamage: currentWeekly,
         dailyDamage,
       };
     });
 
     // 5. Compute army resource totals & total daily damage
-    const totalHealthCurrent = Number(mappedMembers.reduce((sum, m) => sum + m.health.current, 0).toFixed(1));
-    const totalHealthMax = mappedMembers.reduce((sum, m) => sum + m.health.max, 0);
-    const totalHungerCurrent = Number(mappedMembers.reduce((sum, m) => sum + m.hunger.current, 0).toFixed(1));
-    const totalHungerMax = mappedMembers.reduce((sum, m) => sum + m.hunger.max, 0);
+    const totalHealthCurrent = Number(
+      mappedMembers.reduce((sum, m) => sum + m.health.current, 0).toFixed(1),
+    );
+    const totalHealthMax = mappedMembers.reduce(
+      (sum, m) => sum + m.health.max,
+      0,
+    );
+    const totalHungerCurrent = Number(
+      mappedMembers.reduce((sum, m) => sum + m.hunger.current, 0).toFixed(1),
+    );
+    const totalHungerMax = mappedMembers.reduce(
+      (sum, m) => sum + m.hunger.max,
+      0,
+    );
 
-    const readyCount = mappedMembers.filter((m) => m.pillStatus === 'ready').length;
-    const buffCount = mappedMembers.filter((m) => m.pillStatus === 'buff').length;
-    const debuffCount = mappedMembers.filter((m) => m.pillStatus === 'debuff').length;
+    const readyCount = mappedMembers.filter(
+      (m) => m.pillStatus === "ready",
+    ).length;
+    const buffCount = mappedMembers.filter(
+      (m) => m.pillStatus === "buff",
+    ).length;
+    const debuffCount = mappedMembers.filter(
+      (m) => m.pillStatus === "debuff",
+    ).length;
 
-    const totalDailyDamage = mappedMembers.reduce((sum, m) => sum + m.dailyDamage, 0);
+    const totalDailyDamage = mappedMembers.reduce(
+      (sum, m) => sum + m.dailyDamage,
+      0,
+    );
 
     const resultData = {
       success: true,
       data: {
         muInfo: {
           id: targetMuId,
-          name: muData.name || 'Turkic Tribe',
+          name: muData.name || "Turkic Tribe",
           memberCount: members.length,
           leaderId,
         },
@@ -2070,12 +2444,22 @@ app.get('/api/combat-telemetry', async (req, res) => {
           health: {
             current: totalHealthCurrent,
             max: totalHealthMax,
-            percentage: totalHealthMax > 0 ? Number(((totalHealthCurrent / totalHealthMax) * 100).toFixed(1)) : 0,
+            percentage:
+              totalHealthMax > 0
+                ? Number(
+                    ((totalHealthCurrent / totalHealthMax) * 100).toFixed(1),
+                  )
+                : 0,
           },
           hunger: {
             current: totalHungerCurrent,
             max: totalHungerMax,
-            percentage: totalHungerMax > 0 ? Number(((totalHungerCurrent / totalHungerMax) * 100).toFixed(1)) : 0,
+            percentage:
+              totalHungerMax > 0
+                ? Number(
+                    ((totalHungerCurrent / totalHungerMax) * 100).toFixed(1),
+                  )
+                : 0,
           },
         },
         pillOverview: {
@@ -2086,9 +2470,14 @@ app.get('/api/combat-telemetry', async (req, res) => {
         },
         dailyDamageInfo: {
           totalDailyDamage,
-          baselineDate: latestDate,
-          baselineTimestamp: snapshots[latestDate]?.timestamp || Date.now(),
-          calculationRule: 'Anlık Haftalık Hasar - 02:55 Snapshot Haftalık Hasar',
+          baselineDate,
+          targetResetDate,
+          baselineTimestamp:
+            baselineDate && snapshots[baselineDate]?.timestamp
+              ? snapshots[baselineDate].timestamp
+              : Date.now(),
+          calculationRule:
+            "Anlık Canlı Haftalık Hasar - 02:55 Snapshot Haftalık Hasar",
         },
         members: mappedMembers,
         generatedAt: new Date().toISOString(),
@@ -2098,30 +2487,35 @@ app.get('/api/combat-telemetry', async (req, res) => {
     cache.set(cacheKey, { data: resultData, timestamp: Date.now() });
     return res.json(resultData);
   } catch (err: any) {
-    console.error('Combat telemetry error:', err);
-    return res.status(500).json({ success: false, error: err.message || 'Failed fetching combat telemetry' });
+    console.error("Combat telemetry error:", err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Failed fetching combat telemetry",
+    });
   }
 });
 
 // API Route: Cron Job endpoint for recording daily damage snapshot (runs at 02:55 TSİ)
-app.all('/api/cron/record-daily-damage', async (req, res) => {
+app.all("/api/cron/record-daily-damage", async (req, res) => {
   try {
     const snapshot = await snapshotAllArmies();
     return res.json({
       success: true,
-      message: '02:55 Günlük Hasar Snapshot başarıyla tamamlandı (6 Ordu).',
+      message: "02:55 Günlük Hasar Snapshot başarıyla tamamlandı (8 Ordu).",
       date: snapshot.date,
       armiesCount: Object.keys(snapshot.armies).length,
       snapshot,
     });
   } catch (err: any) {
-    console.error('Cron job error:', err);
-    return res.status(500).json({ success: false, error: err.message || 'Snapshot failed' });
+    console.error("Cron job error:", err);
+    return res
+      .status(500)
+      .json({ success: false, error: err.message || "Snapshot failed" });
   }
 });
 
 // API Route: Historical daily damage snapshots
-app.get('/api/daily-damage-snapshots', async (req, res) => {
+app.get("/api/daily-damage-snapshots", async (req, res) => {
   let store = await readSnapshotsWithSupabaseServer();
   if (Object.keys(store).length === 0) {
     try {
@@ -2144,28 +2538,84 @@ app.get('/api/daily-damage-snapshots', async (req, res) => {
   });
 });
 
+// API Route: All 8 armies daily damage summary & ranking
+app.get("/api/all-armies-daily-summary", async (req, res) => {
+  try {
+    const { default: handler } =
+      await import("./src/server/handlers/all-armies-daily-summary.js");
+    return handler(req, res);
+  } catch (err: any) {
+    console.error("Error in /api/all-armies-daily-summary:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Management Mode Overview (Ordu Takibi + Bağış Takibi)
+app.get("/api/management-overview", async (req, res) => {
+  try {
+    const { default: handler } =
+      await import("./src/server/handlers/management-overview.js");
+    return handler(req, res);
+  } catch (err: any) {
+    console.error("Error in /api/management-overview:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Secure WarEra Proxy endpoint: executes upstream queries server-side without exposing API tokens to the client
+app.get("/api/warera-proxy", async (req, res) => {
+  try {
+    const endpointPath = req.query.path as string;
+    const input = req.query.input as string;
+    const batch = req.query.batch as string;
+
+    if (!endpointPath) {
+      return res.status(400).json({ error: "Missing path parameter" });
+    }
+
+    let upstreamUrl = `https://api2.warera.io/trpc/${endpointPath}?`;
+    if (batch) {
+      upstreamUrl += `batch=${batch}&`;
+    }
+    if (input) {
+      upstreamUrl += `input=${encodeURIComponent(input)}`;
+    }
+
+    const userApiKey =
+      (req.headers["x-user-api-key"] as string) || (req.query.apiKey as string);
+    const upstreamRes = await fetchWarEra(upstreamUrl, undefined, userApiKey);
+    const data = await upstreamRes.json();
+    return res.status(upstreamRes.status).json(data);
+  } catch (err: any) {
+    console.error("Error in /api/warera-proxy:", err);
+    return res
+      .status(500)
+      .json({ error: err.message || "WarEra Proxy failure" });
+  }
+});
+
 // Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: Date.now() });
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", timestamp: Date.now() });
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-    const { createServer: createViteServer } = await import('vite');
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: 'spa',
+      appType: "spa",
     });
     app.use(vite.middlewares);
   } else if (!process.env.VERCEL) {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 
@@ -2173,32 +2623,49 @@ async function startServer() {
   setInterval(() => {
     try {
       const now = new Date();
-      const parts = new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Europe/Istanbul',
-        hour: '2-digit',
-        minute: '2-digit',
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Istanbul",
+        hour: "2-digit",
+        minute: "2-digit",
         hour12: false,
       }).formatToParts(now);
 
-      const hour = parseInt(parts.find((p) => p.type === 'hour')?.value || '-1', 10);
-      const minute = parseInt(parts.find((p) => p.type === 'minute')?.value || '-1', 10);
+      const hour = parseInt(
+        parts.find((p) => p.type === "hour")?.value || "-1",
+        10,
+      );
+      const minute = parseInt(
+        parts.find((p) => p.type === "minute")?.value || "-1",
+        10,
+      );
 
       if (hour === 2 && minute === 55) {
-        const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(now);
+        const todayStr = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Europe/Istanbul",
+        }).format(now);
         const store = readSnapshotsFromDisk();
         if (!store[todayStr]) {
-          console.log(`[02:55 TSİ CRON] Taking scheduled daily damage snapshot for ${todayStr}...`);
+          console.log(
+            `[02:55 TSİ CRON] Taking scheduled daily damage snapshot for ${todayStr}...`,
+          );
           snapshotAllArmies().catch(console.error);
         }
       }
     } catch (e) {
-      console.error('Error in 02:55 cron runner:', e);
+      console.error("Error in 02:55 cron runner:", e);
     }
   }, 60 * 1000);
 }
 
-if (!process.env.VERCEL) {
-  startServer();
+const invokedScript = process.argv[1] || "";
+const isServerEntrypoint = /(?:^|[\\/])server\.(?:ts|js|cjs)$/.test(
+  invokedScript,
+);
+
+if (isServerEntrypoint && !process.env.VERCEL) {
+  void startServer().catch((err) => {
+    console.error("Failed to start local server:", err);
+  });
 }
 
 export default app;

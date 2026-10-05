@@ -15,6 +15,8 @@ import { MilitaryOverviewSection } from './components/MilitaryOverviewSection';
 import { MilitaryDetailsSection } from './components/MilitaryDetailsSection';
 import { DailyDamageTelemetrySection } from './components/DailyDamageTelemetrySection';
 import { ManagementWipSection, ManagementTab } from './components/ManagementWipSection';
+import { ManagementArmyTrackingSection } from './components/ManagementArmyTrackingSection';
+import { ManagementDonationTrackingSection } from './components/ManagementDonationTrackingSection';
 import { MilitaryUnitData, PlayerStats, ApiResponse } from './types';
 import { 
   fetchMilitaryUnitData, 
@@ -32,6 +34,8 @@ export type ActiveTab =
   | 'combatArmyInfo' 
   | 'combatDetails' 
   | 'combatDamage'
+  | 'mgmtArmies'
+  | 'mgmtDonations'
   | 'mgmtUnit'
   | 'mgmtOrders'
   | 'mgmtTreasury'
@@ -40,12 +44,14 @@ export type ActiveTab =
 export type AppMode = 'economy' | 'combat' | 'management';
 
 export const TAB_TO_SLUG: Record<ActiveTab, string> = {
-  donations: 'bagis-takip',
+  donations: 'bagis-takibi',
   armyStats: 'ordu-istatistikleri',
   countryStats: 'ulke-istatistikleri',
   combatArmyInfo: 'ordu-bilgisi',
   combatDetails: 'detayli-bilgi',
   combatDamage: 'hasar',
+  mgmtArmies: 'ordu-takibi',
+  mgmtDonations: 'yonetim-bagis',
   mgmtUnit: 'birlik-yonetimi',
   mgmtOrders: 'gorev-ve-emirler',
   mgmtTreasury: 'kasa-lojistik',
@@ -59,6 +65,8 @@ export const TAB_TO_MODE: Record<ActiveTab, AppMode> = {
   combatArmyInfo: 'combat',
   combatDetails: 'combat',
   combatDamage: 'combat',
+  mgmtArmies: 'management',
+  mgmtDonations: 'management',
   mgmtUnit: 'management',
   mgmtOrders: 'management',
   mgmtTreasury: 'management',
@@ -72,94 +80,123 @@ const TAB_TITLES: Record<ActiveTab, string> = {
   combatArmyInfo: 'Nizam-ı Türkiye - Ordu Bilgisi (Savaş Modu)',
   combatDetails: 'Nizam-ı Türkiye - Detaylı Bilgi (Savaş Modu)',
   combatDamage: 'Nizam-ı Türkiye - Hasar Telemetrisi (Savaş Modu)',
+  mgmtArmies: 'Nizam-ı Türkiye - Ordu Takibi (Yönetim Modu)',
+  mgmtDonations: 'Nizam-ı Türkiye - Bağış Takibi (Yönetim Modu)',
   mgmtUnit: 'Nizam-ı Türkiye - Birlik Yönetimi (Yönetim Modu)',
   mgmtOrders: 'Nizam-ı Türkiye - Görev & Emirler (Yönetim Modu)',
   mgmtTreasury: 'Nizam-ı Türkiye - Kasa & Lojistik (Yönetim Modu)',
   mgmtDiplomacy: 'Nizam-ı Türkiye - İttifak & Diplomasi (Yönetim Modu)',
 };
 
-export function getTabFromUrl(): ActiveTab {
-  if (typeof window === 'undefined') return 'donations';
-  
-  // Normalize pathname: e.g. "/ordu-istatistikleri" -> "ordu-istatistikleri"
+export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
+  if (typeof window === 'undefined') return { tab: 'donations', muId: null };
+
   const path = window.location.pathname.toLowerCase().replace(/^\/+|\/+$/g, '');
+  const segments = path.split('/').filter(Boolean);
+
+  let tabSlug = segments[0] || '';
+  let urlMuId: string | null = null;
+
+  // 1. Direct hex MU ID in first segment: e.g. "/68e0f3b86351b310a982d79e"
+  if (/^[a-f0-9]{24}$/.test(tabSlug)) {
+    urlMuId = tabSlug;
+    tabSlug = 'bagis-takibi';
+  } else if (segments[1] && /^[a-f0-9]{24}$/.test(segments[1])) {
+    // 2. MU ID in second segment: e.g. "/bagis-takibi/68e0f3b86351b310a982d79e"
+    urlMuId = segments[1];
+  }
+
+  // 3. Search query params fallback: "?muId=..."
+  const searchParams = new URLSearchParams(window.location.search);
+  const queryMuId = searchParams.get('muId');
+  if (!urlMuId && queryMuId && /^[a-f0-9]{24}$/.test(queryMuId.toLowerCase())) {
+    urlMuId = queryMuId.toLowerCase();
+  }
+
+  // 4. Hash fallback: e.g. "#/bagis-takibi/68e0f3b86351b310a982d79e"
   const hash = window.location.hash.toLowerCase().replace(/^#\/?/, '');
-  const segment = path || hash;
-
-  // Yönetim Modu (Management) rotaları
-  if (segment === 'birlik-yonetimi' || segment === 'birlik' || segment === 'unit-management' || segment === 'yonetim') {
-    return 'mgmtUnit';
-  }
-  if (segment === 'gorev-ve-emirler' || segment === 'emirler' || segment === 'orders' || segment === 'gorev') {
-    return 'mgmtOrders';
-  }
-  if (segment === 'kasa-lojistik' || segment === 'kasa' || segment === 'treasury' || segment === 'lojistik') {
-    return 'mgmtTreasury';
-  }
-  if (segment === 'ittifak-diplomasi' || segment === 'diplomasi' || segment === 'diplomacy' || segment === 'ittifak') {
-    return 'mgmtDiplomacy';
+  const hashSegments = hash.split('/').filter(Boolean);
+  if (!tabSlug && hashSegments[0]) {
+    tabSlug = hashSegments[0];
+    if (hashSegments[1] && /^[a-f0-9]{24}$/.test(hashSegments[1])) {
+      urlMuId = hashSegments[1];
+    }
   }
 
-  // Savaş Modu (Combat) rotaları
-  if (segment === 'ordu-bilgisi' || segment === 'ordubilgisi' || segment === 'army-info') {
-    return 'combatArmyInfo';
-  }
-  if (segment === 'detayli-bilgi' || segment === 'detaylibilgi' || segment === 'detailed-info' || segment === 'detay') {
-    return 'combatDetails';
-  }
-  if (segment === 'hasar' || segment === 'damage') {
-    return 'combatDamage';
+  // Map slug to ActiveTab
+  let tab: ActiveTab = 'donations';
+
+  if (tabSlug === 'ordu-takibi' || tabSlug === 'ordu-takip' || tabSlug === 'yonetim-ordu-takibi') {
+    tab = 'mgmtArmies';
+  } else if (tabSlug === 'yonetim-bagis' || tabSlug === 'bagis-hedef' || tabSlug === 'bagis-takibi-yonetim' || tabSlug === 'yonetim-bagis-takibi') {
+    tab = 'mgmtDonations';
+  } else if (tabSlug === 'birlik-yonetimi' || tabSlug === 'birlik' || tabSlug === 'unit-management' || tabSlug === 'yonetim') {
+    tab = 'mgmtArmies';
+  } else if (tabSlug === 'gorev-ve-emirler' || tabSlug === 'emirler' || tabSlug === 'orders' || tabSlug === 'gorev') {
+    tab = 'mgmtOrders';
+  } else if (tabSlug === 'kasa-lojistik' || tabSlug === 'kasa' || tabSlug === 'treasury' || tabSlug === 'lojistik') {
+    tab = 'mgmtDonations';
+  } else if (tabSlug === 'ittifak-diplomasi' || tabSlug === 'diplomasi' || tabSlug === 'diplomacy' || tabSlug === 'ittifak') {
+    tab = 'mgmtDiplomacy';
+  } else if (tabSlug === 'ordu-bilgisi' || tabSlug === 'ordubilgisi' || tabSlug === 'army-info') {
+    tab = 'combatArmyInfo';
+  } else if (tabSlug === 'detayli-bilgi' || tabSlug === 'detaylibilgi' || tabSlug === 'detailed-info' || tabSlug === 'detay') {
+    tab = 'combatDetails';
+  } else if (tabSlug === 'hasar' || tabSlug === 'damage' || tabSlug === 'hasar-takibi' || tabSlug === 'hasar-takip') {
+    tab = 'combatDamage';
+  } else if (
+    tabSlug === 'ordu-istatistikleri' ||
+    tabSlug === 'ordu' ||
+    tabSlug === 'army-stats' ||
+    tabSlug === 'armystats' ||
+    tabSlug === 'army'
+  ) {
+    tab = 'armyStats';
+  } else if (
+    tabSlug === 'ulke-istatistikleri' ||
+    tabSlug === 'ulke' ||
+    tabSlug === 'country-stats' ||
+    tabSlug === 'countrystats' ||
+    tabSlug === 'country'
+  ) {
+    tab = 'countryStats';
+  } else if (
+    tabSlug === 'bagis-takibi' ||
+    tabSlug === 'bagis-takip' ||
+    tabSlug === 'bagis' ||
+    tabSlug === 'donations' ||
+    tabSlug === 'donation'
+  ) {
+    tab = 'donations';
   }
 
-  // Ekonomi Modu (Economy) rotaları
-  if (
-    segment === 'ordu-istatistikleri' ||
-    segment === 'ordu' ||
-    segment === 'army-stats' ||
-    segment === 'armystats' ||
-    segment === 'army'
-  ) {
-    return 'armyStats';
-  }
-  if (
-    segment === 'ulke-istatistikleri' ||
-    segment === 'ulke' ||
-    segment === 'country-stats' ||
-    segment === 'countrystats' ||
-    segment === 'country'
-  ) {
-    return 'countryStats';
-  }
-  if (
-    segment === 'bagis-takip' ||
-    segment === 'bagis' ||
-    segment === 'donations' ||
-    segment === 'donation'
-  ) {
-    return 'donations';
-  }
-  return 'donations';
+  return { tab, muId: urlMuId };
+}
+
+export function getTabFromUrl(): ActiveTab {
+  return getRouteFromUrl().tab;
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>(() => getTabFromUrl());
-  const [muId, setMuId] = useState(() => {
-    return getCookie('warera_last_mu') || DEFAULT_MU_ID;
-  });
+  const initialRoute = useMemo(() => getRouteFromUrl(), []);
+  const initialTargetMu = initialRoute.muId || getCookie('warera_last_mu') || DEFAULT_MU_ID;
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => initialRoute.tab);
+  const [muId, setMuId] = useState<string>(() => initialTargetMu);
 
   // Read initial cached state instantly on mount (0ms instant hydration - zero flicker/reset on refresh)
   const [muData, setMuData] = useState<MilitaryUnitData | null>(() => {
-    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    const cached = getCachedMilitaryUnitData(initialTargetMu);
     return cached?.militaryUnit || null;
   });
 
   const [players, setPlayers] = useState<PlayerStats[]>(() => {
-    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    const cached = getCachedMilitaryUnitData(initialTargetMu);
     return cached?.players || [];
   });
 
   const [aggregated, setAggregated] = useState<ApiResponse['aggregated']>(() => {
-    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    const cached = getCachedMilitaryUnitData(initialTargetMu);
     return (
       cached?.aggregated || {
         totalDonations: 0,
@@ -172,21 +209,21 @@ export default function App() {
 
   // Only show skeleton if we have literally 0 cached players
   const [isLoading, setIsLoading] = useState(() => {
-    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    const cached = getCachedMilitaryUnitData(initialTargetMu);
     return !cached || !cached.players || cached.players.length === 0;
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(() => {
-    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    const cached = getCachedMilitaryUnitData(initialTargetMu);
     return cached?.timestamp || null;
   });
   const [isLiveDonations, setIsLiveDonations] = useState(() => {
-    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    const cached = getCachedMilitaryUnitData(initialTargetMu);
     return Boolean(cached?.isLiveDonations);
   });
   const [hasApiToken, setHasApiToken] = useState(() => {
-    const cached = getCachedMilitaryUnitData(getCookie('warera_last_mu') || DEFAULT_MU_ID);
+    const cached = getCachedMilitaryUnitData(initialTargetMu);
     return Boolean(cached?.hasApiToken);
   });
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -203,18 +240,19 @@ export default function App() {
     return false;
   });
 
-  // Switch tab and synchronize browser URL without page reload
+  // Switch tab and synchronize browser URL with MU ID without page reload
   const handleTabChange = useCallback((newTab: ActiveTab) => {
     setActiveTab(newTab);
     const slug = TAB_TO_SLUG[newTab];
-    const newPath = `/${slug}${window.location.search}`;
-    if (window.location.pathname !== `/${slug}`) {
-      window.history.pushState({ tab: newTab }, '', newPath);
+    const newPath = newTab === 'countryStats' ? `/${slug}${window.location.search}` : `/${slug}/${muId}${window.location.search}`;
+    const expectedPathname = newTab === 'countryStats' ? `/${slug}` : `/${slug}/${muId}`;
+    if (window.location.pathname !== expectedPathname) {
+      window.history.pushState({ tab: newTab, muId }, '', newPath);
     }
     if (TAB_TITLES[newTab]) {
       document.title = TAB_TITLES[newTab];
     }
-  }, []);
+  }, [muId]);
 
   const currentMode: AppMode = TAB_TO_MODE[activeTab] || 'economy';
 
@@ -222,39 +260,44 @@ export default function App() {
     if (newMode === 'combat') {
       handleTabChange('combatArmyInfo');
     } else if (newMode === 'management') {
-      handleTabChange('mgmtUnit');
+      handleTabChange('mgmtArmies');
     } else {
       handleTabChange('donations');
     }
   }, [handleTabChange]);
 
-  // Listen for browser Back/Forward (popstate) navigation & sync URL
+  // Listen for browser Back/Forward (popstate) navigation & sync URL with MU ID
   useEffect(() => {
     const onPopState = () => {
-      const tab = getTabFromUrl();
-      setActiveTab(tab);
-      if (TAB_TITLES[tab]) {
-        document.title = TAB_TITLES[tab];
+      const route = getRouteFromUrl();
+      setActiveTab(route.tab);
+      if (route.muId && route.muId !== muId) {
+        setMuId(route.muId);
+        setCookie('warera_last_mu', route.muId, 365);
+      }
+      if (TAB_TITLES[route.tab]) {
+        document.title = TAB_TITLES[route.tab];
       }
     };
 
     window.addEventListener('popstate', onPopState);
 
     // Initial page title sync
-    const currentTab = getTabFromUrl();
-    if (TAB_TITLES[currentTab]) {
-      document.title = TAB_TITLES[currentTab];
+    const route = getRouteFromUrl();
+    if (TAB_TITLES[route.tab]) {
+      document.title = TAB_TITLES[route.tab];
     }
 
-    // If loaded on root "/", gracefully update URL to "/bagis-takip" so the panel name is visible
+    // If loaded on root "/" or on slug without MU ID, gracefully update URL to include the MU ID
     const currentPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
-    const currentSlug = TAB_TO_SLUG[currentTab];
-    if (currentPath === '') {
-      window.history.replaceState({ tab: currentTab }, '', `/${currentSlug}${window.location.search}`);
+    const currentSlug = TAB_TO_SLUG[route.tab];
+    const targetExpectedPath = route.tab === 'countryStats' ? `/${currentSlug}` : `/${currentSlug}/${muId}`;
+    if (currentPath === '' || currentPath === currentSlug) {
+      window.history.replaceState({ tab: route.tab, muId }, '', `${targetExpectedPath}${window.location.search}`);
     }
 
     return () => window.removeEventListener('popstate', onPopState);
-  }, []);
+  }, [muId]);
 
   // Sync dark mode class on html tag
   useEffect(() => {
@@ -268,10 +311,19 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  // Switch MU and instantly swap to cached state if available
-  const handleMuIdChange = (newId: string) => {
+  // Switch MU and instantly swap to cached state if available + sync URL
+  const handleMuIdChange = useCallback((newId: string) => {
     setMuId(newId);
-    setCookie('warera_last_mu', newId);
+    setCookie('warera_last_mu', newId, 365);
+
+    // Update browser URL path with the new MU ID
+    const slug = TAB_TO_SLUG[activeTab];
+    const newPath = activeTab === 'countryStats' ? `/${slug}${window.location.search}` : `/${slug}/${newId}${window.location.search}`;
+    const expectedPathname = activeTab === 'countryStats' ? `/${slug}` : `/${slug}/${newId}`;
+    if (window.location.pathname !== expectedPathname) {
+      window.history.pushState({ tab: activeTab, muId: newId }, '', newPath);
+    }
+
     const cached = getCachedMilitaryUnitData(newId);
     if (cached && cached.players?.length > 0) {
       setMuData(cached.militaryUnit);
@@ -284,7 +336,7 @@ export default function App() {
     } else {
       setIsLoading(true);
     }
-  };
+  }, [activeTab]);
 
   // Fetch MU Data with smooth background revalidation
   const fetchData = useCallback(
@@ -405,12 +457,17 @@ export default function App() {
 
         {/* Main Content Area */}
         {currentMode === 'management' ? (
-          <ManagementWipSection
-            activeTab={activeTab as ManagementTab}
-            onTabChange={(t) => handleTabChange(t)}
-            onSwitchMode={(m) => handleModeChange(m)}
-            muName={muData?.name}
-          />
+          activeTab === 'mgmtDonations' ? (
+            <ManagementDonationTrackingSection
+              currentMuId={muId}
+              onSelectArmy={handleMuIdChange}
+            />
+          ) : (
+            <ManagementArmyTrackingSection
+              onSelectArmy={handleMuIdChange}
+              onNavigateTab={handleTabChange}
+            />
+          )
         ) : currentMode === 'combat' ? (
           activeTab === 'combatArmyInfo' ? (
             <MilitaryOverviewSection

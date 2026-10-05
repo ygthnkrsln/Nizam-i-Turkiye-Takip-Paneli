@@ -1,41 +1,50 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-  Swords, 
-  Heart, 
-  Flame, 
-  Shield, 
-  Search, 
-  RefreshCw, 
-  Download, 
-  SlidersHorizontal, 
-  Check, 
-  X, 
-  ChevronUp, 
-  ChevronDown, 
-  TrendingUp, 
-  Info, 
-  Clock, 
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import {
+  Swords,
+  Heart,
+  Flame,
+  Shield,
+  Search,
+  RefreshCw,
+  Download,
+  SlidersHorizontal,
+  Check,
+  X,
+  ChevronUp,
+  ChevronDown,
+  TrendingUp,
+  Info,
+  Clock,
   Sparkles,
   AlertCircle,
   FileText,
   Calendar,
-  Database
-} from 'lucide-react';
-import { CombatTelemetryData, CombatMemberTelemetry, DailyDamageSnapshotsResponse } from '../types';
-import { 
-  fetchCombatTelemetry, 
-  getCachedCombatTelemetry, 
-  fetchDailyDamageSnapshots, 
-  triggerDailySnapshotCron 
-} from '../services/wareraApi';
-import { 
-  generateSingleDayPdf, 
-  generateThreeDaysConsolidatedPdf, 
+  Database,
+  Trophy,
+} from "lucide-react";
+import {
+  CombatTelemetryData,
+  CombatMemberTelemetry,
+  DailyDamageSnapshotsResponse,
+  PRESET_MILITARY_UNITS,
+} from "../types";
+import { calculateDailyDamageFromSnapshot } from "../lib/dailyDamage";
+import {
+  fetchCombatTelemetry,
+  getCachedCombatTelemetry,
+  fetchDailyDamageSnapshots,
+  triggerDailySnapshotCron,
+  fetchAllArmiesDailySummary,
+} from "../services/wareraApi";
+import {
+  generateSingleDayPdf,
+  generateThreeDaysConsolidatedPdf,
+  generateAllArmiesTodayPdf,
   MemberHistoryReportItem,
-  ArmyReportMeta 
-} from '../services/pdfReportGenerator';
-import { TurkeyFlagSVG } from './DestinationFlag';
-import { ActiveTab } from '../App';
+  ArmyReportMeta,
+} from "../services/pdfReportGenerator";
+import { TurkeyFlagSVG } from "./DestinationFlag";
+import { ActiveTab } from "../App";
 
 interface DailyDamageTelemetrySectionProps {
   muId: string;
@@ -43,26 +52,34 @@ interface DailyDamageTelemetrySectionProps {
   onNavigateTab: (tab: ActiveTab) => void;
 }
 
-type SortField = 'name' | 'level' | 'pill' | 'damage' | 'health' | 'skillsReset';
-type SortDirection = 'asc' | 'desc';
+type SortField =
+  | "name"
+  | "level"
+  | "pill"
+  | "damage"
+  | "health"
+  | "skillsReset";
+type SortDirection = "asc" | "desc";
 
-export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionProps> = ({
-  muId,
-  onMuIdChange,
-  onNavigateTab,
-}) => {
-  const [data, setData] = useState<CombatTelemetryData | null>(() => getCachedCombatTelemetry(muId));
+export const DailyDamageTelemetrySection: React.FC<
+  DailyDamageTelemetrySectionProps
+> = ({ muId, onMuIdChange, onNavigateTab }) => {
+  const [data, setData] = useState<CombatTelemetryData | null>(() =>
+    getCachedCombatTelemetry(muId),
+  );
   const [isLoading, setIsLoading] = useState(!data);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Search & Filter
-  const [searchQuery, setSearchQuery] = useState('');
-  const [pillFilter, setPillFilter] = useState<'all' | 'ready' | 'buff' | 'debuff'>('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [pillFilter, setPillFilter] = useState<
+    "all" | "ready" | "buff" | "debuff"
+  >("all");
 
   // Sorting
-  const [sortField, setSortField] = useState<SortField>('damage');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortField, setSortField] = useState<SortField>("damage");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   // Column Visibility
   const [visibleColumns, setVisibleColumns] = useState({
@@ -80,7 +97,8 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
   const [pdfFeedback, setPdfFeedback] = useState<string | null>(null);
 
   // Modals
-  const [selectedMember, setSelectedMember] = useState<CombatMemberTelemetry | null>(null);
+  const [selectedMember, setSelectedMember] =
+    useState<CombatMemberTelemetry | null>(null);
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
 
   // Ticking time for live seconds countdown
@@ -96,53 +114,69 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
   // Close dropdowns on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (columnsMenuRef.current && !columnsMenuRef.current.contains(event.target as Node)) {
+      if (
+        columnsMenuRef.current &&
+        !columnsMenuRef.current.contains(event.target as Node)
+      ) {
         setIsColumnsMenuOpen(false);
       }
-      if (pdfMenuRef.current && !pdfMenuRef.current.contains(event.target as Node)) {
+      if (
+        pdfMenuRef.current &&
+        !pdfMenuRef.current.contains(event.target as Node)
+      ) {
         setIsPdfMenuOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const loadData = async (forceRefresh = false) => {
-    if (forceRefresh) {
-      setIsRefreshing(true);
-    } else {
-      const cached = getCachedCombatTelemetry(muId);
-      if (cached) {
-        setData(cached);
-        setIsLoading(false);
-      } else {
-        setIsLoading(true);
-      }
+    // Show cached state immediately if available for 0ms render without blank flicker
+    const cached = getCachedCombatTelemetry(muId);
+    if (cached && !forceRefresh && !data) {
+      setData(cached);
+      setIsLoading(false);
+    } else if (!data && !cached) {
+      setIsLoading(true);
     }
+
+    setIsRefreshing(true);
     setError(null);
 
     try {
-      const telemetry = await fetchCombatTelemetry(muId, forceRefresh);
+      // Always fetch fresh live telemetry from WarEra API against the 02:55 baseline
+      const telemetry = await fetchCombatTelemetry(muId, true);
       setData(telemetry);
     } catch (err: any) {
-      console.error('Error fetching combat telemetry:', err);
-      setError(err.message || 'Telemetri verileri yüklenemedi');
+      console.error("Error fetching combat telemetry:", err);
+      if (!data && !cached) {
+        setError(err.message || "Telemetri verileri yüklenemedi");
+      }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   };
 
+  // Sayfa her açıldığında veya ordu değiştiğinde otomatik canlı güncelleme
   useEffect(() => {
-    loadData();
+    loadData(false);
+    fetchDailyDamageSnapshots()
+      .then(setSnapshotData)
+      .catch(() => {});
+
+    // Sayfa odağı (window focus) geri geldiğinde de arka planda canlı tazeleme
+    const onWindowFocus = () => {
+      loadData(true);
+    };
+    window.addEventListener("focus", onWindowFocus);
+    return () => window.removeEventListener("focus", onWindowFocus);
   }, [muId]);
 
-  const [snapshotData, setSnapshotData] = useState<DailyDamageSnapshotsResponse | null>(null);
+  const [snapshotData, setSnapshotData] =
+    useState<DailyDamageSnapshotsResponse | null>(null);
   const [isSnapshotTriggering, setIsSnapshotTriggering] = useState(false);
-
-  useEffect(() => {
-    fetchDailyDamageSnapshots().then(setSnapshotData).catch(() => {});
-  }, [muId]);
 
   const handleTriggerSnapshot = async () => {
     setIsSnapshotTriggering(true);
@@ -152,7 +186,7 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
       setSnapshotData(updated);
       await loadData(true);
     } catch (e) {
-      console.error('Trigger snapshot error:', e);
+      console.error("Trigger snapshot error:", e);
     } finally {
       setIsSnapshotTriggering(false);
     }
@@ -161,11 +195,40 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
   // Members with real daily damages directly from server's 02:55 snapshot baseline
   const membersWithDailyDamage = useMemo(() => {
     if (!data?.members) return [];
-    return data.members.map((m) => ({
-      ...m,
-      dailyDamage: m.dailyDamage || 0,
-    }));
-  }, [data]);
+
+    const snapshots = snapshotData?.snapshots || {};
+    const dates = Object.keys(snapshots).sort();
+    let baselineMembers: Record<
+      string,
+      { username: string; weeklyDamage: number }
+    > = {};
+    if (dates.length > 0) {
+      const targetDate =
+        data.dailyDamageInfo?.baselineDate || dates[dates.length - 1];
+      baselineMembers = snapshots[targetDate]?.armies?.[muId]?.members || {};
+    }
+
+    return data.members.map((m) => {
+      let dDamage = m.dailyDamage;
+      // Client-side verification against snapshot if dailyDamage is not supplied or 0
+      if (
+        (dDamage === undefined || dDamage === 0) &&
+        baselineMembers[m.userId]
+      ) {
+        const baseWeekly = baselineMembers[m.userId]?.weeklyDamage;
+        if (baseWeekly !== undefined) {
+          dDamage = calculateDailyDamageFromSnapshot(
+            m.weeklyDamage,
+            baseWeekly,
+          );
+        }
+      }
+      return {
+        ...m,
+        dailyDamage: dDamage || 0,
+      };
+    });
+  }, [data, snapshotData, muId]);
 
   // Total daily damage of the army (sum of real member daily damages)
   const totalArmyDailyDamage = useMemo(() => {
@@ -183,27 +246,27 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
   };
 
   const formatCountdown = (ms: number) => {
-    if (ms <= 0) return '00h 00m 00s';
+    if (ms <= 0) return "00h 00m 00s";
     const totalSecs = Math.floor(ms / 1000);
     const hours = Math.floor(totalSecs / 3600);
     const minutes = Math.floor((totalSecs % 3600) / 60);
     const seconds = totalSecs % 60;
-    return `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
+    return `${hours.toString().padStart(2, "0")}h ${minutes.toString().padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`;
   };
 
   // Skills reset cooldown helper (7 days cooldown from lastSkillsResetAt)
   const getSkillsResetInfo = (m: CombatMemberTelemetry) => {
     if (m.skillsReset.freeReset >= 1) {
-      return { isReady: true, label: 'Hemen' };
+      return { isReady: true, label: "Hemen" };
     }
     if (!m.skillsReset.lastSkillsResetAt) {
-      return { isReady: true, label: 'Hemen' };
+      return { isReady: true, label: "Hemen" };
     }
     const lastReset = new Date(m.skillsReset.lastSkillsResetAt).getTime();
     const cooldownEnd = lastReset + 7 * 24 * 60 * 60 * 1000;
     const diff = cooldownEnd - nowTime;
     if (diff <= 0) {
-      return { isReady: true, label: 'Hemen' };
+      return { isReady: true, label: "Hemen" };
     }
 
     const days = Math.floor(diff / (24 * 3600 * 1000));
@@ -221,7 +284,7 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
     if (dmg >= 1e9) return `${(dmg / 1e9).toFixed(2)}B`;
     if (dmg >= 1e6) return `${(dmg / 1e6).toFixed(2)}M`;
     if (dmg >= 1e3) return `${(dmg / 1e3).toFixed(1)}K`;
-    return dmg.toLocaleString('tr-TR');
+    return dmg.toLocaleString("tr-TR");
   };
 
   const formatCompactK = (num: number) => {
@@ -230,16 +293,20 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
   };
 
   const formatTimeTr = (date: Date = new Date()) => {
-    return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return date.toLocaleTimeString("tr-TR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
   };
 
   // Sort handler
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
       setSortField(field);
-      setSortDirection('desc');
+      setSortDirection("desc");
     }
   };
 
@@ -247,7 +314,7 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
   const filteredAndSortedMembers = useMemo(() => {
     let list = membersWithDailyDamage.filter((m) => {
       // Pill filter
-      if (pillFilter !== 'all' && m.pillStatus !== pillFilter) return false;
+      if (pillFilter !== "all" && m.pillStatus !== pillFilter) return false;
 
       // Search query
       if (searchQuery.trim()) {
@@ -262,19 +329,19 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
 
     list.sort((a, b) => {
       let comparison = 0;
-      if (sortField === 'name') {
+      if (sortField === "name") {
         comparison = a.username.localeCompare(b.username);
-      } else if (sortField === 'level') {
+      } else if (sortField === "level") {
         comparison = a.level - b.level;
-      } else if (sortField === 'damage') {
+      } else if (sortField === "damage") {
         comparison = a.dailyDamage - b.dailyDamage;
-      } else if (sortField === 'health') {
+      } else if (sortField === "health") {
         comparison = a.health.current - b.health.current;
-      } else if (sortField === 'pill') {
+      } else if (sortField === "pill") {
         const aMs = getPillRemainingMs(a.pillExpiresAt);
         const bMs = getPillRemainingMs(b.pillExpiresAt);
         comparison = aMs - bMs;
-      } else if (sortField === 'skillsReset') {
+      } else if (sortField === "skillsReset") {
         const aInfo = getSkillsResetInfo(a);
         const bInfo = getSkillsResetInfo(b);
         const aMs = aInfo.isReady ? 0 : aInfo.remainingMs || 0;
@@ -282,24 +349,37 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
         comparison = aMs - bMs;
       }
 
-      return sortDirection === 'asc' ? comparison : -comparison;
+      return sortDirection === "asc" ? comparison : -comparison;
     });
 
     return list;
-  }, [membersWithDailyDamage, pillFilter, searchQuery, sortField, sortDirection, nowTime]);
+  }, [
+    membersWithDailyDamage,
+    pillFilter,
+    searchQuery,
+    sortField,
+    sortDirection,
+    nowTime,
+  ]);
 
   // 3-Day History Dates & Member Records for PDF Export
   const threeDayReportData = useMemo(() => {
     const now = new Date();
-    const d3 = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(now);
-    
+    const d3 = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Istanbul",
+    }).format(now);
+
     // Yesterday
     const d2Date = new Date(now.getTime() - 24 * 3600 * 1000);
-    const d2 = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(d2Date);
+    const d2 = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Istanbul",
+    }).format(d2Date);
 
     // 2 Days Ago
     const d1Date = new Date(now.getTime() - 48 * 3600 * 1000);
-    const d1 = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(d1Date);
+    const d1 = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Istanbul",
+    }).format(d1Date);
 
     const dates: [string, string, string] = [d1, d2, d3];
 
@@ -314,24 +394,22 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
       const day3Damage = m.dailyDamage || 0;
 
       // Yesterday (Day 2)
-      let day2Damage = 0;
-      if (d3Snap[m.userId] && d2Snap[m.userId]) {
-        day2Damage = Math.max(0, d3Snap[m.userId].weeklyDamage - d2Snap[m.userId].weeklyDamage);
-      } else if (d2Snap[m.userId]) {
-        day2Damage = Math.round(d2Snap[m.userId].weeklyDamage / 7);
-      } else {
-        day2Damage = Math.round(day3Damage * 0.92);
-      }
+      const day2Damage =
+        d3Snap[m.userId] && d2Snap[m.userId]
+          ? calculateDailyDamageFromSnapshot(
+              d3Snap[m.userId].weeklyDamage,
+              d2Snap[m.userId].weeklyDamage,
+            )
+          : 0;
 
       // 2 Days Ago (Day 1)
-      let day1Damage = 0;
-      if (d2Snap[m.userId] && d1Snap[m.userId]) {
-        day1Damage = Math.max(0, d2Snap[m.userId].weeklyDamage - d1Snap[m.userId].weeklyDamage);
-      } else if (d1Snap[m.userId]) {
-        day1Damage = Math.round(d1Snap[m.userId].weeklyDamage / 7);
-      } else {
-        day1Damage = Math.round(day2Damage * 0.88);
-      }
+      const day1Damage =
+        d2Snap[m.userId] && d1Snap[m.userId]
+          ? calculateDailyDamageFromSnapshot(
+              d2Snap[m.userId].weeklyDamage,
+              d1Snap[m.userId].weeklyDamage,
+            )
+          : 0;
 
       const total3DayDamage = day1Damage + day2Damage + day3Damage;
 
@@ -363,12 +441,12 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
     setIsPdfMenuOpen(false);
     try {
       const meta: ArmyReportMeta = {
-        muName: data?.muInfo?.name || 'Turkic Tribe',
+        muName: data?.muInfo?.name || "Turkic Tribe",
         muId,
         memberCount: membersWithDailyDamage.length,
         totalDamage: totalArmyDailyDamage,
         dateStr: threeDayReportData.dates[2],
-        reportType: 'singleDay',
+        reportType: "singleDay",
       };
       const members = membersWithDailyDamage.map((m) => ({
         username: m.username,
@@ -379,23 +457,28 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
         pillStatus: m.pillStatus,
       }));
       generateSingleDayPdf(meta, members);
-      notifyPdfSuccess(`Bugünün (${threeDayReportData.dates[2]}) PDF raporu başarıyla oluşturuldu ve indirildi.`);
+      notifyPdfSuccess(
+        `Bugünün (${threeDayReportData.dates[2]}) PDF raporu başarıyla oluşturuldu ve indirildi.`,
+      );
     } catch (e) {
-      console.error('PDF export error:', e);
+      console.error("PDF export error:", e);
     }
   };
 
   const handleExportYesterdayPdf = () => {
     setIsPdfMenuOpen(false);
     try {
-      const totalYesterdayDmg = threeDayReportData.items.reduce((s, it) => s + it.day2Damage, 0);
+      const totalYesterdayDmg = threeDayReportData.items.reduce(
+        (s, it) => s + it.day2Damage,
+        0,
+      );
       const meta: ArmyReportMeta = {
-        muName: data?.muInfo?.name || 'Turkic Tribe',
+        muName: data?.muInfo?.name || "Turkic Tribe",
         muId,
         memberCount: threeDayReportData.items.length,
         totalDamage: totalYesterdayDmg,
         dateStr: threeDayReportData.dates[1],
-        reportType: 'singleDay',
+        reportType: "singleDay",
       };
       const members = threeDayReportData.items.map((m) => ({
         username: m.username,
@@ -403,26 +486,31 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
         role: m.role,
         damage: m.day2Damage,
         healthStr: m.currentHealth,
-        pillStatus: 'ready',
+        pillStatus: "ready",
       }));
       generateSingleDayPdf(meta, members);
-      notifyPdfSuccess(`Dünün (${threeDayReportData.dates[1]}) PDF raporu başarıyla oluşturuldu ve indirildi.`);
+      notifyPdfSuccess(
+        `Dünün (${threeDayReportData.dates[1]}) PDF raporu başarıyla oluşturuldu ve indirildi.`,
+      );
     } catch (e) {
-      console.error('PDF export error:', e);
+      console.error("PDF export error:", e);
     }
   };
 
   const handleExportDayBeforeYesterdayPdf = () => {
     setIsPdfMenuOpen(false);
     try {
-      const totalDay1Dmg = threeDayReportData.items.reduce((s, it) => s + it.day1Damage, 0);
+      const totalDay1Dmg = threeDayReportData.items.reduce(
+        (s, it) => s + it.day1Damage,
+        0,
+      );
       const meta: ArmyReportMeta = {
-        muName: data?.muInfo?.name || 'Turkic Tribe',
+        muName: data?.muInfo?.name || "Turkic Tribe",
         muId,
         memberCount: threeDayReportData.items.length,
         totalDamage: totalDay1Dmg,
         dateStr: threeDayReportData.dates[0],
-        reportType: 'singleDay',
+        reportType: "singleDay",
       };
       const members = threeDayReportData.items.map((m) => ({
         username: m.username,
@@ -430,12 +518,14 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
         role: m.role,
         damage: m.day1Damage,
         healthStr: m.currentHealth,
-        pillStatus: 'ready',
+        pillStatus: "ready",
       }));
       generateSingleDayPdf(meta, members);
-      notifyPdfSuccess(`2 gün öncesinin (${threeDayReportData.dates[0]}) PDF raporu başarıyla oluşturuldu ve indirildi.`);
+      notifyPdfSuccess(
+        `2 gün öncesinin (${threeDayReportData.dates[0]}) PDF raporu başarıyla oluşturuldu ve indirildi.`,
+      );
     } catch (e) {
-      console.error('PDF export error:', e);
+      console.error("PDF export error:", e);
     }
   };
 
@@ -443,17 +533,57 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
     setIsPdfMenuOpen(false);
     try {
       const meta: ArmyReportMeta = {
-        muName: data?.muInfo?.name || 'Turkic Tribe',
+        muName: data?.muInfo?.name || "Turkic Tribe",
         muId,
         memberCount: threeDayReportData.items.length,
-        totalDamage: threeDayReportData.items.reduce((s, it) => s + it.total3DayDamage, 0),
+        totalDamage: threeDayReportData.items.reduce(
+          (s, it) => s + it.total3DayDamage,
+          0,
+        ),
         dateStr: `${threeDayReportData.dates[0]} - ${threeDayReportData.dates[2]}`,
-        reportType: 'threeDaysConsolidated',
+        reportType: "threeDaysConsolidated",
       };
-      generateThreeDaysConsolidatedPdf(meta, threeDayReportData.dates, threeDayReportData.items);
-      notifyPdfSuccess('Son 3 günün konsolide / karşılaştırmalı PDF raporu başarıyla indirildi.');
+      generateThreeDaysConsolidatedPdf(
+        meta,
+        threeDayReportData.dates,
+        threeDayReportData.items,
+      );
+      notifyPdfSuccess(
+        "Son 3 günün konsolide / karşılaştırmalı PDF raporu başarıyla indirildi.",
+      );
     } catch (e) {
-      console.error('PDF export error:', e);
+      console.error("PDF export error:", e);
+    }
+  };
+
+  // 5. TÜM ORDULARIN BUGÜNE AİT RAPORU (8 Ordu Hasar Sıralaması)
+  const [isGeneratingAllArmiesPdf, setIsGeneratingAllArmiesPdf] =
+    useState(false);
+  const handleExportAllArmiesTodayPdf = async () => {
+    setIsGeneratingAllArmiesPdf(true);
+    setIsPdfMenuOpen(false);
+    try {
+      const summary = await fetchAllArmiesDailySummary(true);
+      if (!summary || !summary.armies || summary.armies.length === 0) {
+        throw new Error("8 ordu verisi bulunamadı");
+      }
+
+      generateAllArmiesTodayPdf(
+        summary.armies,
+        summary.dateStr,
+        `02:55 TSİ (${summary.baselineDate || "2026-10-03"})`,
+      );
+
+      notifyPdfSuccess(
+        "Tüm 8 ordunun bugünkü hasar sıralaması PDF raporu başarıyla oluşturuldu ve indirildi.",
+      );
+    } catch (e: any) {
+      console.error("All armies PDF export error:", e);
+      notifyPdfSuccess(
+        "Rapor oluşturulurken hata oluştu: " + (e.message || "Bilinmiyor"),
+      );
+    } finally {
+      setIsGeneratingAllArmiesPdf(false);
     }
   };
 
@@ -461,23 +591,53 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
     <div className="w-full space-y-6 text-white font-mono bg-gradient-to-b from-[#1C2830] to-[#162127] p-4 sm:p-5 rounded-2xl border border-rose-500/25 shadow-2xl">
       {/* 1. BAŞLIK VE CANLI SAAT */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-rose-500/20">
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-wide uppercase flex items-center gap-2">
             <span>ORDU HASAR & ÜYE TELEMETRİSİ</span>
-            <span 
+            <span
               className="text-rose-400 hover:text-rose-300 cursor-pointer text-sm"
               title="Canlı War Era tRPC telemetri verileri ve 02:55 cron döngüsüyle sıfırlanan günlük hasar takibi"
             >
               <Info className="w-4 h-4 inline" />
             </span>
           </h1>
+
+          {/* 8 Ordu Seçici Dropdown */}
+          <div className="relative">
+            <select
+              value={muId}
+              onChange={(e) => onMuIdChange(e.target.value)}
+              className="px-3 py-1.5 rounded-xl bg-[#141C21] border border-rose-500/40 text-xs font-bold text-rose-200 hover:border-rose-400 focus:outline-none focus:border-rose-400 cursor-pointer shadow-md transition-colors"
+              title="Aktif orduyu değiştirin (8 Ordu)"
+            >
+              {PRESET_MILITARY_UNITS.map((u) => (
+                <option
+                  key={u.id}
+                  value={u.id}
+                  className="bg-[#182329] text-white"
+                >
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Son Güncelleme Rozeti */}
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#141C21] border border-rose-500/30 text-xs font-mono text-rose-300 shadow-inner">
           <Clock className="w-3.5 h-3.5 text-rose-400" />
           <span>Son Güncelleme: </span>
-          <span className="font-bold text-white">{formatTimeTr(data?.generatedAt ? new Date(data.generatedAt) : new Date())}</span>
+          <span className="font-bold text-white">
+            {formatTimeTr(
+              data?.generatedAt ? new Date(data.generatedAt) : new Date(),
+            )}
+          </span>
+          {isRefreshing && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-rose-300 animate-pulse font-bold ml-1.5 pl-1.5 border-l border-rose-500/30">
+              <RefreshCw className="w-3 h-3 animate-spin text-rose-400" />
+              <span>Canlı Güncelleniyor...</span>
+            </span>
+          )}
         </div>
       </div>
 
@@ -491,7 +651,9 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                 <div className="w-7 h-7 rounded-lg bg-rose-950/60 border border-rose-500/30 flex items-center justify-center text-rose-400">
                   <Swords className="w-3.5 h-3.5" />
                 </div>
-                <span className="text-xs font-bold uppercase tracking-wider">ORDU GÜNLÜK HASARI</span>
+                <span className="text-xs font-bold uppercase tracking-wider">
+                  ORDU GÜNLÜK HASARI
+                </span>
               </div>
 
               <div className="flex items-center gap-1.5 text-[10px]">
@@ -557,7 +719,9 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                 </div>
                 <span>ORDU KAYNAKLARI</span>
               </div>
-              <span className="text-[#BBE1FA]/60 text-[11px]">Can & Açlık Durumu</span>
+              <span className="text-[#BBE1FA]/60 text-[11px]">
+                Can & Açlık Durumu
+              </span>
             </div>
 
             {/* Toplam Can Barı */}
@@ -568,7 +732,8 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                   <span>Toplam Can:</span>
                 </span>
                 <span className="text-white font-bold">
-                  {formatCompactK(data?.resources?.health?.current || 1340)} / {formatCompactK(data?.resources?.health?.max || 2900)}{' '}
+                  {formatCompactK(data?.resources?.health?.current || 1340)} /{" "}
+                  {formatCompactK(data?.resources?.health?.max || 2900)}{" "}
                   <span className="text-cyan-400 font-normal">
                     (%{data?.resources?.health?.percentage || 46.3})
                   </span>
@@ -577,7 +742,9 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
               <div className="h-2.5 w-full rounded-full bg-[#141C21] border border-emerald-500/20 overflow-hidden">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500"
-                  style={{ width: `${Math.min(100, Math.max(5, data?.resources?.health?.percentage || 46.3))}%` }}
+                  style={{
+                    width: `${Math.min(100, Math.max(5, data?.resources?.health?.percentage || 46.3))}%`,
+                  }}
                 />
               </div>
             </div>
@@ -590,7 +757,8 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                   <span>Toplam Açlık / Enerji:</span>
                 </span>
                 <span className="text-white font-bold">
-                  {(data?.resources?.hunger?.current || 64.3).toFixed(1)} / {data?.resources?.hunger?.max || 135}{' '}
+                  {(data?.resources?.hunger?.current || 64.3).toFixed(1)} /{" "}
+                  {data?.resources?.hunger?.max || 135}{" "}
                   <span className="text-amber-300 font-normal">
                     (%{data?.resources?.hunger?.percentage || 47.6})
                   </span>
@@ -599,7 +767,9 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
               <div className="h-2.5 w-full rounded-full bg-[#141C21] border border-amber-500/20 overflow-hidden">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-500"
-                  style={{ width: `${Math.min(100, Math.max(5, data?.resources?.hunger?.percentage || 47.6))}%` }}
+                  style={{
+                    width: `${Math.min(100, Math.max(5, data?.resources?.hunger?.percentage || 47.6))}%`,
+                  }}
                 />
               </div>
             </div>
@@ -634,11 +804,13 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
               {/* Hazır */}
               <button
                 type="button"
-                onClick={() => setPillFilter((prev) => (prev === 'ready' ? 'all' : 'ready'))}
+                onClick={() =>
+                  setPillFilter((prev) => (prev === "ready" ? "all" : "ready"))
+                }
                 className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                  pillFilter === 'ready'
-                    ? 'bg-rose-950/80 border-rose-400 text-white font-bold shadow-md'
-                    : 'bg-[#141C21] hover:bg-[#182329] border-rose-500/25 text-[#BBE1FA]/70'
+                  pillFilter === "ready"
+                    ? "bg-rose-950/80 border-rose-400 text-white font-bold shadow-md"
+                    : "bg-[#141C21] hover:bg-[#182329] border-rose-500/25 text-[#BBE1FA]/70"
                 }`}
               >
                 <div className="flex items-center justify-center gap-1 text-[11px]">
@@ -653,11 +825,13 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
               {/* Buff %60 */}
               <button
                 type="button"
-                onClick={() => setPillFilter((prev) => (prev === 'buff' ? 'all' : 'buff'))}
+                onClick={() =>
+                  setPillFilter((prev) => (prev === "buff" ? "all" : "buff"))
+                }
                 className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                  pillFilter === 'buff'
-                    ? 'bg-emerald-950/80 border-emerald-400 text-emerald-200 font-bold shadow-md'
-                    : 'bg-[#141C21] hover:bg-[#182329] border-emerald-500/30 text-emerald-400'
+                  pillFilter === "buff"
+                    ? "bg-emerald-950/80 border-emerald-400 text-emerald-200 font-bold shadow-md"
+                    : "bg-[#141C21] hover:bg-[#182329] border-emerald-500/30 text-emerald-400"
                 }`}
               >
                 <div className="flex items-center justify-center gap-1 text-[11px]">
@@ -672,11 +846,15 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
               {/* Debuff */}
               <button
                 type="button"
-                onClick={() => setPillFilter((prev) => (prev === 'debuff' ? 'all' : 'debuff'))}
+                onClick={() =>
+                  setPillFilter((prev) =>
+                    prev === "debuff" ? "all" : "debuff",
+                  )
+                }
                 className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                  pillFilter === 'debuff'
-                    ? 'bg-rose-950/80 border-rose-400 text-rose-200 font-bold shadow-md'
-                    : 'bg-[#141C21] hover:bg-[#182329] border-rose-500/30 text-rose-400'
+                  pillFilter === "debuff"
+                    ? "bg-rose-950/80 border-rose-400 text-rose-200 font-bold shadow-md"
+                    : "bg-[#141C21] hover:bg-[#182329] border-rose-500/30 text-rose-400"
                 }`}
               >
                 <div className="flex items-center justify-center gap-1 text-[11px]">
@@ -692,17 +870,23 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
             {/* Tri-Color Segment Bar */}
             <div className="mt-3.5 h-2 w-full rounded-full bg-[#141C21] overflow-hidden flex">
               <div
-                style={{ width: `${((data?.pillOverview?.readyCount || 7) / (data?.members?.length || 21)) * 100}%` }}
+                style={{
+                  width: `${((data?.pillOverview?.readyCount || 7) / (data?.members?.length || 21)) * 100}%`,
+                }}
                 className="bg-slate-500"
                 title={`Hazır: ${data?.pillOverview?.readyCount || 7}`}
               />
               <div
-                style={{ width: `${((data?.pillOverview?.buffCount || 14) / (data?.members?.length || 21)) * 100}%` }}
+                style={{
+                  width: `${((data?.pillOverview?.buffCount || 14) / (data?.members?.length || 21)) * 100}%`,
+                }}
                 className="bg-emerald-400"
                 title={`Buff %60: ${data?.pillOverview?.buffCount || 14}`}
               />
               <div
-                style={{ width: `${((data?.pillOverview?.debuffCount || 0) / (data?.members?.length || 21)) * 100}%` }}
+                style={{
+                  width: `${((data?.pillOverview?.debuffCount || 0) / (data?.members?.length || 21)) * 100}%`,
+                }}
                 className="bg-rose-500"
                 title={`Debuff: ${data?.pillOverview?.debuffCount || 0}`}
               />
@@ -738,7 +922,9 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
             disabled={isRefreshing || isLoading}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-200 font-bold text-xs border border-rose-500/40 transition-all disabled:opacity-50 cursor-pointer shadow-md"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-rose-300 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 text-rose-300 ${isRefreshing ? "animate-spin" : ""}`}
+            />
             <span>Hasar verilerini güncelle</span>
           </button>
 
@@ -778,8 +964,12 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
                     <div>
-                      <div className="font-bold text-xs">Bugünün Raporu (PDF)</div>
-                      <div className="text-[10px] text-[#BBE1FA]/60">{threeDayReportData.dates[2]} • Canlı Telemetri</div>
+                      <div className="font-bold text-xs">
+                        Bugünün Raporu (PDF)
+                      </div>
+                      <div className="text-[10px] text-[#BBE1FA]/60">
+                        {threeDayReportData.dates[2]} • Canlı Telemetri
+                      </div>
                     </div>
                   </div>
                   <Download className="w-3.5 h-3.5 text-rose-400 opacity-60 group-hover:opacity-100" />
@@ -794,8 +984,12 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
                     <div>
-                      <div className="font-bold text-xs">Dünün Raporu (PDF)</div>
-                      <div className="text-[10px] text-[#BBE1FA]/60">{threeDayReportData.dates[1]} • 24 Saatlik Hasar</div>
+                      <div className="font-bold text-xs">
+                        Dünün Raporu (PDF)
+                      </div>
+                      <div className="text-[10px] text-[#BBE1FA]/60">
+                        {threeDayReportData.dates[1]} • 24 Saatlik Hasar
+                      </div>
                     </div>
                   </div>
                   <Download className="w-3.5 h-3.5 text-amber-400 opacity-60 group-hover:opacity-100" />
@@ -810,8 +1004,12 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
                     <div>
-                      <div className="font-bold text-xs">2 Gün Öncesinin Raporu (PDF)</div>
-                      <div className="text-[10px] text-[#BBE1FA]/60">{threeDayReportData.dates[0]} • 24 Saatlik Hasar</div>
+                      <div className="font-bold text-xs">
+                        2 Gün Öncesinin Raporu (PDF)
+                      </div>
+                      <div className="text-[10px] text-[#BBE1FA]/60">
+                        {threeDayReportData.dates[0]} • 24 Saatlik Hasar
+                      </div>
                     </div>
                   </div>
                   <Download className="w-3.5 h-3.5 text-cyan-400 opacity-60 group-hover:opacity-100" />
@@ -831,11 +1029,42 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                           Son 3 Günün Konsolide Raporu
                         </div>
                         <div className="text-[10px] text-rose-400/80">
-                          {threeDayReportData.dates[0]} - {threeDayReportData.dates[2]} Karşılaştırma
+                          {threeDayReportData.dates[0]} -{" "}
+                          {threeDayReportData.dates[2]} Karşılaştırma
                         </div>
                       </div>
                     </div>
                     <Download className="w-3.5 h-3.5 text-rose-300 opacity-80 group-hover:opacity-100" />
+                  </button>
+                </div>
+
+                {/* 5. ⭐ Tüm Orduların Bugüne Ait Raporu (8 Ordu Sıralaması) */}
+                <div className="pt-1.5 border-t border-amber-500/30">
+                  <button
+                    type="button"
+                    onClick={handleExportAllArmiesTodayPdf}
+                    disabled={isGeneratingAllArmiesPdf}
+                    className="w-full text-left px-2.5 py-2 rounded-lg bg-gradient-to-r from-amber-950/70 to-rose-950/80 hover:from-amber-900/90 hover:to-rose-900 border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white flex items-center justify-between group cursor-pointer transition-all shadow-md"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Trophy className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+                      <div>
+                        <div className="font-bold text-xs text-amber-300 group-hover:text-white flex items-center gap-1.5">
+                          <span>Tüm Orduların Bugüne Ait Raporu</span>
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                            8 Ordu
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-amber-200/70">
+                          Bugünkü Canlı Hasar Sıralaması (PDF)
+                        </div>
+                      </div>
+                    </div>
+                    {isGeneratingAllArmiesPdf ? (
+                      <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5 text-amber-300 opacity-80 group-hover:opacity-100" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -864,7 +1093,12 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                   <input
                     type="checkbox"
                     checked={visibleColumns.pill}
-                    onChange={(e) => setVisibleColumns((p) => ({ ...p, pill: e.target.checked }))}
+                    onChange={(e) =>
+                      setVisibleColumns((p) => ({
+                        ...p,
+                        pill: e.target.checked,
+                      }))
+                    }
                     className="accent-rose-500 cursor-pointer"
                   />
                 </label>
@@ -874,7 +1108,12 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                   <input
                     type="checkbox"
                     checked={visibleColumns.resources}
-                    onChange={(e) => setVisibleColumns((p) => ({ ...p, resources: e.target.checked }))}
+                    onChange={(e) =>
+                      setVisibleColumns((p) => ({
+                        ...p,
+                        resources: e.target.checked,
+                      }))
+                    }
                     className="accent-rose-500 cursor-pointer"
                   />
                 </label>
@@ -884,7 +1123,12 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                   <input
                     type="checkbox"
                     checked={visibleColumns.damage}
-                    onChange={(e) => setVisibleColumns((p) => ({ ...p, damage: e.target.checked }))}
+                    onChange={(e) =>
+                      setVisibleColumns((p) => ({
+                        ...p,
+                        damage: e.target.checked,
+                      }))
+                    }
                     className="accent-rose-500 cursor-pointer"
                   />
                 </label>
@@ -894,7 +1138,12 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                   <input
                     type="checkbox"
                     checked={visibleColumns.skillsReset}
-                    onChange={(e) => setVisibleColumns((p) => ({ ...p, skillsReset: e.target.checked }))}
+                    onChange={(e) =>
+                      setVisibleColumns((p) => ({
+                        ...p,
+                        skillsReset: e.target.checked,
+                      }))
+                    }
                     className="accent-rose-500 cursor-pointer"
                   />
                 </label>
@@ -928,13 +1177,17 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
             <tr className="border-b border-rose-500/20 text-[11px] font-bold text-[#BBE1FA]/70 uppercase tracking-wider bg-[#141C21]">
               {/* Sütun 1: Ordu Üyesi */}
               <th
-                onClick={() => handleSort('name')}
+                onClick={() => handleSort("name")}
                 className="p-3.5 cursor-pointer hover:text-rose-300 transition-colors select-none"
               >
                 <div className="flex items-center gap-1.5">
                   <span>ORDU ÜYESİ</span>
                   <span className="text-[10px] text-rose-400">
-                    {sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                    {sortField === "name"
+                      ? sortDirection === "asc"
+                        ? "▲"
+                        : "▼"
+                      : "↕"}
                   </span>
                 </div>
               </th>
@@ -942,13 +1195,17 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
               {/* Sütun 2: Pill */}
               {visibleColumns.pill && (
                 <th
-                  onClick={() => handleSort('pill')}
+                  onClick={() => handleSort("pill")}
                   className="p-3.5 cursor-pointer hover:text-rose-300 transition-colors select-none"
                 >
                   <div className="flex items-center gap-1.5">
                     <span>PILL</span>
                     <span className="text-[10px] text-rose-400">
-                      {sortField === 'pill' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                      {sortField === "pill"
+                        ? sortDirection === "asc"
+                          ? "▲"
+                          : "▼"
+                        : "↕"}
                     </span>
                   </div>
                 </th>
@@ -957,13 +1214,17 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
               {/* Sütun 3: Resources */}
               {visibleColumns.resources && (
                 <th
-                  onClick={() => handleSort('health')}
+                  onClick={() => handleSort("health")}
                   className="p-3.5 cursor-pointer hover:text-rose-300 transition-colors select-none min-w-[240px]"
                 >
                   <div className="flex items-center gap-1.5">
                     <span>RESOURCES</span>
                     <span className="text-[10px] text-rose-400">
-                      {sortField === 'health' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                      {sortField === "health"
+                        ? sortDirection === "asc"
+                          ? "▲"
+                          : "▼"
+                        : "↕"}
                     </span>
                   </div>
                 </th>
@@ -972,13 +1233,17 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
               {/* Sütun 4: Günlük Hasar */}
               {visibleColumns.damage && (
                 <th
-                  onClick={() => handleSort('damage')}
+                  onClick={() => handleSort("damage")}
                   className="p-3.5 cursor-pointer hover:text-rose-300 transition-colors select-none text-right"
                 >
                   <div className="flex items-center justify-end gap-1.5">
                     <span>GÜNLÜK HASAR (DMG)</span>
                     <span className="text-[10px] text-rose-400">
-                      {sortField === 'damage' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                      {sortField === "damage"
+                        ? sortDirection === "asc"
+                          ? "▲"
+                          : "▼"
+                        : "↕"}
                     </span>
                   </div>
                 </th>
@@ -987,13 +1252,17 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
               {/* Sütun 5: Skills Reset */}
               {visibleColumns.skillsReset && (
                 <th
-                  onClick={() => handleSort('skillsReset')}
+                  onClick={() => handleSort("skillsReset")}
                   className="p-3.5 cursor-pointer hover:text-rose-300 transition-colors select-none text-right"
                 >
                   <div className="flex items-center justify-end gap-1.5">
                     <span>SKILLS RESET</span>
                     <span className="text-[10px] text-rose-400">
-                      {sortField === 'skillsReset' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                      {sortField === "skillsReset"
+                        ? sortDirection === "asc"
+                          ? "▲"
+                          : "▼"
+                        : "↕"}
                     </span>
                   </div>
                 </th>
@@ -1008,8 +1277,10 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
               const skillsReset = getSkillsResetInfo(member);
 
               const finishTimeStr = member.pillExpiresAt
-                ? new Date(member.pillExpiresAt).toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul' })
-                : '';
+                ? new Date(member.pillExpiresAt).toLocaleTimeString("tr-TR", {
+                    timeZone: "Europe/Istanbul",
+                  })
+                : "";
 
               return (
                 <tr
@@ -1045,10 +1316,10 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                           <span
                             className={`font-bold truncate ${
                               member.isLeader
-                                ? 'text-amber-300'
+                                ? "text-amber-300"
                                 : member.isManager
-                                ? 'text-rose-300'
-                                : 'text-white'
+                                  ? "text-rose-300"
+                                  : "text-white"
                             }`}
                           >
                             {member.username}
@@ -1058,7 +1329,9 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                           {(member.isLeader || member.isCommander) && (
                             <span
                               className="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-950/80 text-rose-300 border border-rose-500/50 shrink-0"
-                              title={member.isLeader ? 'Birlik Lideri' : 'Komutan'}
+                              title={
+                                member.isLeader ? "Birlik Lideri" : "Komutan"
+                              }
                             >
                               C
                             </span>
@@ -1099,11 +1372,16 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                         <div className="relative h-5 rounded-md bg-[#141C21] border border-emerald-500/30 overflow-hidden flex items-center justify-between px-2">
                           <div
                             className="absolute left-0 top-0 bottom-0 bg-emerald-500/25 transition-all duration-300"
-                            style={{ width: `${Math.min(100, Math.max(5, (member.health.current / (member.health.max || 100)) * 100))}%` }}
+                            style={{
+                              width: `${Math.min(100, Math.max(5, (member.health.current / (member.health.max || 100)) * 100))}%`,
+                            }}
                           />
                           <span className="relative z-10 text-[11px] font-bold text-emerald-300 flex items-center gap-1">
                             <span>💚</span>
-                            <span>{member.health.current.toFixed(1)} / {member.health.max}.0</span>
+                            <span>
+                              {member.health.current.toFixed(1)} /{" "}
+                              {member.health.max}.0
+                            </span>
                           </span>
                           <span className="relative z-10 text-[10px] text-emerald-400 font-bold">
                             ^{member.health.hourlyRegen.toFixed(1)}
@@ -1114,11 +1392,16 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                         <div className="relative h-5 rounded-md bg-[#141C21] border border-rose-500/30 overflow-hidden flex items-center justify-between px-2">
                           <div
                             className="absolute left-0 top-0 bottom-0 bg-rose-500/25 transition-all duration-300"
-                            style={{ width: `${Math.min(100, Math.max(5, (member.hunger.current / (member.hunger.max || 10)) * 100))}%` }}
+                            style={{
+                              width: `${Math.min(100, Math.max(5, (member.hunger.current / (member.hunger.max || 10)) * 100))}%`,
+                            }}
                           />
                           <span className="relative z-10 text-[11px] font-bold text-rose-300 flex items-center gap-1">
                             <span>⚔️</span>
-                            <span>{member.hunger.current.toFixed(1)} / {member.hunger.max}.0</span>
+                            <span>
+                              {member.hunger.current.toFixed(1)} /{" "}
+                              {member.hunger.max}.0
+                            </span>
                           </span>
                           <span className="relative z-10 text-[10px] text-rose-400 font-bold">
                             ^{member.hunger.hourlyRegen.toFixed(1)}
@@ -1156,7 +1439,10 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
 
             {filteredAndSortedMembers.length === 0 && (
               <tr>
-                <td colSpan={5} className="p-8 text-center text-[#BBE1FA]/50 text-xs font-mono">
+                <td
+                  colSpan={5}
+                  className="p-8 text-center text-[#BBE1FA]/50 text-xs font-mono"
+                >
                   Arama kriterlerine uygun asker bulunamadı.
                 </td>
               </tr>
@@ -1172,7 +1458,9 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
             <div className="flex items-center justify-between pb-4 border-b border-rose-500/20 mb-4">
               <div className="flex items-center gap-2 text-white">
                 <TrendingUp className="w-5 h-5 text-rose-400" />
-                <h3 className="text-base font-bold uppercase font-mono">Ordu Günlük Hasar Değişimi</h3>
+                <h3 className="text-base font-bold uppercase font-mono">
+                  Ordu Günlük Hasar Değişimi
+                </h3>
               </div>
               <button
                 type="button"
@@ -1186,12 +1474,20 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
             <div className="space-y-4 font-mono">
               <div className="p-4 rounded-xl bg-[#141C21] border border-rose-500/20 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-[#BBE1FA]/60 block">Bugünkü Gerçek Hasar</span>
-                  <span className="text-2xl font-black text-rose-300">{formatDamage(totalArmyDailyDamage)} DMG</span>
+                  <span className="text-xs text-[#BBE1FA]/60 block">
+                    Bugünkü Gerçek Hasar
+                  </span>
+                  <span className="text-2xl font-black text-rose-300">
+                    {formatDamage(totalArmyDailyDamage)} DMG
+                  </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-[#BBE1FA]/60 block">Hesaplama Kuralı</span>
-                  <span className="text-rose-400 font-bold text-xs">Haftalık Hasar - 02:55 Snapshot</span>
+                  <span className="text-xs text-[#BBE1FA]/60 block">
+                    Hesaplama Kuralı
+                  </span>
+                  <span className="text-rose-400 font-bold text-xs">
+                    Haftalık Hasar - 02:55 Snapshot
+                  </span>
                 </div>
               </div>
 
@@ -1199,7 +1495,9 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
               <div className="p-4 rounded-xl bg-[#141C21] border border-rose-500/20 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-[#BBE1FA]/80 font-bold">02:55 TSİ Snapshot Sistemi</span>
+                    <span className="text-xs text-[#BBE1FA]/80 font-bold">
+                      02:55 TSİ Snapshot Sistemi
+                    </span>
                     {snapshotData?.supabaseConnected ? (
                       <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[9px] font-bold flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
@@ -1218,7 +1516,9 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                     className="px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-500/40 text-[10px] font-bold transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1 shadow-sm"
                     title="02:55 snapshot işlemini şimdi test et"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isSnapshotTriggering ? 'animate-spin' : ''}`} />
+                    <RefreshCw
+                      className={`w-3.5 h-3.5 ${isSnapshotTriggering ? "animate-spin" : ""}`}
+                    />
                     <span>02:55 Snapshot'ı Şimdi Al (Test)</span>
                   </button>
                 </div>
@@ -1226,8 +1526,13 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                 <div className="space-y-2 text-xs">
                   <div className="p-2.5 rounded-lg bg-[#182329] border border-rose-500/30 flex items-center justify-between">
                     <div>
-                      <span className="font-bold text-white block">Aktif Gün ({data?.dailyDamageInfo?.baselineDate || 'Bugün'})</span>
-                      <span className="text-[10px] text-[#BBE1FA]/50">02:55 TSİ döngüsü devrede</span>
+                      <span className="font-bold text-white block">
+                        Aktif Gün (
+                        {data?.dailyDamageInfo?.baselineDate || "Bugün"})
+                      </span>
+                      <span className="text-[10px] text-[#BBE1FA]/50">
+                        02:55 TSİ döngüsü devrede
+                      </span>
                     </div>
                     <span className="text-rose-300 font-bold text-sm">
                       {formatDamage(totalArmyDailyDamage)} DMG
@@ -1239,17 +1544,29 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                       <span className="text-[10px] text-[#BBE1FA]/60 uppercase tracking-wider block font-bold">
                         Kayıtlı Snapshot Günleri ({snapshotData.dates.length})
                       </span>
-                      {snapshotData.dates.slice(-7).reverse().map((d) => {
-                        const armySnap = snapshotData.snapshots[d]?.armies?.[muId];
-                        return (
-                          <div key={d} className="p-2 rounded bg-[#182329] flex items-center justify-between text-xs font-mono border border-rose-500/15">
-                            <span className="text-[#BBE1FA]/70">{d}</span>
-                            <span className="text-white">
-                              Haftalık Baz: <span className="text-rose-300 font-bold">{formatDamage(armySnap?.armyTotalWeeklyDamage || 0)}</span>
-                            </span>
-                          </div>
-                        );
-                      })}
+                      {snapshotData.dates
+                        .slice(-7)
+                        .reverse()
+                        .map((d) => {
+                          const armySnap =
+                            snapshotData.snapshots[d]?.armies?.[muId];
+                          return (
+                            <div
+                              key={d}
+                              className="p-2 rounded bg-[#182329] flex items-center justify-between text-xs font-mono border border-rose-500/15"
+                            >
+                              <span className="text-[#BBE1FA]/70">{d}</span>
+                              <span className="text-white">
+                                Haftalık Baz:{" "}
+                                <span className="text-rose-300 font-bold">
+                                  {formatDamage(
+                                    armySnap?.armyTotalWeeklyDamage || 0,
+                                  )}
+                                </span>
+                              </span>
+                            </div>
+                          );
+                        })}
                     </div>
                   ) : (
                     <div className="py-2 text-center text-[11px] text-[#BBE1FA]/50">
@@ -1297,8 +1614,12 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                 </div>
 
                 <div>
-                  <h3 className="text-base font-bold text-white">{selectedMember.username}</h3>
-                  <span className="text-xs text-[#BBE1FA]/60">#{selectedMember.userId}</span>
+                  <h3 className="text-base font-bold text-white">
+                    {selectedMember.username}
+                  </h3>
+                  <span className="text-xs text-[#BBE1FA]/60">
+                    #{selectedMember.userId}
+                  </span>
                 </div>
               </div>
 
@@ -1314,25 +1635,33 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
             <div className="space-y-3 text-xs">
               <div className="p-3 rounded-xl bg-[#141C21] border border-rose-500/20 flex items-center justify-between">
                 <span className="text-[#BBE1FA]/60">Bugünkü Hasar:</span>
-                <span className="text-base font-bold text-rose-300">{formatDamage(selectedMember.dailyDamage)}</span>
+                <span className="text-base font-bold text-rose-300">
+                  {formatDamage(selectedMember.dailyDamage)}
+                </span>
               </div>
 
               <div className="p-3 rounded-xl bg-[#141C21] border border-rose-500/20 flex items-center justify-between">
                 <span className="text-[#BBE1FA]/60">Toplam Hasar:</span>
-                <span className="font-bold text-white">{formatDamage(selectedMember.totalDamage)}</span>
+                <span className="font-bold text-white">
+                  {formatDamage(selectedMember.totalDamage)}
+                </span>
               </div>
 
               <div className="p-3 rounded-xl bg-[#141C21] border border-rose-500/20 flex items-center justify-between">
                 <span className="text-[#BBE1FA]/60">Can (Health):</span>
                 <span className="text-emerald-400 font-bold">
-                  {selectedMember.health.current.toFixed(1)} / {selectedMember.health.max} (Saatlik: ^{selectedMember.health.hourlyRegen})
+                  {selectedMember.health.current.toFixed(1)} /{" "}
+                  {selectedMember.health.max} (Saatlik: ^
+                  {selectedMember.health.hourlyRegen})
                 </span>
               </div>
 
               <div className="p-3 rounded-xl bg-[#141C21] border border-rose-500/20 flex items-center justify-between">
                 <span className="text-[#BBE1FA]/60">Açlık (Hunger):</span>
                 <span className="text-rose-400 font-bold">
-                  {selectedMember.hunger.current.toFixed(1)} / {selectedMember.hunger.max} (Saatlik: ^{selectedMember.hunger.hourlyRegen})
+                  {selectedMember.hunger.current.toFixed(1)} /{" "}
+                  {selectedMember.hunger.max} (Saatlik: ^
+                  {selectedMember.hunger.hourlyRegen})
                 </span>
               </div>
 
@@ -1341,10 +1670,13 @@ export const DailyDamageTelemetrySection: React.FC<DailyDamageTelemetrySectionPr
                 <span className="font-bold text-white">
                   {getPillRemainingMs(selectedMember.pillExpiresAt) > 0 ? (
                     <span className="text-emerald-400">
-                      💊 {formatCountdown(getPillRemainingMs(selectedMember.pillExpiresAt))}
+                      💊{" "}
+                      {formatCountdown(
+                        getPillRemainingMs(selectedMember.pillExpiresAt),
+                      )}
                     </span>
                   ) : (
-                    'Hazır'
+                    "Hazır"
                   )}
                 </span>
               </div>

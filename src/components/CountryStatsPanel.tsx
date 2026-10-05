@@ -22,6 +22,7 @@ const PRESET_ARMIES = [
   { id: '690088ce4864a132a2d92d07', name: 'Legio Panthera', memberCount: 25, avatarUrl: 'https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png' },
   { id: '6902269a560184d196a6fba8', name: 'BEASTs', memberCount: 25, avatarUrl: 'https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg' },
   { id: '6a0f1495478fe2a58d2868d6', name: 'Deliler', memberCount: 24, avatarUrl: 'https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png' },
+  { id: '68e0f3b86351b310a982d79e', name: 'WAVVE', memberCount: 20, avatarUrl: 'https://media.warera.io/avatars/mu/mu-68e0f3b86351b310a982d79e-1786113114746-rr3s4yb3.png' },
 ];
 
 let sessionCountryStatsCache: CountryStatsResponse | null = null;
