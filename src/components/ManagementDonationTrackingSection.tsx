@@ -132,19 +132,19 @@ export const ManagementDonationTrackingSection: React.FC<
   }).format(yesterdayDate);
 
   return (
-    <div className="w-full space-y-6 text-white font-mono bg-gradient-to-b from-[#1E1911] via-[#161410] to-[#12100E] p-4 sm:p-6 rounded-2xl border border-amber-500/35 shadow-2xl relative">
+    <div className="w-full space-y-6 text-white font-mono bg-gradient-to-b from-[#182329] via-[#141C21] to-[#141C21] p-4 sm:p-6 rounded-2xl border border-emerald-500/35 shadow-2xl relative">
       {/* 1. ÜST BAŞLIK VE TARİH KONTROLLERİ */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-amber-500/20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-emerald-500/20">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-950/80 border border-amber-500/40 flex items-center justify-center text-amber-400">
+            <div className="w-8 h-8 rounded-lg bg-emerald-950/80 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
               <Coins className="w-4 h-4" />
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-white tracking-wide uppercase">
               YÖNETİM BAĞIŞ HEDEF & TAKİP SİSTEMİ
             </h1>
             <span
-              className="text-amber-400 hover:text-amber-300 cursor-pointer text-sm"
+              className="text-emerald-400 hover:text-emerald-300 cursor-pointer text-sm"
               title="Ekonomi modundaki 30+ seviye oyuncuların katsayıları ve tarih bazlı bağış toplama takibi"
             >
               <Info className="w-4 h-4" />
@@ -159,13 +159,13 @@ export const ManagementDonationTrackingSection: React.FC<
 
         {/* Tarih Seçici ve Hızlı Butonlar */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="inline-flex items-center rounded-xl bg-[#141C21] p-1 border border-amber-500/30 text-xs shadow-inner">
+          <div className="inline-flex items-center rounded-xl bg-[#141C21] p-1 border border-emerald-500/30 text-xs shadow-inner">
             <button
               type="button"
               onClick={() => setSelectedDate(todayStr)}
               className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
                 selectedDate === todayStr
-                  ? "bg-amber-950/90 text-amber-300 border border-amber-500/40 shadow-sm"
+                  ? "bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 shadow-sm"
                   : "text-[#BBE1FA]/60 hover:text-white"
               }`}
             >
@@ -176,7 +176,7 @@ export const ManagementDonationTrackingSection: React.FC<
               onClick={() => setSelectedDate(yesterdayStr)}
               className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
                 selectedDate === yesterdayStr
-                  ? "bg-amber-950/90 text-amber-300 border border-amber-500/40 shadow-sm"
+                  ? "bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 shadow-sm"
                   : "text-[#BBE1FA]/60 hover:text-white"
               }`}
             >
@@ -189,7 +189,7 @@ export const ManagementDonationTrackingSection: React.FC<
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-3 py-1.5 rounded-xl bg-[#141C21] border border-amber-500/40 text-xs text-amber-200 focus:outline-none focus:border-amber-400 cursor-pointer font-mono"
+              className="px-3 py-1.5 rounded-xl bg-[#141C21] border border-emerald-500/40 text-xs text-emerald-200 focus:outline-none focus:border-emerald-400 cursor-pointer font-mono"
             />
           </div>
 
@@ -197,10 +197,10 @@ export const ManagementDonationTrackingSection: React.FC<
             type="button"
             onClick={() => loadData(true)}
             disabled={isRefreshing || isLoading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-500/40 text-amber-200 hover:text-white text-xs font-bold transition-all cursor-pointer shadow-md disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-200 hover:text-white text-xs font-bold transition-all cursor-pointer shadow-md disabled:opacity-50"
           >
             <RefreshCw
-              className={`w-3.5 h-3.5 text-amber-400 ${isRefreshing ? "animate-spin" : ""}`}
+              className={`w-3.5 h-3.5 text-emerald-400 ${isRefreshing ? "animate-spin" : ""}`}
             />
             <span>{isRefreshing ? "Hesaplanıyor..." : "Yenile"}</span>
           </button>
@@ -208,17 +208,17 @@ export const ManagementDonationTrackingSection: React.FC<
       </div>
 
       {/* 2. FORMÜL & KURALLAR BİLGİ KUTUSU */}
-      <div className="rounded-xl bg-amber-950/30 border border-amber-500/35 p-3.5 text-xs text-amber-200/90 space-y-1.5 shadow-md">
-        <div className="flex items-center gap-2 font-bold text-amber-300 uppercase tracking-wider text-[11px]">
-          <Info className="w-4 h-4 text-amber-400 shrink-0" />
+      <div className="rounded-xl bg-emerald-950/30 border border-emerald-500/35 p-3.5 text-xs text-emerald-200/90 space-y-1.5 shadow-md">
+        <div className="flex items-center gap-2 font-bold text-emerald-300 uppercase tracking-wider text-[11px]">
+          <Info className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>HEDEF BAĞIŞ HESAPLAMA KRİTERLERİ (EKONOMİ MODU ZORUNLU)</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1 text-[11px] text-[#BBE1FA]/80">
-          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#141C21]/60 border border-amber-500/20">
-            <span className="text-amber-400 font-black">1.5x</span>
+          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#141C21]/60 border border-emerald-500/20">
+            <span className="text-emerald-400 font-black">1.5x</span>
             <span>Ekonomi & 30+ Lv & Servet &lt; 30k</span>
           </div>
-          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#141C21]/60 border border-amber-500/20">
+          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#141C21]/60 border border-emerald-500/20">
             <span className="text-yellow-400 font-black">2.0x</span>
             <span>Ekonomi & 30+ Lv & Servet &ge; 30k</span>
           </div>
@@ -236,16 +236,16 @@ export const ManagementDonationTrackingSection: React.FC<
       {/* 3. İTTİFAK TOPLAM GÖSTERGE KARTLARI (Hedef, Toplanan, Kalan, Başarı) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KART 1: TOPLAM HEDEF BAĞIŞ */}
-        <div className="rounded-xl bg-[#18201B]/80 border border-amber-500/30 p-4 shadow-lg flex flex-col justify-between">
-          <div className="flex items-center justify-between text-amber-400 mb-2">
+        <div className="rounded-xl bg-[#182329]/80 border border-emerald-500/30 p-4 shadow-lg flex flex-col justify-between">
+          <div className="flex items-center justify-between text-emerald-400 mb-2">
             <span className="text-xs font-bold uppercase tracking-wider">
               TOPLAM HEDEF BAĞIŞ
             </span>
-            <Target className="w-4 h-4 text-amber-400" />
+            <Target className="w-4 h-4 text-emerald-400" />
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-amber-300">
+          <div className="text-2xl sm:text-3xl font-black text-emerald-300">
             {alliance?.donations?.totalTarget?.toLocaleString("tr-TR") ?? 0}
-            <span className="text-xs font-normal text-amber-400/80 ml-1.5">
+            <span className="text-xs font-normal text-emerald-400/80 ml-1.5">
               Gold
             </span>
           </div>
@@ -255,7 +255,7 @@ export const ManagementDonationTrackingSection: React.FC<
         </div>
 
         {/* KART 2: TOPLANAN BAĞIŞ */}
-        <div className="rounded-xl bg-[#18201B]/80 border border-emerald-500/30 p-4 shadow-lg flex flex-col justify-between">
+        <div className="rounded-xl bg-[#182329]/80 border border-emerald-500/30 p-4 shadow-lg flex flex-col justify-between">
           <div className="flex items-center justify-between text-emerald-400 mb-2">
             <span className="text-xs font-bold uppercase tracking-wider">
               TOPLANAN BAĞIŞ
@@ -274,7 +274,7 @@ export const ManagementDonationTrackingSection: React.FC<
         </div>
 
         {/* KART 3: KALAN / EKSİK BAĞIŞ */}
-        <div className="rounded-xl bg-[#18201B]/80 border border-rose-500/30 p-4 shadow-lg flex flex-col justify-between">
+        <div className="rounded-xl bg-[#182329]/80 border border-rose-500/30 p-4 shadow-lg flex flex-col justify-between">
           <div className="flex items-center justify-between text-rose-400 mb-2">
             <span className="text-xs font-bold uppercase tracking-wider">
               KALAN / AÇIK
@@ -293,7 +293,7 @@ export const ManagementDonationTrackingSection: React.FC<
         </div>
 
         {/* KART 4: GENEL BAŞARI ORANI */}
-        <div className="rounded-xl bg-[#18201B]/80 border border-cyan-500/30 p-4 shadow-lg flex flex-col justify-between">
+        <div className="rounded-xl bg-[#182329]/80 border border-cyan-500/30 p-4 shadow-lg flex flex-col justify-between">
           <div className="flex items-center justify-between text-cyan-400 mb-2">
             <span className="text-xs font-bold uppercase tracking-wider">
               GENEL BAŞARI ORANI
@@ -308,18 +308,18 @@ export const ManagementDonationTrackingSection: React.FC<
               style={{
                 width: `${Math.min(100, alliance?.donations?.completionPercentage ?? 0)}%`,
               }}
-              className="h-full rounded-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all duration-500"
+              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500"
             />
           </div>
         </div>
       </div>
 
       {/* 4. 8 ORDUNUN HEDEF VE TOPLANAN BAĞIŞ LİSTESİ */}
-      <div className="rounded-xl bg-[#18201B]/90 border border-amber-500/30 overflow-hidden shadow-xl">
-        <div className="p-3.5 bg-[#141C21] border-b border-amber-500/20 flex items-center justify-between flex-wrap gap-2">
+      <div className="rounded-xl bg-[#182329]/90 border border-emerald-500/30 overflow-hidden shadow-xl">
+        <div className="p-3.5 bg-[#141C21] border-b border-emerald-500/20 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <Award className="w-4 h-4 text-amber-400" />
-            <span className="font-bold text-xs uppercase tracking-wider text-amber-200">
+            <Award className="w-4 h-4 text-emerald-400" />
+            <span className="font-bold text-xs uppercase tracking-wider text-emerald-200">
               8 ORDU BAĞIŞ HEDEF & GERÇEKLEŞME TABLOSU ({selectedDate})
             </span>
           </div>
@@ -331,7 +331,7 @@ export const ManagementDonationTrackingSection: React.FC<
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs font-mono">
             <thead>
-              <tr className="bg-[#141C21]/80 border-b border-amber-500/20 text-[#BBE1FA]/70 text-[11px] uppercase tracking-wider">
+              <tr className="bg-[#141C21]/80 border-b border-emerald-500/20 text-[#BBE1FA]/70 text-[11px] uppercase tracking-wider">
                 <th className="py-3 px-4 text-center w-12">#</th>
                 <th className="py-3 px-4">Ordu Adı</th>
                 <th className="py-3 px-4 text-center">30+ Lv & Eko / Toplam</th>
@@ -342,7 +342,7 @@ export const ManagementDonationTrackingSection: React.FC<
                 <th className="py-3 px-4 text-center w-28">Durum</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-amber-500/15">
+            <tbody className="divide-y divide-emerald-500/15">
               {armies.map((army, idx) => {
                 const isSelected = army.muId === activeDrilldownMuId;
                 const d = army.donations;
@@ -353,7 +353,7 @@ export const ManagementDonationTrackingSection: React.FC<
                       <Check className="w-3 h-3" /> Tamamlandı
                     </span>
                   ) : pct >= 50 ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/80 border border-amber-500/40 text-amber-300 text-[10px] font-bold">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold">
                       <Clock className="w-3 h-3" /> Devam Ediyor
                     </span>
                   ) : (
@@ -371,12 +371,12 @@ export const ManagementDonationTrackingSection: React.FC<
                     }}
                     className={`transition-colors cursor-pointer group ${
                       isSelected
-                        ? "bg-amber-950/40 border-l-4 border-l-amber-400"
-                        : "hover:bg-amber-950/20"
+                        ? "bg-emerald-950/40 border-l-4 border-l-emerald-400"
+                        : "hover:bg-emerald-950/20"
                     }`}
                   >
                     {/* Sıra */}
-                    <td className="py-3.5 px-4 text-center font-bold text-amber-400">
+                    <td className="py-3.5 px-4 text-center font-bold text-emerald-400">
                       #{idx + 1}
                     </td>
 
@@ -386,7 +386,7 @@ export const ManagementDonationTrackingSection: React.FC<
                         <img
                           src={army.avatarUrl}
                           alt={army.name}
-                          className="w-8 h-8 rounded-lg object-cover border border-amber-500/30 shrink-0"
+                          className="w-8 h-8 rounded-lg object-cover border border-emerald-500/30 shrink-0"
                           onError={(e) => {
                             (e.currentTarget as HTMLImageElement).src =
                               "https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png";
@@ -394,7 +394,7 @@ export const ManagementDonationTrackingSection: React.FC<
                         />
                         <div>
                           <div
-                            className={`font-bold text-sm transition-colors ${isSelected ? "text-amber-300" : "text-white group-hover:text-amber-300"}`}
+                            className={`font-bold text-sm transition-colors ${isSelected ? "text-emerald-300" : "text-white group-hover:text-emerald-300"}`}
                           >
                             {army.name}
                           </div>
@@ -407,8 +407,8 @@ export const ManagementDonationTrackingSection: React.FC<
 
                     {/* 30+ Seviye / Toplam */}
                     <td className="py-3.5 px-4 text-center">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#141C21] border border-amber-500/30 text-amber-200 text-xs font-bold">
-                        <Users className="w-3 h-3 text-amber-400" />
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#141C21] border border-emerald-500/30 text-emerald-200 text-xs font-bold">
+                        <Users className="w-3 h-3 text-emerald-400" />
                         <span>
                           {d.eligibleMemberCount} / {army.memberCount}
                         </span>
@@ -416,7 +416,7 @@ export const ManagementDonationTrackingSection: React.FC<
                     </td>
 
                     {/* Hedef Bağış */}
-                    <td className="py-3.5 px-4 text-right font-bold text-amber-300">
+                    <td className="py-3.5 px-4 text-right font-bold text-emerald-300">
                       {d.targetDonation.toLocaleString("tr-TR")} Gold
                     </td>
 
@@ -434,7 +434,7 @@ export const ManagementDonationTrackingSection: React.FC<
                     <td className="py-3.5 px-4">
                       <div>
                         <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="font-bold text-amber-300">
+                          <span className="font-bold text-emerald-300">
                             %{pct}
                           </span>
                           <span className="text-[10px] text-[#BBE1FA]/60">
@@ -442,10 +442,10 @@ export const ManagementDonationTrackingSection: React.FC<
                             Asker Tamamladı
                           </span>
                         </div>
-                        <div className="w-full h-2 rounded-full bg-[#141C21] overflow-hidden p-0.5 border border-amber-500/20">
+                        <div className="w-full h-2 rounded-full bg-[#141C21] overflow-hidden p-0.5 border border-emerald-500/20">
                           <div
                             style={{ width: `${Math.min(100, pct)}%` }}
-                            className="h-full rounded-full bg-gradient-to-r from-amber-600 via-amber-400 to-emerald-400 transition-all duration-300"
+                            className="h-full rounded-full bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-400 transition-all duration-300"
                           />
                         </div>
                       </div>
@@ -463,13 +463,13 @@ export const ManagementDonationTrackingSection: React.FC<
 
       {/* 5. SEÇİLİ ORDUNUN ASKER BAZLI DETAY LİSTESİ (Drilldown Table) */}
       {activeArmy && (
-        <div className="rounded-xl bg-[#18201B]/95 border border-amber-500/35 overflow-hidden shadow-2xl mt-4">
-          <div className="p-4 bg-[#141C21] border-b border-amber-500/20 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="rounded-xl bg-[#182329]/95 border border-emerald-500/35 overflow-hidden shadow-2xl mt-4">
+          <div className="p-4 bg-[#141C21] border-b border-emerald-500/20 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <img
                 src={activeArmy.avatarUrl}
                 alt={activeArmy.name}
-                className="w-9 h-9 rounded-lg object-cover border border-amber-400 shrink-0"
+                className="w-9 h-9 rounded-lg object-cover border border-emerald-400 shrink-0"
               />
               <div>
                 <h3 className="font-bold text-base text-white flex items-center gap-2">
@@ -477,13 +477,13 @@ export const ManagementDonationTrackingSection: React.FC<
                     {activeArmy.name} - Asker Bazlı Günlük Hedef & Bağış
                     İncelemesi
                   </span>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-500/40">
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-500/40">
                     {selectedDate}
                   </span>
                 </h3>
                 <p className="text-xs text-[#BBE1FA]/60">
                   Toplam Hedef:{" "}
-                  <strong className="text-amber-300">
+                  <strong className="text-emerald-300">
                     {activeArmy.donations.targetDonation} Gold
                   </strong>{" "}
                   | Toplanan:{" "}
@@ -501,29 +501,29 @@ export const ManagementDonationTrackingSection: React.FC<
             {/* Arama ve Filtre Butonları */}
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-amber-400" />
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-emerald-400" />
                 <input
                   type="text"
                   placeholder="Asker ara..."
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 rounded-lg bg-[#182329] border border-amber-500/30 text-xs text-white placeholder:text-[#BBE1FA]/40 focus:outline-none focus:border-amber-400 w-36 sm:w-48 font-mono"
+                  className="pl-8 pr-3 py-1.5 rounded-lg bg-[#182329] border border-emerald-500/30 text-xs text-white placeholder:text-[#BBE1FA]/40 focus:outline-none focus:border-emerald-400 w-36 sm:w-48 font-mono"
                 />
               </div>
 
               {/* Filtre Switcher */}
-              <div className="inline-flex items-center rounded-lg bg-[#141C21] p-0.5 border border-amber-500/30 text-[11px] flex-wrap">
+              <div className="inline-flex items-center rounded-lg bg-[#141C21] p-0.5 border border-emerald-500/30 text-[11px] flex-wrap">
                 <button
                   type="button"
                   onClick={() => setMemberFilter("all")}
-                  className={`px-2.5 py-1 rounded transition-colors ${memberFilter === "all" ? "bg-amber-950 text-amber-300 font-bold" : "text-[#BBE1FA]/60 hover:text-white"}`}
+                  className={`px-2.5 py-1 rounded transition-colors ${memberFilter === "all" ? "bg-emerald-950 text-emerald-300 font-bold" : "text-[#BBE1FA]/60 hover:text-white"}`}
                 >
                   Tümü ({activeArmy.members.length})
                 </button>
                 <button
                   type="button"
                   onClick={() => setMemberFilter("eligible")}
-                  className={`px-2.5 py-1 rounded transition-colors ${memberFilter === "eligible" ? "bg-amber-950 text-amber-300 font-bold" : "text-[#BBE1FA]/60 hover:text-white"}`}
+                  className={`px-2.5 py-1 rounded transition-colors ${memberFilter === "eligible" ? "bg-emerald-950 text-emerald-300 font-bold" : "text-[#BBE1FA]/60 hover:text-white"}`}
                 >
                   Ekonomi & 30+ Lv ({activeArmy.donations.eligibleMemberCount})
                 </button>
@@ -560,7 +560,7 @@ export const ManagementDonationTrackingSection: React.FC<
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs font-mono">
               <thead>
-                <tr className="bg-[#141C21]/80 border-b border-amber-500/20 text-[#BBE1FA]/70 text-[11px] uppercase tracking-wider">
+                <tr className="bg-[#141C21]/80 border-b border-emerald-500/20 text-[#BBE1FA]/70 text-[11px] uppercase tracking-wider">
                   <th className="py-2.5 px-4 text-center w-12">#</th>
                   <th className="py-2.5 px-4">Asker Adı & Rütbe</th>
                   <th className="py-2.5 px-4 text-center">Mod</th>
@@ -575,7 +575,7 @@ export const ManagementDonationTrackingSection: React.FC<
                   <th className="py-2.5 px-4 text-center w-32">Durum</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-amber-500/15">
+              <tbody className="divide-y divide-emerald-500/15">
                 {filteredMembers.map((m, idx) => {
                   let badge = (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[10px]">
@@ -602,7 +602,7 @@ export const ManagementDonationTrackingSection: React.FC<
                       );
                     } else if (m.status === "partial") {
                       badge = (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/90 border border-amber-500/40 text-amber-300 text-[10px] font-bold">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold">
                           <Clock className="w-3 h-3" /> Kısmi Bağış
                         </span>
                       );
@@ -618,7 +618,7 @@ export const ManagementDonationTrackingSection: React.FC<
                   return (
                     <tr
                       key={m.userId}
-                      className="hover:bg-amber-950/20 transition-colors"
+                      className="hover:bg-emerald-950/20 transition-colors"
                     >
                       <td className="py-2.5 px-4 text-center text-[#BBE1FA]/50">
                         {idx + 1}
@@ -665,7 +665,7 @@ export const ManagementDonationTrackingSection: React.FC<
                           </div>
                         )}
                       </td>
-                      <td className="py-2.5 px-4 text-center font-bold text-amber-300">
+                      <td className="py-2.5 px-4 text-center font-bold text-emerald-300">
                         Lv.{m.level}
                       </td>
                       <td className="py-2.5 px-4 text-right text-[#BBE1FA]/80">
@@ -674,7 +674,7 @@ export const ManagementDonationTrackingSection: React.FC<
                       <td className="py-2.5 px-4 text-center">
                         {m.isEligible ? (
                           <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${m.multiplier === 2 ? "bg-yellow-950 text-yellow-300 border border-yellow-500/30" : "bg-amber-950 text-amber-300 border border-amber-500/30"}`}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${m.multiplier === 2 ? "bg-yellow-950 text-yellow-300 border border-yellow-500/30" : "bg-emerald-950 text-emerald-300 border border-emerald-500/30"}`}
                           >
                             {m.multiplier}x
                           </span>
@@ -684,7 +684,7 @@ export const ManagementDonationTrackingSection: React.FC<
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 px-4 text-right font-bold text-amber-300">
+                      <td className="py-2.5 px-4 text-right font-bold text-emerald-300">
                         {m.targetDonation > 0
                           ? `${m.targetDonation} Gold`
                           : "-"}

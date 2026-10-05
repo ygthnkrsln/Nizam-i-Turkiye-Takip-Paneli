@@ -631,8 +631,6 @@ export const MilitaryDetailsSection: React.FC<MilitaryDetailsSectionProps> = ({
                         </span>
                       ) : null}
 
-                      {/* Kişisel TierBadge */}
-                      <TierBadge tier={member.weeklyTier} />
                     </div>
 
                     {/* Tıklanabilir User ID Rozeti */}
@@ -654,15 +652,6 @@ export const MilitaryDetailsSection: React.FC<MilitaryDetailsSectionProps> = ({
                   </div>
                 </div>
 
-                {/* Sağ: Haftalık Hasar Miktarı */}
-                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-rose-500/15 pt-2 sm:pt-0 shrink-0 font-mono">
-                  <span className="text-[10px] text-[#BBE1FA]/50 sm:text-right block">Haftalık Hasar</span>
-                  <div className="flex items-center gap-1.5 text-rose-400 font-bold text-sm">
-                    <Flame className="w-3.5 h-3.5 text-rose-400" />
-                    <span>{formatDamage(member.weeklyDamage)}</span>
-                    <span className="text-[10px] text-[#BBE1FA]/60">DMG</span>
-                  </div>
-                </div>
               </div>
             );
           })}
@@ -702,7 +691,6 @@ export const MilitaryDetailsSection: React.FC<MilitaryDetailsSectionProps> = ({
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-bold text-white">{selectedMember.username}</h3>
-                    <TierBadge tier={selectedMember.weeklyTier} />
                   </div>
                   <p className="text-xs text-rose-300/80 mt-0.5">{selectedMember.roleLabel}</p>
                 </div>
@@ -738,14 +726,6 @@ export const MilitaryDetailsSection: React.FC<MilitaryDetailsSectionProps> = ({
 
               {/* Stats Cards */}
               <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-xl bg-[#141C21] border border-rose-500/20">
-                  <span className="text-[#BBE1FA]/60 block text-[10px]">Haftalık Hasar</span>
-                  <span className="text-rose-400 font-bold text-base block mt-0.5">
-                    {formatDamage(selectedMember.weeklyDamage)} DMG
-                  </span>
-                  <span className="text-[10px] text-[#BBE1FA]/50">Lig Rank: #{selectedMember.weeklyRank || '-'}</span>
-                </div>
-
                 <div className="p-3 rounded-xl bg-[#141C21] border border-rose-500/20">
                   <span className="text-[#BBE1FA]/60 block text-[10px]">Tüm Zamanlar Hasar</span>
                   <span className="text-amber-400 font-bold text-base block mt-0.5">
