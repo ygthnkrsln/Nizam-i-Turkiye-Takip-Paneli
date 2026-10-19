@@ -2401,10 +2401,12 @@ export async function fetchManagementOverview(
   date?: string,
   forceRefresh = false,
   signal?: AbortSignal,
+  includeDonations = true,
 ): Promise<ManagementOverviewResponse> {
   const params = new URLSearchParams();
   if (date) params.set("date", date);
   if (forceRefresh) params.set("refresh", "true");
+  if (!includeDonations) params.set("donations", "false");
   const queryStr = params.toString() ? `?${params.toString()}` : "";
 
   const sameDate =
@@ -2414,6 +2416,7 @@ export async function fetchManagementOverview(
 
   if (
     !forceRefresh &&
+    includeDonations &&
     managementOverviewClientCache &&
     managementOverviewIncludesRequiredArmies(
       managementOverviewClientCache.data,
@@ -2464,9 +2467,11 @@ export async function fetchManagementOverview(
   let payload: ManagementOverviewResponse = await res.json();
 
   if (!managementOverviewIncludesRequiredArmies(payload)) {
-    throw new Error("Bağış takip verileri eksik; doğru veri alınana kadar gösterim durduruldu.");
+    throw new Error("Yönetim verileri eksik; doğru veri alınana kadar gösterim durduruldu.");
   }
 
-  managementOverviewClientCache = { timestamp: Date.now(), data: payload };
+  if (includeDonations) {
+    managementOverviewClientCache = { timestamp: Date.now(), data: payload };
+  }
   return payload;
 }

@@ -192,6 +192,7 @@ async function processSingleArmy(
   army: { id: string; name: string; avatarUrl: string },
   snapshots: Record<string, any>,
   effectiveDate: string,
+  includeDonations: boolean,
 ) {
   try {
     // Fetch MU
@@ -250,7 +251,9 @@ async function processSingleArmy(
       throw new Error(`Ordu ${army.name}: Tüm üye profilleri alınamadı`);
     }
 
-    // Identify eligible members who have donation obligations
+    // Donation transaction lookups are only needed by the donation panel.
+    // Keeping them out of army tracking avoids coupling its live health data
+    // to the much heavier transaction API workload.
     const eligibleSet = new Set(
       rawUsers
         .filter((u) => {
@@ -276,7 +279,7 @@ async function processSingleArmy(
     for (let i = 0; i < donationUserIds.length; i += donationBatchSize) {
       donationBatches.push(donationUserIds.slice(i, i + donationBatchSize));
     }
-    await mapWithConcurrency(donationBatches, 2, async (batch) => {
+    if (includeDonations) await mapWithConcurrency(donationBatches, 2, async (batch) => {
       const endpoints = batch
         .map(() => "transaction.getPaginatedTransactions")
         .join(",");
@@ -534,6 +537,7 @@ export default async function handler(req: any, res: any) {
 
   const targetDateQuery = (req.query?.date as string) || "";
   const forceRefresh = req.query?.refresh === "true";
+  const includeDonations = req.query?.donations !== "false";
 
   // Determine target date in Turkey timezone YYYY-MM-DD
   const now = new Date();
@@ -550,7 +554,7 @@ export default async function handler(req: any, res: any) {
       ? targetDateQuery
       : todayDateStr;
 
-  const cacheKey = `mgmt_overview_v7_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v8_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return res.status(200).json(cached.data);
@@ -574,10 +578,10 @@ export default async function handler(req: any, res: any) {
     const baselineDate =
       dates.length > 0 ? dates[dates.length - 1] : "2026-10-03";
     // Distribute each parallel request across the configured API keys.
-    const armyOverviews = await Promise.all(
-      PRESET_8_ARMIES.map((army) =>
-        processSingleArmy(army, snapshots, effectiveDate),
-      ),
+    const armyOverviews = await mapWithConcurrency(
+      PRESET_8_ARMIES,
+      4,
+      (army) => processSingleArmy(army, snapshots, effectiveDate, includeDonations),
     );
 
     // Alliance Aggregates

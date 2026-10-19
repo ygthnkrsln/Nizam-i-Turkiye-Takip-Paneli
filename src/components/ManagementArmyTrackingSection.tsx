@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Heart,
   Flame,
@@ -41,19 +41,23 @@ export const ManagementArmyTrackingSection: React.FC<
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const requestInFlight = useRef(false);
 
   const loadData = async (forceRefresh = false) => {
+    if (requestInFlight.current) return;
+    requestInFlight.current = true;
     if (forceRefresh) setIsRefreshing(true);
     else if (!data) setIsLoading(true);
     setError(null);
     try {
-      const res = await fetchManagementOverview(undefined, forceRefresh);
+      const res = await fetchManagementOverview(undefined, forceRefresh, undefined, false);
       setData(res);
       setLastRefreshedAt(new Date());
     } catch (err: any) {
       console.error("Error loading management army tracking:", err);
       setError(err.message || "Veriler alınamadı");
     } finally {
+      requestInFlight.current = false;
       setIsLoading(false);
       setIsRefreshing(false);
     }

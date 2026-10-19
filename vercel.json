@@ -6,6 +6,11 @@
       "schedule": "55 23 * * *"
     }
   ],
+  "functions": {
+    "api/management-overview.ts": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

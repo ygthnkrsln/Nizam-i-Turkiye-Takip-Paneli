@@ -14,7 +14,6 @@ import { WorkInProgressPanel } from './components/WorkInProgressPanel';
 import { MilitaryOverviewSection } from './components/MilitaryOverviewSection';
 import { MilitaryDetailsSection } from './components/MilitaryDetailsSection';
 import { DailyDamageTelemetrySection } from './components/DailyDamageTelemetrySection';
-import { ManagementWipSection, ManagementTab } from './components/ManagementWipSection';
 import { ManagementArmyTrackingSection } from './components/ManagementArmyTrackingSection';
 import { ManagementDonationTrackingSection } from './components/ManagementDonationTrackingSection';
 import { MilitaryUnitData, PlayerStats, ApiResponse } from './types';
@@ -41,7 +40,6 @@ export type ActiveTab =
   | 'mgmtTreasury'
   | 'mgmtDiplomacy';
 
-export type AppMode = 'economy' | 'combat' | 'management';
 
 export const TAB_TO_SLUG: Record<ActiveTab, string> = {
   donations: 'bagis-takibi',
@@ -56,21 +54,6 @@ export const TAB_TO_SLUG: Record<ActiveTab, string> = {
   mgmtOrders: 'gorev-ve-emirler',
   mgmtTreasury: 'kasa-lojistik',
   mgmtDiplomacy: 'ittifak-diplomasi',
-};
-
-export const TAB_TO_MODE: Record<ActiveTab, AppMode> = {
-  donations: 'economy',
-  armyStats: 'economy',
-  countryStats: 'economy',
-  combatArmyInfo: 'combat',
-  combatDetails: 'combat',
-  combatDamage: 'combat',
-  mgmtArmies: 'management',
-  mgmtDonations: 'management',
-  mgmtUnit: 'management',
-  mgmtOrders: 'management',
-  mgmtTreasury: 'management',
-  mgmtDiplomacy: 'management',
 };
 
 const TAB_TITLES: Record<ActiveTab, string> = {
@@ -254,18 +237,6 @@ export default function App() {
     }
   }, [muId]);
 
-  const currentMode: AppMode = TAB_TO_MODE[activeTab] || 'economy';
-
-  const handleModeChange = useCallback((newMode: AppMode) => {
-    if (newMode === 'combat') {
-      handleTabChange('combatArmyInfo');
-    } else if (newMode === 'management') {
-      handleTabChange('mgmtArmies');
-    } else {
-      handleTabChange('donations');
-    }
-  }, [handleTabChange]);
-
   // Listen for browser Back/Forward (popstate) navigation & sync URL with MU ID
   useEffect(() => {
     const onPopState = () => {
@@ -429,13 +400,7 @@ export default function App() {
       {/* Ambient background glow matching the color scheme */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0F4C75]/20 via-transparent to-transparent pointer-events-none" />
 
-      {/* Top Header - With Mode Switcher (Ekonomi vs Savaş) & Dynamic Tabs */}
-      <Header 
-        activeTab={activeTab} 
-        onTabChange={handleTabChange} 
-        currentMode={currentMode}
-        onModeChange={handleModeChange}
-      />
+      <Header activeTab={activeTab} onTabChange={handleTabChange} />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 relative z-10">
@@ -456,43 +421,18 @@ export default function App() {
         )}
 
         {/* Main Content Area */}
-        {currentMode === 'management' ? (
-          activeTab === 'mgmtDonations' ? (
-            <ManagementDonationTrackingSection
-              currentMuId={muId}
-              onSelectArmy={handleMuIdChange}
-            />
-          ) : (
-            <ManagementArmyTrackingSection
-              onSelectArmy={handleMuIdChange}
-              onNavigateTab={handleTabChange}
-            />
-          )
-        ) : currentMode === 'combat' ? (
-          activeTab === 'combatArmyInfo' ? (
-            <MilitaryOverviewSection
-              muId={muId}
-              onMuIdChange={handleMuIdChange}
-              onNavigateTab={handleTabChange}
-            />
-          ) : activeTab === 'combatDetails' ? (
-            <MilitaryDetailsSection
-              muId={muId}
-              onMuIdChange={handleMuIdChange}
-              onNavigateTab={handleTabChange}
-            />
-          ) : activeTab === 'combatDamage' ? (
-            <DailyDamageTelemetrySection
-              muId={muId}
-              onMuIdChange={handleMuIdChange}
-              onNavigateTab={handleTabChange}
-            />
-          ) : (
-            <WorkInProgressPanel
-              activeTab={activeTab}
-              onSwitchToEconomy={() => handleModeChange('economy')}
-            />
-          )
+        {activeTab === 'mgmtArmies' ? (
+          <ManagementArmyTrackingSection onSelectArmy={handleMuIdChange} onNavigateTab={handleTabChange} />
+        ) : activeTab === 'mgmtDonations' ? (
+          <ManagementDonationTrackingSection currentMuId={muId} onSelectArmy={handleMuIdChange} />
+        ) : activeTab === 'combatArmyInfo' ? (
+          <MilitaryOverviewSection muId={muId} onMuIdChange={handleMuIdChange} onNavigateTab={handleTabChange} />
+        ) : activeTab === 'combatDetails' ? (
+          <MilitaryDetailsSection muId={muId} onMuIdChange={handleMuIdChange} onNavigateTab={handleTabChange} />
+        ) : activeTab === 'combatDamage' ? (
+          <DailyDamageTelemetrySection muId={muId} onMuIdChange={handleMuIdChange} onNavigateTab={handleTabChange} />
+        ) : activeTab === 'mgmtUnit' || activeTab === 'mgmtOrders' || activeTab === 'mgmtTreasury' || activeTab === 'mgmtDiplomacy' ? (
+          <WorkInProgressPanel activeTab={activeTab} onSwitchToEconomy={() => handleTabChange('donations')} />
         ) : (
           <>
             {/* Top 4-Column Equal Cards (Army Selector, Active Soldiers, Active Factories, Active Engine Power) - shown in army/donation tabs */}
