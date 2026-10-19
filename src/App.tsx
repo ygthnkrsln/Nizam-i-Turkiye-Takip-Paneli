@@ -165,6 +165,9 @@ export default function App() {
   const initialTargetMu = initialRoute.muId || getCookie('warera_last_mu') || DEFAULT_MU_ID;
 
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => initialRoute.tab);
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= 768,
+  );
   const [muId, setMuId] = useState<string>(() => initialTargetMu);
 
   // Read initial cached state instantly on mount (0ms instant hydration - zero flicker/reset on refresh)
@@ -396,12 +399,18 @@ export default function App() {
   }, [players]);
 
   return (
-    <div className="min-h-screen bg-[#141C21] text-white flex flex-col font-sans relative selection:bg-[#3282B8] selection:text-white">
+    <div className="min-h-screen bg-[#141C21] text-white flex font-sans relative selection:bg-[#3282B8] selection:text-white">
       {/* Ambient background glow matching the color scheme */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0F4C75]/20 via-transparent to-transparent pointer-events-none" />
 
-      <Header activeTab={activeTab} onTabChange={handleTabChange} />
+      <Header
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen((open) => !open)}
+      />
 
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 relative z-10">
         {/* Error Alert */}
@@ -521,6 +530,7 @@ export default function App() {
           </div>
         </div>
       </footer>
+      </div>
     </div>
   );
 }
