@@ -33,14 +33,25 @@ async function mapWithConcurrency<T, R>(
 ): Promise<R[]> {
   const results = new Array<R>(items.length);
   let nextIndex = 0;
+  let hasError = false;
+  let firstError: unknown;
   await Promise.all(
     Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-      while (nextIndex < items.length) {
+      while (nextIndex < items.length && !hasError) {
         const index = nextIndex++;
-        results[index] = await mapper(items[index]);
+        try {
+          results[index] = await mapper(items[index]);
+        } catch (error) {
+          if (!hasError) {
+            hasError = true;
+            firstError = error;
+          }
+          break;
+        }
       }
     }),
   );
+  if (hasError) throw firstError;
   return results;
 }
 
@@ -513,16 +524,18 @@ export default async function handler(req: any, res: any) {
     isValidDate(targetDateQuery)
       ? targetDateQuery
       : todayDateStr;
+  const cacheTtlMs =
+    effectiveDate === todayDateStr ? 30 * 1000 : CACHE_TTL_MS;
 
   const cacheKey = `mgmt_overview_v9_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
-  if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+  if (!forceRefresh && cached && Date.now() - cached.timestamp < cacheTtlMs) {
     return res.status(200).json(cached.data);
   }
 
   if (!forceRefresh) {
     const persisted = await readManagementOverviewCache(cacheKey);
-    if (persisted && Date.now() - persisted.timestamp < CACHE_TTL_MS) {
+    if (persisted && Date.now() - persisted.timestamp < cacheTtlMs) {
       cache.set(cacheKey, {
         timestamp: persisted.timestamp,
         data: persisted.payload,

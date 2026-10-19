@@ -13,7 +13,6 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { formatNumber, formatRelativeTime } from '../utils/formatters';
-import { exportPlayerTableToPDF } from '../utils/exportPdf';
 import { 
   TurkeyFlagSVG, 
   UAEFlagSVG, 
@@ -21,7 +20,7 @@ import {
   CameroonFlagSVG, 
   ArmyFlagSVG 
 } from './DestinationFlag';
-import { getPlayerModeInfo } from './ArmyStatsTable';
+import { getPlayerModeInfo } from '../utils/playerMode';
 
 interface PlayerTableProps {
   players: PlayerStats[];
@@ -201,9 +200,10 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
     );
   };
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
     setIsExporting(true);
     try {
+      const { exportPlayerTableToPDF } = await import('../utils/exportPdf');
       exportPlayerTableToPDF(filteredAndSortedPlayers, muName || 'Turkic Tribe');
     } catch (err) {
       console.error('PDF export error:', err);

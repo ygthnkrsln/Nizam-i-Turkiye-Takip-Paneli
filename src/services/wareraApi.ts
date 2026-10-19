@@ -2356,10 +2356,13 @@ export interface ManagementOverviewResponse {
   armies: ManagementArmyItem[];
 }
 
-let managementOverviewClientCache: {
-  timestamp: number;
-  data: ManagementOverviewResponse;
-} | null = null;
+const managementOverviewClientCache = new Map<
+  string,
+  { timestamp: number; data: ManagementOverviewResponse }
+>();
+const MANAGEMENT_OVERVIEW_CACHE_LIMIT = 8;
+const MANAGEMENT_TODAY_CACHE_TTL_MS = 30 * 1000;
+const MANAGEMENT_HISTORY_CACHE_TTL_MS = 3 * 60 * 1000;
 const MANAGEMENT_REQUIRED_MU_ID = "693d20605669127e9d45f9b8";
 
 function managementOverviewIncludesRequiredArmies(
@@ -2386,22 +2389,24 @@ export async function fetchManagementOverview(
   if (!includeDonations) params.set("donations", "false");
   const queryStr = params.toString() ? `?${params.toString()}` : "";
 
-  const sameDate =
-    !date ||
-    !managementOverviewClientCache ||
-    managementOverviewClientCache.data.effectiveDate === date;
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+  }).format(new Date());
+  const effectiveDate = date || today;
+  const cacheKey = `${includeDonations ? "full" : "armies"}:${effectiveDate}`;
+  const cacheTtlMs =
+    effectiveDate === today
+      ? MANAGEMENT_TODAY_CACHE_TTL_MS
+      : MANAGEMENT_HISTORY_CACHE_TTL_MS;
+  const cached = managementOverviewClientCache.get(cacheKey);
 
   if (
     !forceRefresh &&
-    includeDonations &&
-    managementOverviewClientCache &&
-    managementOverviewIncludesRequiredArmies(
-      managementOverviewClientCache.data,
-    ) &&
-    sameDate &&
-    Date.now() - managementOverviewClientCache.timestamp < 3 * 60 * 1000
+    cached &&
+    managementOverviewIncludesRequiredArmies(cached.data) &&
+    Date.now() - cached.timestamp < cacheTtlMs
   ) {
-    return managementOverviewClientCache.data;
+    return cached.data;
   }
 
   let res = await fetch(`/api/management-overview${queryStr}`, { signal });
@@ -2447,8 +2452,14 @@ export async function fetchManagementOverview(
     throw new Error("Yönetim verileri eksik; doğru veri alınana kadar gösterim durduruldu.");
   }
 
-  if (includeDonations) {
-    managementOverviewClientCache = { timestamp: Date.now(), data: payload };
+  managementOverviewClientCache.delete(cacheKey);
+  managementOverviewClientCache.set(cacheKey, {
+    timestamp: Date.now(),
+    data: payload,
+  });
+  if (managementOverviewClientCache.size > MANAGEMENT_OVERVIEW_CACHE_LIMIT) {
+    const oldestKey = managementOverviewClientCache.keys().next().value;
+    if (oldestKey) managementOverviewClientCache.delete(oldestKey);
   }
   return payload;
 }

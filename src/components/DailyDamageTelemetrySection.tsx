@@ -15,12 +15,9 @@ import {
   TrendingUp,
   Info,
   Clock,
-  Sparkles,
   AlertCircle,
   FileText,
-  Calendar,
   Database,
-  Trophy,
 } from "lucide-react";
 import {
   CombatTelemetryData,
@@ -34,15 +31,8 @@ import {
   getCachedCombatTelemetry,
   fetchDailyDamageSnapshots,
   triggerDailySnapshotCron,
-  fetchAllArmiesDailySummary,
 } from "../services/wareraApi";
-import {
-  generateSingleDayPdf,
-  generateThreeDaysConsolidatedPdf,
-  generateAllArmiesTodayPdf,
-  MemberHistoryReportItem,
-  ArmyReportMeta,
-} from "../services/pdfReportGenerator";
+import type { ArmyReportColumns, ArmyReportMember, ArmyReportMeta } from "../services/pdfReportGenerator";
 import { TurkeyFlagSVG } from "./DestinationFlag";
 import { ActiveTab } from "../App";
 
@@ -362,74 +352,6 @@ export const DailyDamageTelemetrySection: React.FC<
     nowTime,
   ]);
 
-  // 3-Day History Dates & Member Records for PDF Export
-  const threeDayReportData = useMemo(() => {
-    const now = new Date();
-    const d3 = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Istanbul",
-    }).format(now);
-
-    // Yesterday
-    const d2Date = new Date(now.getTime() - 24 * 3600 * 1000);
-    const d2 = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Istanbul",
-    }).format(d2Date);
-
-    // 2 Days Ago
-    const d1Date = new Date(now.getTime() - 48 * 3600 * 1000);
-    const d1 = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Istanbul",
-    }).format(d1Date);
-
-    const dates: [string, string, string] = [d1, d2, d3];
-
-    // Read stored snapshots if available
-    const snaps = snapshotData?.snapshots || {};
-    const d1Snap = snaps[d1]?.armies?.[muId]?.members || {};
-    const d2Snap = snaps[d2]?.armies?.[muId]?.members || {};
-    const d3Snap = snaps[d3]?.armies?.[muId]?.members || {};
-
-    const items: MemberHistoryReportItem[] = membersWithDailyDamage.map((m) => {
-      // Today (Day 3)
-      const day3Damage = m.dailyDamage || 0;
-
-      // Yesterday (Day 2)
-      const day2Damage =
-        d3Snap[m.userId] && d2Snap[m.userId]
-          ? calculateDailyDamageFromSnapshot(
-              d3Snap[m.userId].weeklyDamage,
-              d2Snap[m.userId].weeklyDamage,
-            )
-          : 0;
-
-      // 2 Days Ago (Day 1)
-      const day1Damage =
-        d2Snap[m.userId] && d1Snap[m.userId]
-          ? calculateDailyDamageFromSnapshot(
-              d2Snap[m.userId].weeklyDamage,
-              d1Snap[m.userId].weeklyDamage,
-            )
-          : 0;
-
-      const total3DayDamage = day1Damage + day2Damage + day3Damage;
-
-      return {
-        userId: m.userId,
-        username: m.username,
-        level: m.level,
-        militaryRank: m.militaryRank,
-        role: m.role,
-        day1Damage,
-        day2Damage,
-        day3Damage,
-        total3DayDamage,
-        currentHealth: `${m.health.current.toFixed(1)} / ${m.health.max}`,
-      };
-    });
-
-    return { dates, items };
-  }, [membersWithDailyDamage, snapshotData, muId]);
-
   const notifyPdfSuccess = (msg: string) => {
     setPdfFeedback(msg);
     setTimeout(() => {
@@ -437,153 +359,34 @@ export const DailyDamageTelemetrySection: React.FC<
     }, 4500);
   };
 
-  const handleExportTodayPdf = () => {
+  const handleExportTodayPdf = async () => {
     setIsPdfMenuOpen(false);
     try {
+      const { generateSingleDayPdf } = await import("../services/pdfReportGenerator");
       const meta: ArmyReportMeta = {
         muName: data?.muInfo?.name || "Turkic Tribe",
         muId,
         memberCount: membersWithDailyDamage.length,
         totalDamage: totalArmyDailyDamage,
-        dateStr: threeDayReportData.dates[2],
-        reportType: "singleDay",
+        dateStr: new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Europe/Istanbul",
+        }).format(new Date()),
       };
-      const members = membersWithDailyDamage.map((m) => ({
+      const members: ArmyReportMember[] = membersWithDailyDamage.map((m) => ({
         username: m.username,
         level: m.level,
-        role: m.role,
         damage: m.dailyDamage,
-        healthStr: `${m.health.current.toFixed(1)}/${m.health.max}`,
         pillStatus: m.pillStatus,
+        resources: `HP ${m.health.current.toFixed(1)}/${m.health.max} ( +${m.health.hourlyRegen.toFixed(1)}/s ) · Açlık ${m.hunger.current.toFixed(1)}/${m.hunger.max} ( +${m.hunger.hourlyRegen.toFixed(1)}/s )`,
+        skillsReset: getSkillsResetInfo(m).label,
       }));
-      generateSingleDayPdf(meta, members);
+      const columns: ArmyReportColumns = visibleColumns;
+      generateSingleDayPdf(meta, members, columns);
       notifyPdfSuccess(
-        `Bugünün (${threeDayReportData.dates[2]}) PDF raporu başarıyla oluşturuldu ve indirildi.`,
+        `Bugünün (${meta.dateStr}) PDF raporu başarıyla oluşturuldu ve indirildi.`,
       );
     } catch (e) {
       console.error("PDF export error:", e);
-    }
-  };
-
-  const handleExportYesterdayPdf = () => {
-    setIsPdfMenuOpen(false);
-    try {
-      const totalYesterdayDmg = threeDayReportData.items.reduce(
-        (s, it) => s + it.day2Damage,
-        0,
-      );
-      const meta: ArmyReportMeta = {
-        muName: data?.muInfo?.name || "Turkic Tribe",
-        muId,
-        memberCount: threeDayReportData.items.length,
-        totalDamage: totalYesterdayDmg,
-        dateStr: threeDayReportData.dates[1],
-        reportType: "singleDay",
-      };
-      const members = threeDayReportData.items.map((m) => ({
-        username: m.username,
-        level: m.level,
-        role: m.role,
-        damage: m.day2Damage,
-        healthStr: m.currentHealth,
-        pillStatus: "ready",
-      }));
-      generateSingleDayPdf(meta, members);
-      notifyPdfSuccess(
-        `Dünün (${threeDayReportData.dates[1]}) PDF raporu başarıyla oluşturuldu ve indirildi.`,
-      );
-    } catch (e) {
-      console.error("PDF export error:", e);
-    }
-  };
-
-  const handleExportDayBeforeYesterdayPdf = () => {
-    setIsPdfMenuOpen(false);
-    try {
-      const totalDay1Dmg = threeDayReportData.items.reduce(
-        (s, it) => s + it.day1Damage,
-        0,
-      );
-      const meta: ArmyReportMeta = {
-        muName: data?.muInfo?.name || "Turkic Tribe",
-        muId,
-        memberCount: threeDayReportData.items.length,
-        totalDamage: totalDay1Dmg,
-        dateStr: threeDayReportData.dates[0],
-        reportType: "singleDay",
-      };
-      const members = threeDayReportData.items.map((m) => ({
-        username: m.username,
-        level: m.level,
-        role: m.role,
-        damage: m.day1Damage,
-        healthStr: m.currentHealth,
-        pillStatus: "ready",
-      }));
-      generateSingleDayPdf(meta, members);
-      notifyPdfSuccess(
-        `2 gün öncesinin (${threeDayReportData.dates[0]}) PDF raporu başarıyla oluşturuldu ve indirildi.`,
-      );
-    } catch (e) {
-      console.error("PDF export error:", e);
-    }
-  };
-
-  const handleExport3DaysConsolidatedPdf = () => {
-    setIsPdfMenuOpen(false);
-    try {
-      const meta: ArmyReportMeta = {
-        muName: data?.muInfo?.name || "Turkic Tribe",
-        muId,
-        memberCount: threeDayReportData.items.length,
-        totalDamage: threeDayReportData.items.reduce(
-          (s, it) => s + it.total3DayDamage,
-          0,
-        ),
-        dateStr: `${threeDayReportData.dates[0]} - ${threeDayReportData.dates[2]}`,
-        reportType: "threeDaysConsolidated",
-      };
-      generateThreeDaysConsolidatedPdf(
-        meta,
-        threeDayReportData.dates,
-        threeDayReportData.items,
-      );
-      notifyPdfSuccess(
-        "Son 3 günün konsolide / karşılaştırmalı PDF raporu başarıyla indirildi.",
-      );
-    } catch (e) {
-      console.error("PDF export error:", e);
-    }
-  };
-
-  // 5. TÜM ORDULARIN BUGÜNE AİT RAPORU (8 Ordu Hasar Sıralaması)
-  const [isGeneratingAllArmiesPdf, setIsGeneratingAllArmiesPdf] =
-    useState(false);
-  const handleExportAllArmiesTodayPdf = async () => {
-    setIsGeneratingAllArmiesPdf(true);
-    setIsPdfMenuOpen(false);
-    try {
-      const summary = await fetchAllArmiesDailySummary(true);
-      if (!summary || !summary.armies || summary.armies.length === 0) {
-        throw new Error("8 ordu verisi bulunamadı");
-      }
-
-      generateAllArmiesTodayPdf(
-        summary.armies,
-        summary.dateStr,
-        `02:55 TSİ (${summary.baselineDate || "2026-10-03"})`,
-      );
-
-      notifyPdfSuccess(
-        "Tüm 8 ordunun bugünkü hasar sıralaması PDF raporu başarıyla oluşturuldu ve indirildi.",
-      );
-    } catch (e: any) {
-      console.error("All armies PDF export error:", e);
-      notifyPdfSuccess(
-        "Rapor oluşturulurken hata oluştu: " + (e.message || "Bilinmiyor"),
-      );
-    } finally {
-      setIsGeneratingAllArmiesPdf(false);
     }
   };
 
@@ -928,13 +731,13 @@ export const DailyDamageTelemetrySection: React.FC<
             <span>Hasar verilerini güncelle</span>
           </button>
 
-          {/* PDF Raporları Menüsü (Bugün, Dün, 2 Gün Önce, Son 3 Gün Konsolide) */}
+          {/* PDF Raporu Menüsü */}
           <div className="relative" ref={pdfMenuRef}>
             <button
               type="button"
               onClick={() => setIsPdfMenuOpen((prev) => !prev)}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/40 text-rose-200 hover:text-white font-bold text-xs transition-all cursor-pointer shadow-md"
-              title="Günlük ve geçmiş 3 günün PDF hasar raporlarını indir"
+              title="Bugünün PDF hasar raporunu indir"
             >
               <Download className="w-3.5 h-3.5 text-rose-300" />
               <span>PDF Raporu İndir</span>
@@ -944,9 +747,7 @@ export const DailyDamageTelemetrySection: React.FC<
             {isPdfMenuOpen && (
               <div className="absolute right-0 top-full mt-2 w-72 bg-[#182329] border border-rose-500/40 rounded-xl p-2.5 shadow-2xl z-50 space-y-1.5 text-xs backdrop-blur-xl font-mono">
                 <div className="px-2 py-1 border-b border-rose-500/20 mb-1 flex items-center justify-between">
-                  <span className="text-[10px] text-rose-300 font-bold uppercase tracking-wider">
-                    PDF RAPOR SEÇENEKLERİ
-                  </span>
+                  <span className="text-[10px] text-rose-300 font-bold uppercase tracking-wider">PDF RAPORU</span>
                   {snapshotData?.supabaseConnected && (
                     <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
@@ -955,7 +756,6 @@ export const DailyDamageTelemetrySection: React.FC<
                   )}
                 </div>
 
-                {/* 1. Bugünün Raporu */}
                 <button
                   type="button"
                   onClick={handleExportTodayPdf}
@@ -968,105 +768,13 @@ export const DailyDamageTelemetrySection: React.FC<
                         Bugünün Raporu (PDF)
                       </div>
                       <div className="text-[10px] text-[#BBE1FA]/60">
-                        {threeDayReportData.dates[2]} • Canlı Telemetri
+                        Güncel canlı telemetri
                       </div>
                     </div>
                   </div>
                   <Download className="w-3.5 h-3.5 text-rose-400 opacity-60 group-hover:opacity-100" />
                 </button>
 
-                {/* 2. Dünün Raporu */}
-                <button
-                  type="button"
-                  onClick={handleExportYesterdayPdf}
-                  className="w-full text-left px-2.5 py-2 rounded-lg bg-[#141C21] hover:bg-rose-950/60 border border-rose-500/20 hover:border-rose-500/40 text-white flex items-center justify-between group cursor-pointer transition-all"
-                >
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-                    <div>
-                      <div className="font-bold text-xs">
-                        Dünün Raporu (PDF)
-                      </div>
-                      <div className="text-[10px] text-[#BBE1FA]/60">
-                        {threeDayReportData.dates[1]} • 24 Saatlik Hasar
-                      </div>
-                    </div>
-                  </div>
-                  <Download className="w-3.5 h-3.5 text-amber-400 opacity-60 group-hover:opacity-100" />
-                </button>
-
-                {/* 3. 2 Gün Öncesinin Raporu */}
-                <button
-                  type="button"
-                  onClick={handleExportDayBeforeYesterdayPdf}
-                  className="w-full text-left px-2.5 py-2 rounded-lg bg-[#141C21] hover:bg-rose-950/60 border border-rose-500/20 hover:border-rose-500/40 text-white flex items-center justify-between group cursor-pointer transition-all"
-                >
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
-                    <div>
-                      <div className="font-bold text-xs">
-                        2 Gün Öncesinin Raporu (PDF)
-                      </div>
-                      <div className="text-[10px] text-[#BBE1FA]/60">
-                        {threeDayReportData.dates[0]} • 24 Saatlik Hasar
-                      </div>
-                    </div>
-                  </div>
-                  <Download className="w-3.5 h-3.5 text-cyan-400 opacity-60 group-hover:opacity-100" />
-                </button>
-
-                {/* 4. Son 3 Günün Konsolide / Karşılaştırmalı Raporu */}
-                <div className="pt-1 border-t border-rose-500/20">
-                  <button
-                    type="button"
-                    onClick={handleExport3DaysConsolidatedPdf}
-                    className="w-full text-left px-2.5 py-2 rounded-lg bg-rose-950/50 hover:bg-rose-900/70 border border-rose-500/35 hover:border-rose-400 text-rose-200 hover:text-white flex items-center justify-between group cursor-pointer transition-all"
-                  >
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
-                      <div>
-                        <div className="font-bold text-xs text-rose-300 group-hover:text-white">
-                          Son 3 Günün Konsolide Raporu
-                        </div>
-                        <div className="text-[10px] text-rose-400/80">
-                          {threeDayReportData.dates[0]} -{" "}
-                          {threeDayReportData.dates[2]} Karşılaştırma
-                        </div>
-                      </div>
-                    </div>
-                    <Download className="w-3.5 h-3.5 text-rose-300 opacity-80 group-hover:opacity-100" />
-                  </button>
-                </div>
-
-                {/* 5. ⭐ Tüm Orduların Bugüne Ait Raporu (8 Ordu Sıralaması) */}
-                <div className="pt-1.5 border-t border-amber-500/30">
-                  <button
-                    type="button"
-                    onClick={handleExportAllArmiesTodayPdf}
-                    disabled={isGeneratingAllArmiesPdf}
-                    className="w-full text-left px-2.5 py-2 rounded-lg bg-gradient-to-r from-amber-950/70 to-rose-950/80 hover:from-amber-900/90 hover:to-rose-900 border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white flex items-center justify-between group cursor-pointer transition-all shadow-md"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Trophy className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-                      <div>
-                        <div className="font-bold text-xs text-amber-300 group-hover:text-white flex items-center gap-1.5">
-                          <span>Tüm Orduların Bugüne Ait Raporu</span>
-                          <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
-                            8 Ordu
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-amber-200/70">
-                          Bugünkü Canlı Hasar Sıralaması (PDF)
-                        </div>
-                      </div>
-                    </div>
-                    {isGeneratingAllArmiesPdf ? (
-                      <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" />
-                    ) : (
-                      <Download className="w-3.5 h-3.5 text-amber-300 opacity-80 group-hover:opacity-100" />
-                    )}
-                  </button>
-                </div>
               </div>
             )}
           </div>

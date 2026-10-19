@@ -13,7 +13,6 @@ import {
   Swords,
   TrendingUp
 } from 'lucide-react';
-import { exportCountryStatsToPDF } from '../utils/exportCountryPdf';
 import {
   COUNTRY_STATS_ARMIES,
   includesRequiredCountryStatsArmies,
@@ -267,10 +266,11 @@ export const CountryStatsPanel: React.FC = () => {
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'combat' | 'economy' | 'all'>('combat');
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
     if (!data) return;
     setIsExporting(true);
     try {
+      const { exportCountryStatsToPDF } = await import('../utils/exportCountryPdf');
       exportCountryStatsToPDF(data, viewMode);
     } catch (err) {
       console.error('PDF export error:', err);

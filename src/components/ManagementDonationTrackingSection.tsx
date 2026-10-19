@@ -65,13 +65,13 @@ export const ManagementDonationTrackingSection: React.FC<
     activeRequest.current = controller;
     const requestId = ++requestSequence.current;
     if (forceRefresh) setIsRefreshing(true);
-    else if (!data) setIsLoading(true);
+    else setIsLoading(true);
     setData(null);
     setError(null);
     try {
       const res = await fetchManagementOverview(
         selectedDate,
-        true,
+        forceRefresh,
         controller.signal,
       );
       if (requestId !== requestSequence.current) return;
@@ -91,7 +91,7 @@ export const ManagementDonationTrackingSection: React.FC<
   };
 
   useEffect(() => {
-    loadData(true);
+    loadData(false);
     return () => activeRequest.current?.abort();
   }, [selectedDate]);
 

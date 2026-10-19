@@ -5,17 +5,17 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Header } from './components/Header';
-import { MetricsCards } from './components/MetricsCards';
-import { PlayerTable } from './components/PlayerTable';
-import { ArmyStatsTable } from './components/ArmyStatsTable';
-import { CountryStatsPanel } from './components/CountryStatsPanel';
-import { ApiKeySection } from './components/ApiKeySection';
-import { WorkInProgressPanel } from './components/WorkInProgressPanel';
-import { MilitaryOverviewSection } from './components/MilitaryOverviewSection';
-import { MilitaryDetailsSection } from './components/MilitaryDetailsSection';
-import { DailyDamageTelemetrySection } from './components/DailyDamageTelemetrySection';
-import { ManagementArmyTrackingSection } from './components/ManagementArmyTrackingSection';
-import { ManagementDonationTrackingSection } from './components/ManagementDonationTrackingSection';
+const MetricsCards = React.lazy(() => import('./components/MetricsCards').then((module) => ({ default: module.MetricsCards })));
+const PlayerTable = React.lazy(() => import('./components/PlayerTable').then((module) => ({ default: module.PlayerTable })));
+const ArmyStatsTable = React.lazy(() => import('./components/ArmyStatsTable').then((module) => ({ default: module.ArmyStatsTable })));
+const CountryStatsPanel = React.lazy(() => import('./components/CountryStatsPanel').then((module) => ({ default: module.CountryStatsPanel })));
+const ApiKeySection = React.lazy(() => import('./components/ApiKeySection').then((module) => ({ default: module.ApiKeySection })));
+const WorkInProgressPanel = React.lazy(() => import('./components/WorkInProgressPanel').then((module) => ({ default: module.WorkInProgressPanel })));
+const MilitaryOverviewSection = React.lazy(() => import('./components/MilitaryOverviewSection').then((module) => ({ default: module.MilitaryOverviewSection })));
+const MilitaryDetailsSection = React.lazy(() => import('./components/MilitaryDetailsSection').then((module) => ({ default: module.MilitaryDetailsSection })));
+const DailyDamageTelemetrySection = React.lazy(() => import('./components/DailyDamageTelemetrySection').then((module) => ({ default: module.DailyDamageTelemetrySection })));
+const ManagementArmyTrackingSection = React.lazy(() => import('./components/ManagementArmyTrackingSection').then((module) => ({ default: module.ManagementArmyTrackingSection })));
+const ManagementDonationTrackingSection = React.lazy(() => import('./components/ManagementDonationTrackingSection').then((module) => ({ default: module.ManagementDonationTrackingSection })));
 import { MilitaryUnitData, PlayerStats, ApiResponse } from './types';
 import { 
   fetchMilitaryUnitData, 
@@ -432,6 +432,7 @@ export default function App() {
           </div>
         )}
 
+        <React.Suspense fallback={<div className="rounded-xl border border-[#3282B8]/20 bg-[#182329] p-6 text-sm text-[#BBE1FA]/70">Panel yükleniyor...</div>}>
         {/* Main Content Area */}
         {activeTab === 'mgmtArmies' ? (
           <ManagementArmyTrackingSection onSelectArmy={handleMuIdChange} onNavigateTab={handleTabChange} />
@@ -492,6 +493,7 @@ export default function App() {
             )}
           </>
         )}
+        </React.Suspense>
       </main>
 
       {/* Footer with Canlı Senkron, Son Güncelleme Saati, and Credit */}

@@ -2,6 +2,7 @@
 // Returns recorded daily damage snapshots and baseline calculations.
 
 import {
+  isSupabaseConnected,
   readSnapshotsWithSupabase,
   snapshotAllArmies,
 } from "../services/daily-damage.js";
@@ -51,5 +52,6 @@ export default async function handler(req: any, res: any) {
     totalSnapshots: dates.length,
     dates,
     snapshots: store,
+    supabaseConnected: isSupabaseConnected(),
   });
 }

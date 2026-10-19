@@ -2,24 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { PlayerStats, SortDirection, PlayerMode } from '../types';
 import { ArrowDown, ArrowUp, ArrowUpDown, Search, RefreshCw, Swords, TrendingUp, UserRound, X } from 'lucide-react';
 import { calculateDailyDamageFromSnapshot, findBaselineForCurrentCycle } from '../lib/dailyDamage';
+import { getPlayerModeInfo } from '../utils/playerMode';
 
 interface ArmyStatsTableProps {
   players: PlayerStats[]; isLoading: boolean; onRefresh?: () => void; isRefreshing?: boolean; muName?: string; muId: string;
 }
 type SortField = 'username' | 'level' | 'playerMode' | 'wealth' | 'dailyDamage';
 type HistoryPoint = { date: string; wealth?: number; dailyDamage?: number };
-
-export function getPlayerModeInfo(player: PlayerStats) {
-  const ecoSkills = ['entrepreneurship', 'energy', 'stamina', 'production', 'companies', 'management'];
-  let ecoSP = player.ecoSkillPoints || 0;
-  if (!player.ecoSkillPoints && player.skills) for (const key of ecoSkills) {
-    const level = Number(player.skills[key]?.level || 0); ecoSP += (level * (level + 1)) / 2;
-  }
-  const totalSP = player.totalSkillPoints || Math.max(ecoSP * 2, 1);
-  const ratio = Math.round((ecoSP / totalSP) * 100);
-  const isEco = player.playerMode ? player.playerMode === 'economy' : ecoSP > totalSP / 2;
-  return { isEco, ecoSP, totalSP, ratio, mode: (isEco ? 'economy' : 'combat') as PlayerMode };
-}
 
 function MiniChart({ points, field, color, currency = false }: { points: HistoryPoint[]; field: 'wealth' | 'dailyDamage'; color: string; currency?: boolean }) {
   const chartData = points.filter((point) => typeof point[field] === 'number' && Number.isFinite(point[field]));
