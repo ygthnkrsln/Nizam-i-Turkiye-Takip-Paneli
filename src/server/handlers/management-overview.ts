@@ -118,6 +118,7 @@ function calculatePlayerSkillMode(u: any): {
   const ecoSkillNames = [
     "entrepreneurship",
     "energy",
+    "stamina",
     "production",
     "companies",
     "management",

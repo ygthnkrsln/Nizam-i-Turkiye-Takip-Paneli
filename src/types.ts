@@ -67,7 +67,7 @@ export interface PlayerStats {
   allFactoriesAutomatedLevel?: number; // Tüm fabrikaların toplam motor gücü
   factories?: FactoryItem[];
   playerMode?: PlayerMode; // 'economy' (Ekonomi Oyuncusu) | 'combat' (Savaş Oyuncusu)
-  ecoSkillPoints?: number; // Ekonomi becerilerine (entrepreneurship, energy, production, companies, management) harcanan SP
+  ecoSkillPoints?: number; // Ekonomi becerilerine (entrepreneurship, energy, stamina, production, companies, management) harcanan SP
   totalSkillPoints?: number; // Harcanan / toplam beceri puanı
   skills?: Record<string, any>;
   rankings?: Record<string, any>;

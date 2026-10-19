@@ -694,6 +694,7 @@ export default async function handler(req: any, res: any) {
         const ecoSkillNames = [
           "entrepreneurship",
           "energy",
+          "stamina",
           "production",
           "companies",
           "management",
@@ -763,7 +764,7 @@ export default async function handler(req: any, res: any) {
           rankings: userProfile?.rankings,
           dates: userProfile?.dates,
           stats: userProfile?.stats,
-          totalXp: userProfile?.experience?.totalXp ?? userProfile?.totalXp ?? 0,
+          totalXp: userProfile?.leveling?.totalXp ?? userProfile?.experience?.totalXp ?? userProfile?.totalXp ?? 0,
           prestigeLevel: userProfile?.leveling?.prestigeLevel ?? userProfile?.prestigeLevel ?? 0,
         };
       });

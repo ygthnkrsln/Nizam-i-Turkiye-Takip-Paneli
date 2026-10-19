@@ -896,6 +896,7 @@ app.get("/api/mu-data", async (req, res) => {
         const ecoSkillNames = [
           "entrepreneurship",
           "energy",
+          "stamina",
           "production",
           "companies",
           "management",
@@ -953,7 +954,7 @@ app.get("/api/mu-data", async (req, res) => {
           rankings: userProfile?.rankings,
           dates: userProfile?.dates,
           stats: userProfile?.stats,
-          totalXp: userProfile?.experience?.totalXp ?? userProfile?.totalXp ?? 0,
+          totalXp: userProfile?.leveling?.totalXp ?? userProfile?.experience?.totalXp ?? userProfile?.totalXp ?? 0,
           prestigeLevel: userProfile?.leveling?.prestigeLevel ?? userProfile?.prestigeLevel ?? 0,
         };
       });
@@ -1178,6 +1179,7 @@ app.get("/api/country-stats", async (req, res) => {
       const ecoSkillNames = [
         "entrepreneurship",
         "energy",
+        "stamina",
         "production",
         "companies",
         "management",

@@ -1507,6 +1507,7 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
       const ecoSkillNames = [
         "entrepreneurship",
         "energy",
+        "stamina",
         "production",
         "companies",
         "management",
@@ -1687,6 +1688,7 @@ export async function fetchMilitaryUnitData(
           const ecoSkillNames = [
             "entrepreneurship",
             "energy",
+            "stamina",
             "production",
             "companies",
             "management",
@@ -1880,11 +1882,19 @@ export async function fetchCountryStats(
       const wealth = Number(u.rankings?.userWealth?.value ?? u.wealth ?? 0);
 
       const ecoSkillNames = [
+
         "entrepreneurship",
+
         "energy",
+
+        "stamina",
+
         "production",
+
         "companies",
+
         "management",
+
       ];
       let ecoSkillPoints = 0;
       if (u.skills) {

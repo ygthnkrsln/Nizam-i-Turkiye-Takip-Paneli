@@ -146,7 +146,7 @@ export default async function handler(req: any, res: any) {
       const wealth = Number(u.rankings?.userWealth?.value ?? u.wealth ?? 0);
 
       // Economy vs Combat mode calculation
-      const ecoSkillNames = ['entrepreneurship', 'energy', 'production', 'companies', 'management'];
+      const ecoSkillNames = ['entrepreneurship', 'energy', 'stamina', 'production', 'companies', 'management'];
       let ecoSkillPoints = 0;
       if (u.skills) {
         for (const sName of ecoSkillNames) {

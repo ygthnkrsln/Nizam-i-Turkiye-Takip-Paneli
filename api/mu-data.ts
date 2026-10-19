@@ -621,7 +621,7 @@ export default async function handler(req: any, res: any) {
         });
 
         // Skills analysis: Check economy vs combat mode
-        const ecoSkillNames = ['entrepreneurship', 'energy', 'production', 'companies', 'management'];
+        const ecoSkillNames = ['entrepreneurship', 'energy', 'stamina', 'production', 'companies', 'management'];
         let ecoSkillPoints = 0;
         if (userProfile?.skills) {
           for (const sName of ecoSkillNames) {
@@ -678,7 +678,7 @@ export default async function handler(req: any, res: any) {
           rankings: userProfile?.rankings,
           dates: userProfile?.dates,
           stats: userProfile?.stats,
-          totalXp: userProfile?.experience?.totalXp ?? userProfile?.totalXp ?? 0,
+          totalXp: userProfile?.leveling?.totalXp ?? userProfile?.experience?.totalXp ?? userProfile?.totalXp ?? 0,
           prestigeLevel: userProfile?.leveling?.prestigeLevel ?? userProfile?.prestigeLevel ?? 0,
         };
       });

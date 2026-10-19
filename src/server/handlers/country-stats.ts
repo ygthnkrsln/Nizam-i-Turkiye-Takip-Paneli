@@ -168,6 +168,7 @@ export default async function handler(req: any, res: any) {
       const ecoSkillNames = [
         "entrepreneurship",
         "energy",
+        "stamina",
         "production",
         "companies",
         "management",
