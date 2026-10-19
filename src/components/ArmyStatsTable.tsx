@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { PlayerStats, SortDirection, PlayerMode } from '../types';
 import { ArrowDown, ArrowUp, ArrowUpDown, Search, RefreshCw, Swords, TrendingUp, UserRound, X } from 'lucide-react';
+import { calculateDailyDamageFromSnapshot, findBaselineForCurrentCycle } from '../lib/dailyDamage';
 
 interface ArmyStatsTableProps {
   players: PlayerStats[]; isLoading: boolean; onRefresh?: () => void; isRefreshing?: boolean; muName?: string; muId: string;
@@ -22,38 +23,57 @@ export function getPlayerModeInfo(player: PlayerStats) {
 
 function MiniChart({ points, field, color, currency = false }: { points: HistoryPoint[]; field: 'wealth' | 'dailyDamage'; color: string; currency?: boolean }) {
   const values = points.map((p) => p[field]).filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
-  if (values.length < 2) return <div className="h-44 grid place-items-center text-sm text-[#BBE1FA]/50">Henüz yeterli geçmiş verisi yok.</div>;
+  if (!values.length) return <div className="h-44 grid place-items-center text-sm text-[#BBE1FA]/50">Bu grafik için henüz kayıt bulunmuyor.</div>;
   const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
   const coords = points.map((p, i) => p[field] == null ? null : `${(i / Math.max(points.length - 1, 1)) * 100},${94 - ((p[field]! - min) / range) * 84}`).filter(Boolean).join(' ');
-  return <div className="rounded-lg border border-[#3282B8]/20 bg-[#101920] p-3">
+  return <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_190px]"><div className="rounded-xl border border-[#3282B8]/20 bg-[#0c151d] p-4">
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-44 w-full overflow-visible">
       {[20, 45, 70, 95].map((y) => <line key={y} x1="0" x2="100" y1={y} y2={y} stroke="#3282B8" strokeOpacity=".17" strokeDasharray="1 2" />)}
-      <polyline points={coords} fill="none" stroke={color} strokeWidth="1.2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+      {values.length > 1 && <polyline points={coords} fill="none" stroke={color} strokeWidth="1.2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />}
+      {values.length === 1 && <circle cx="50" cy="52" r="2" fill={color} vectorEffect="non-scaling-stroke" />}
     </svg>
-    <div className="mt-2 flex justify-between text-[10px] text-[#BBE1FA]/50"><span>{points[0]?.date}</span><span>{points.at(-1)?.date}</span></div>
-    <div className="mt-2 text-xs text-[#BBE1FA]/70">En düşük {currency ? '$' : ''}{Math.min(...values).toLocaleString('tr-TR')} · En yüksek {currency ? '$' : ''}{Math.max(...values).toLocaleString('tr-TR')}</div>
+    <div className="mt-2 flex justify-between text-[10px] text-[#BBE1FA]/50"><span>{points.find((p) => p[field] != null)?.date || '—'}</span><span>{[...points].reverse().find((p) => p[field] != null)?.date || '—'}</span></div>
+    </div><div className="grid grid-cols-2 gap-2 lg:grid-cols-1"><div className="rounded-xl border border-[#3282B8]/20 bg-[#141C21] p-3"><div className="text-[10px] uppercase tracking-wider text-[#BBE1FA]/45">Kayıt sayısı</div><div className="mt-1 font-mono text-xl text-white">{values.length} gün</div></div><div className="rounded-xl border border-[#3282B8]/20 bg-[#141C21] p-3"><div className="text-[10px] uppercase tracking-wider text-[#BBE1FA]/45">Dönem ortalaması</div><div className="mt-1 font-mono text-lg" style={{color}}>{currency ? '$' : ''}{Math.round(values.reduce((a,b)=>a+b,0)/values.length).toLocaleString('tr-TR')}</div></div><div className="col-span-2 rounded-xl border border-[#3282B8]/20 bg-[#141C21] p-3 lg:col-span-1"><div className="text-[10px] uppercase tracking-wider text-[#BBE1FA]/45">En yüksek / en düşük</div><div className="mt-1 flex justify-between font-mono text-xs text-[#BBE1FA]/80"><span>{currency ? '$' : ''}{Math.max(...values).toLocaleString('tr-TR')}</span><span>{currency ? '$' : ''}{Math.min(...values).toLocaleString('tr-TR')}</span></div></div></div>
   </div>;
 }
 
-function PlayerDetails({ player, muId }: { player: PlayerStats; muId: string }) {
+function PlayerDetails({ player, muId, currentDailyDamage }: { player: PlayerStats; muId: string; currentDailyDamage?: number }) {
   const [tab, setTab] = useState<'skills' | 'damage' | 'wealth' | 'rankings'>('skills');
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   useEffect(() => {
     const params = new URLSearchParams({ userId: player.userId, muId });
-    fetch(`/api/daily-damage-snapshots?${params}`).then((r) => r.ok ? r.json() : null).then((data) => setHistory(data?.history || [])).catch(() => setHistory([]));
-  }, [player.userId, muId]);
+    fetch(`/api/daily-damage-snapshots?${params}`).then((r) => r.ok ? r.json() : null).then((data) => {
+      const points: HistoryPoint[] = data?.history || [];
+      if (typeof currentDailyDamage === 'number') {
+        const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
+        const last = points.at(-1);
+        if (last?.date === today) points[points.length - 1] = { ...last, dailyDamage: currentDailyDamage };
+        else points.push({ date: today, dailyDamage: currentDailyDamage, wealth: player.wealth });
+      }
+      setHistory(points);
+    }).catch(() => setHistory(typeof currentDailyDamage === 'number' ? [{ date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date()), dailyDamage: currentDailyDamage, wealth: player.wealth }] : []));
+  }, [player.userId, muId, currentDailyDamage, player.wealth]);
+
   const skills = Object.entries(player.skills || {}).filter(([, value]) => value && typeof value === 'object');
   const rankings = Object.entries(player.rankings || {}).filter(([, value]) => value && typeof value === 'object' && ('rank' in value || 'value' in value));
-  const tabs = [['skills', 'Savaş & Beceriler'], ['damage', '30 Günlük Hasar'], ['wealth', '30 Günlük Servet'], ['rankings', 'Sıralamalar & Dereceler']] as const;
-  return <section className="border-t border-[#3282B8]/20 bg-[#101920] p-4 sm:p-5">
-    <div className="mb-4 flex flex-wrap gap-2">{tabs.map(([key, label]) => <button key={key} onClick={() => setTab(key)} className={`rounded-lg border px-3 py-2 text-xs transition-colors ${tab === key ? 'border-[#3282B8]/60 bg-[#0F4C75]/35 text-[#BBE1FA]' : 'border-[#3282B8]/15 text-[#BBE1FA]/60 hover:border-[#3282B8]/40'}`}>{label}</button>)}</div>
-    {tab === 'skills' && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {[['Seviye', player.level], ['Askeri rütbe', player.militaryRank], ['Toplam hasar', player.totalDamages.toLocaleString('tr-TR')], ['Toplam servet', `$${player.wealth.toLocaleString('tr-TR')}`], ['Toplam XP', (player.totalXp || 0).toLocaleString('tr-TR')], ['Prestij', player.prestigeLevel ?? '—']].map(([label, value]) => <div key={String(label)} className="rounded-lg border border-[#3282B8]/15 bg-[#141C21] p-3"><div className="text-[11px] text-[#BBE1FA]/50">{label}</div><div className="mt-1 font-mono text-sm font-semibold text-white">{value}</div></div>)}
-      {skills.map(([name, skill]) => <div key={name} className="rounded-lg border border-[#3282B8]/15 bg-[#141C21] p-3"><div className="text-xs font-medium text-[#BBE1FA]">{name.replace(/([A-Z])/g, ' $1')}</div><div className="mt-1 font-mono text-sm text-white">Seviye {skill.level ?? skill.value ?? '—'}</div></div>)}
+  const skillLabels: Record<string, string> = { attack:'Saldırı', armor:'Zırh', dodge:'Kaçınma', precision:'İsabet', critChance:'Kritik Şans', critDamage:'Kritik Hasar', health:'Can Kapasitesi', hunger:'Açlık / Tokluk', energy:'Enerji', entrepreneurship:'Girişimcilik', production:'Üretim', companies:'Şirketler', management:'Yönetim' };
+  const rankingLabels: Record<string, string> = { weeklyUserDamages:'Haftalık Hasar', userDamages:'Toplam Hasar', userWealth:'Servet', userLevel:'Seviye', userBounty:'Ödül', userMissionsClaimed:'Tamamlanan Görevler', userMilestoneTiers:'Aşamalar', userCasesOpened:'Açılan Sandıklar', userReferrals:'Davetler' };
+  const tabs = [['skills', 'Savaş ve Beceriler'], ['damage', 'Hasar Geçmişi · 30 gün'], ['wealth', 'Servet Geçmişi · 30 gün'], ['rankings', 'Sıralamalar ve Ödüller']] as const;
+  const combatSkills = skills.filter(([name]) => !['entrepreneurship','production','companies','management'].includes(name));
+  const economySkills = skills.filter(([name]) => ['entrepreneurship','production','companies','management'].includes(name));
+  return <section className="border-t border-[#3282B8]/20 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0F4C75]/10 via-[#101920] to-[#101920] p-4 sm:p-6">
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#3282B8]/25 bg-[#141C21]/90 p-4">
+      <div className="flex items-center gap-3"><div className="grid h-12 w-12 place-items-center overflow-hidden rounded-xl border border-[#3282B8]/35 bg-[#0F4C75]/25">{player.avatarUrl ? <img src={player.avatarUrl} alt="" className="h-full w-full object-cover"/> : <UserRound className="h-6 w-6 text-[#BBE1FA]/70"/>}</div><div><div className="text-lg font-semibold text-white">{player.username}</div><div className="mt-0.5 font-mono text-[10px] text-[#BBE1FA]/45">{player.userId}</div></div></div>
+      <div className="flex flex-wrap gap-2">{[['Seviye', `Lv. ${player.level}`], ['Askeri Rütbe', player.militaryRank ? `#${player.militaryRank}` : '—'], ['Toplam Hasar', `${player.totalDamages.toLocaleString('tr-TR')} DMG`], ['Servet', `$${player.wealth.toLocaleString('tr-TR')}`]].map(([label,value]) => <div key={label} className="min-w-24 rounded-lg border border-[#3282B8]/15 bg-[#0c151d] px-3 py-2"><div className="text-[9px] uppercase tracking-wider text-[#BBE1FA]/40">{label}</div><div className="mt-1 font-mono text-xs font-semibold text-white">{value}</div></div>)}</div>
+    </div>
+    <div className="mb-4 flex gap-2 overflow-x-auto border-b border-[#3282B8]/15 pb-3">{tabs.map(([key,label]) => <button key={key} onClick={() => setTab(key)} className={`shrink-0 rounded-lg border px-3 py-2 text-xs transition-colors ${tab === key ? 'border-[#3282B8]/60 bg-[#0F4C75]/35 text-[#BBE1FA]' : 'border-transparent text-[#BBE1FA]/55 hover:border-[#3282B8]/25 hover:text-[#BBE1FA]'}`}>{label}</button>)}</div>
+    {tab === 'skills' && <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[['Toplam XP', (player.totalXp || 0).toLocaleString('tr-TR')], ['Prestij Seviyesi', player.prestigeLevel ?? '—'], ['Savaş Rütbesi', player.militaryRank ? `#${player.militaryRank}` : '—']].map(([label,value]) => <div key={label} className="rounded-xl border border-[#3282B8]/15 bg-[#141C21]/80 p-3"><div className="text-[10px] uppercase tracking-wider text-[#BBE1FA]/45">{label}</div><div className="mt-1 font-mono text-lg font-semibold text-white">{value}</div></div>)}</div>
+      {[['Savaş Becerileri',combatSkills,'text-cyan-200','border-cyan-500/20 bg-cyan-950/20 text-cyan-200'],['Ekonomi Becerileri',economySkills,'text-emerald-200','border-emerald-500/20 bg-emerald-950/20 text-emerald-200']].map(([title,list,headingColor,badge]) => <div key={title as string}><h4 className={`mb-3 text-xs font-semibold uppercase tracking-wider ${headingColor}`}>{title as string}</h4><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{(list as typeof skills).length ? (list as typeof skills).map(([name,skill]) => <div key={name} className="flex items-center justify-between rounded-xl border border-[#3282B8]/15 bg-[#141C21]/80 p-3"><span className="text-sm text-[#BBE1FA]/80">{skillLabels[name] || name}</span><span className={`rounded-md border px-2 py-1 font-mono text-xs ${badge}`}>Lv. {skill.level ?? skill.value ?? '—'}</span></div>) : <div className="text-xs text-[#BBE1FA]/40">Kayıtlı beceri bulunamadı.</div>}</div></div>)}
     </div>}
-    {tab === 'damage' && <MiniChart points={history} field="dailyDamage" color="#06b6d4" />}
-    {tab === 'wealth' && <MiniChart points={history} field="wealth" color="#f59e0b" currency />}
-    {tab === 'rankings' && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{rankings.length ? rankings.map(([name, value]) => <div key={name} className="rounded-lg border border-[#3282B8]/15 bg-[#141C21] p-3"><div className="text-xs text-[#BBE1FA]/60">{name}</div><div className="mt-1 flex items-baseline justify-between font-mono text-sm text-white"><span>{Number(value.value || 0).toLocaleString('tr-TR')}</span><span className="text-xs text-cyan-300">#{value.rank || '—'}</span></div><div className="mt-1 text-[10px] text-[#BBE1FA]/40">{value.tier || ''}</div></div>) : <p className="text-sm text-[#BBE1FA]/50">Sıralama verisi bulunamadı.</p>}</div>}
+    {tab === 'damage' && <div><h4 className="text-sm font-semibold text-cyan-100">Günlük Hasar · 30 Gün</h4><p className="mb-3 mt-1 text-xs text-[#BBE1FA]/45">02.55 snapshot’ları arasındaki hasar farkı ve mevcut günün canlı hasarı</p><MiniChart points={history} field="dailyDamage" color="#06b6d4" /></div>}
+    {tab === 'wealth' && <div><h4 className="text-sm font-semibold text-amber-100">Servet Geçmişi · 30 Gün</h4><p className="mb-3 mt-1 text-xs text-[#BBE1FA]/45">Cron kayıtlarından alınan son 30 günlük oyuncu serveti</p><MiniChart points={history} field="wealth" color="#f59e0b" currency /></div>}
+    {tab === 'rankings' && <div><h4 className="mb-3 text-sm font-semibold text-violet-100">Resmî Sıralamalar ve Dereceler</h4><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{rankings.length ? rankings.map(([name,value]) => <div key={name} className="rounded-xl border border-violet-500/15 bg-[#141C21]/80 p-4"><div className="text-xs text-[#BBE1FA]/60">{rankingLabels[name] || name}</div><div className="mt-2 flex items-baseline justify-between font-mono text-lg font-semibold text-white"><span>{Number(value.value || 0).toLocaleString('tr-TR')}</span><span className="text-xs text-violet-200">#{value.rank || '—'}</span></div><div className="mt-1 text-[10px] uppercase tracking-wider text-[#BBE1FA]/40">{value.tier || 'Derece bilgisi yok'}</div></div>) : <p className="text-sm text-[#BBE1FA]/50">Sıralama veya ödül verisi bulunamadı.</p>}</div></div>}
   </section>;
 }
 
@@ -62,10 +82,16 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({ players, isLoadi
   const [modeFilter, setModeFilter] = useState<'all' | 'combat' | 'economy'>('all'); const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dailyDamageByUser, setDailyDamageByUser] = useState<Record<string, number>>({});
   useEffect(() => { fetch('/api/daily-damage-snapshots').then((r) => r.ok ? r.json() : null).then((data) => {
-    const dates: string[] = data?.dates || []; const latest = dates.at(-1); const members = latest ? data?.snapshots?.[latest]?.armies?.[muId]?.members || {} : {};
-    const values: Record<string, number> = {}; for (const [id, member] of Object.entries(members) as [string, any][]) if (typeof member.dailyDamage === 'number') values[id] = member.dailyDamage;
+    const baseline = findBaselineForCurrentCycle(data?.snapshots || {}, muId);
+    const members = baseline.baselineMembers || {};
+    const values: Record<string, number> = {};
+    for (const player of players) {
+      const weekly = Number(player.weeklyDamages || 0);
+      const baselineWeekly = members[player.userId]?.weeklyDamage;
+      if (baselineWeekly !== undefined) values[player.userId] = calculateDailyDamageFromSnapshot(weekly, baselineWeekly);
+    }
     setDailyDamageByUser(values);
-  }).catch(() => setDailyDamageByUser({})); }, [muId]);
+  }).catch(() => setDailyDamageByUser({})); }, [muId, players]);
   const sorted = useMemo(() => players.filter((p) => (modeFilter === 'all' || getPlayerModeInfo(p).mode === modeFilter) && (!search || `${p.username} ${p.userId}`.toLowerCase().includes(search.toLowerCase()))).sort((a, b) => {
     const av = sortField === 'username' ? a.username.toLowerCase() : sortField === 'level' ? a.level : sortField === 'playerMode' ? getPlayerModeInfo(a).ratio : sortField === 'dailyDamage' ? dailyDamageByUser[a.userId] || 0 : a.wealth;
     const bv = sortField === 'username' ? b.username.toLowerCase() : sortField === 'level' ? b.level : sortField === 'playerMode' ? getPlayerModeInfo(b).ratio : sortField === 'dailyDamage' ? dailyDamageByUser[b.userId] || 0 : b.wealth;
@@ -88,7 +114,7 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({ players, isLoadi
         <td className="px-4 py-3"><div className="flex items-center gap-3"><img src={player.avatarUrl || ''} alt="" className="h-8 w-8 rounded-full border border-[#3282B8]/30 bg-[#141C21] object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }}/><div><div className="font-semibold">{player.username} {inactive && <span className="ml-1 text-[10px] text-[#BBE1FA]/40">Pasif</span>}</div><div className="font-mono text-[10px] opacity-50">{player.userId}</div></div></div></td>
         <td className="px-4 py-3 font-mono">Lv. {player.level}</td><td className="px-4 py-3"><span className={mode.isEco ? 'text-emerald-300' : 'text-rose-300'}>{mode.isEco ? <TrendingUp className="mr-1 inline h-3 w-3"/> : <Swords className="mr-1 inline h-3 w-3"/>}{mode.isEco ? 'Ekonomi' : 'Savaş'}</span></td>
         <td className="px-4 py-3 font-mono text-amber-200">{currency(player.wealth)}</td><td className="px-4 py-3 font-mono text-cyan-200">{dailyDamageByUser[player.userId] == null ? '—' : `${dailyDamageByUser[player.userId].toLocaleString('tr-TR')} DMG`}</td>
-      </tr>{selected && <tr><td colSpan={5} className="p-0"><PlayerDetails player={player} muId={muId}/></td></tr>}</React.Fragment>;
+      </tr>{selected && <tr><td colSpan={5} className="p-0"><PlayerDetails player={player} muId={muId} currentDailyDamage={dailyDamageByUser[player.userId]}/></td></tr>}</React.Fragment>;
     })}{!isLoading && !sorted.length && <tr><td colSpan={5} className="p-8 text-center text-[#BBE1FA]/50"><UserRound className="mx-auto mb-2 h-5 w-5"/>Uygun asker bulunamadı</td></tr>}</tbody></table></div>
     <div className="flex flex-wrap justify-between gap-2 border-t border-emerald-500/15 bg-[#141C21]/80 px-4 py-3 text-xs text-[#BBE1FA]/55"><span>{muName} · {sorted.length}/{players.length} asker · Toplam servet {currency(players.reduce((sum, p) => sum + (p.wealth || 0), 0))}</span><span>Oyuncu adına tıklayarak detayları görüntüleyin</span></div>
   </div>;

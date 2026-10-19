@@ -6,6 +6,7 @@ import {
   readSnapshotsWithSupabase,
   snapshotAllArmies,
 } from '../src/server/services/daily-damage.js';
+import { calculateDailyDamageFromSnapshot } from '../src/lib/dailyDamage.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -31,9 +32,17 @@ export default async function handler(req: any, res: any) {
   // Get dates sorted
   const dates = Object.keys(store).sort();
   if (userId && muId) {
-    const history = dates.slice(-30).map((date) => {
+    const historyDates = dates.slice(-30);
+    const history = historyDates.map((date) => {
       const member = store[date]?.armies?.[muId]?.members?.[userId];
-      return { date, wealth: member?.wealth, dailyDamage: member?.dailyDamage };
+      const previousDate = dates[dates.indexOf(date) - 1];
+      const previousMember = previousDate ? store[previousDate]?.armies?.[muId]?.members?.[userId] : undefined;
+      const dailyDamage = typeof member?.dailyDamage === 'number'
+        ? member.dailyDamage
+        : previousMember && member
+          ? calculateDailyDamageFromSnapshot(member.weeklyDamage, previousMember.weeklyDamage)
+          : undefined;
+      return { date, wealth: member?.wealth, dailyDamage };
     });
     return res.status(200).json({ success: true, history });
   }
