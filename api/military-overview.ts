@@ -50,7 +50,7 @@ export default async function handler(req: any, res: any) {
   const targetMuId = (req.query?.muId as string) || DEFAULT_MU_ID;
   const forceRefresh = req.query?.refresh === 'true';
 
-  const cacheKey = `mil_overview_${targetMuId}`;
+  const cacheKey = `mil_overview_v2_${targetMuId}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return res.status(200).json(cached.data);
@@ -153,7 +153,7 @@ export default async function handler(req: any, res: any) {
     // 4. Compute Statistics
     const memberCount = members.length;
     const totalWeeklyDamage = getMilitaryUnitWeeklyDamage(muData);
-    const totalAllTimeDamage = allUsers.reduce((sum, u) => sum + (u.rankings?.userDamages?.value || 0), 0);
+    const totalAllTimeDamage = Number(muData.rankings?.muDamages?.value ?? 0);
     const totalWealth = allUsers.reduce((sum, u) => sum + (u.rankings?.userWealth?.value || 0), 0);
     const avgLevel = memberCount > 0 
       ? Number((allUsers.reduce((sum, u) => sum + (u.leveling?.level || 1), 0) / memberCount).toFixed(1))

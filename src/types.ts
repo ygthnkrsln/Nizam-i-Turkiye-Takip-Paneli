@@ -301,6 +301,7 @@ export interface MilitaryDetailMember {
   allTimeTier: string;
   allTimeRank: number;
   wealth: number;
+  isInactive: boolean;
   role: "leader" | "commander" | "manager" | "soldier";
   roleBadge: string;
   roleLabel: string;

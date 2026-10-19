@@ -1413,7 +1413,7 @@ app.get("/api/military-overview", async (req, res) => {
   const targetMuId = (req.query.muId as string) || DEFAULT_MU_ID;
   const forceRefresh = req.query.refresh === "true";
 
-  const cacheKey = `mil_overview_${targetMuId}`;
+  const cacheKey = `mil_overview_v2_${targetMuId}`;
   const cached = cache.get(cacheKey);
   if (
     !forceRefresh &&
@@ -1530,10 +1530,7 @@ app.get("/api/military-overview", async (req, res) => {
     // 4. Compute Statistics
     const memberCount = members.length;
     const totalWeeklyDamage = getMilitaryUnitWeeklyDamage(muData);
-    const totalAllTimeDamage = allUsers.reduce(
-      (sum, u) => sum + (u.rankings?.userDamages?.value || 0),
-      0,
-    );
+    const totalAllTimeDamage = Number(muData.rankings?.muDamages?.value ?? 0);
     const totalWealth = allUsers.reduce(
       (sum, u) => sum + (u.rankings?.userWealth?.value || 0),
       0,
@@ -1767,7 +1764,7 @@ app.get("/api/military-details", async (req, res) => {
   const targetMuId = (req.query.muId as string) || DEFAULT_MU_ID;
   const forceRefresh = req.query.refresh === "true";
 
-  const cacheKey = `mil_details_v2_${targetMuId}`;
+  const cacheKey = `mil_details_v3_${targetMuId}`;
   const cached = cache.get(cacheKey);
   if (
     !forceRefresh &&
@@ -1858,7 +1855,7 @@ app.get("/api/military-details", async (req, res) => {
     const leaderUser = allUsers.find((u) => u._id === leaderId);
     const leaderUsername = leaderUser?.username || "Muhtarr";
 
-    // 4. Map and rank members (sorted by weeklyDamage descending)
+    // 4. Map members with activity status and lifetime ranking data
     const mappedMembers = allUsers.map((u) => {
       const isLeader = u._id === leaderId;
       const isCommander = commanders.includes(u._id);
@@ -1885,6 +1882,11 @@ app.get("/api/military-details", async (req, res) => {
         allTimeTier: u.rankings?.userDamages?.tier || "bronze",
         allTimeRank: u.rankings?.userDamages?.rank || 0,
         wealth: u.rankings?.userWealth?.value || 0,
+        isInactive: Boolean(
+          u.dates?.lastConnectionAt &&
+            Date.now() - new Date(u.dates.lastConnectionAt).getTime() >
+              3 * 24 * 60 * 60 * 1000,
+        ),
         role,
         roleBadge: isLeader ? "L" : isCommander ? "C" : isManager ? "M" : "",
         roleLabel: isLeader
@@ -1897,7 +1899,10 @@ app.get("/api/military-details", async (req, res) => {
       };
     });
 
-    mappedMembers.sort((a, b) => b.weeklyDamage - a.weeklyDamage);
+    mappedMembers.sort((a, b) => {
+      if (a.isInactive !== b.isInactive) return a.isInactive ? 1 : -1;
+      return b.allTimeDamage - a.allTimeDamage;
+    });
 
     // 5. Structure Final Output
     const rankings = muData.rankings || {};

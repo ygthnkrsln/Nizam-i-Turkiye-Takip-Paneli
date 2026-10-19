@@ -3,7 +3,7 @@
 // 1. "Ordu Takibi": Live health & hunger bar percentages + today's damage across all 8 armies
 // 2. "Bağış Takibi": Target donation (Lv>=30: 1.5x if wealth<30k, 2.0x if wealth>=30k) + actual donations on selected date
 
-import { getNextWarEraToken } from "../../lib/wareraTokens.js";
+import { getNextWarEraToken, getWarEraTokens } from "../../lib/wareraTokens.js";
 import {
   readManagementOverviewCache,
   saveManagementOverviewCache,
@@ -73,7 +73,31 @@ interface CacheItem {
 }
 const cache = new Map<string, CacheItem>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes: enough to avoid repeated heavy refreshes while staying fresh
-const armyLastKnownData = new Map<string, any>();
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex++;
+        results[index] = await mapper(items[index]);
+      }
+    }),
+  );
+  return results;
+}
+
+function upstreamError(response: Response, message: string) {
+  return Object.assign(new Error(`${message} (${response.status})`), {
+    statusCode: response.status,
+    retryAfter: response.headers.get("Retry-After"),
+  });
+}
 
 async function fetchWarEra(
   url: string,
@@ -81,7 +105,13 @@ async function fetchWarEra(
   retries = 4,
 ): Promise<Response> {
   let attempt = 0;
-  while (attempt <= retries) {
+  const configuredTokens = getWarEraTokens();
+  if (configuredTokens.length === 0) {
+    throw new Error("WarEra API anahtarı yapılandırılmamış");
+  }
+  const maxAttempts = Math.max(retries + 1, configuredTokens.length);
+  let lastResponse: Response | null = null;
+  while (attempt < maxAttempts) {
     const token = getNextWarEraToken();
     const headers: Record<string, string> = {
       Accept: "application/json",
@@ -91,15 +121,15 @@ async function fetchWarEra(
     };
     try {
       const res = await fetch(url, { ...init, headers });
-      if (res.status === 429 || res.status === 503) {
+      if (res.status === 429) {
+        lastResponse = res;
         attempt++;
-        if (attempt <= retries) {
-          // Jittered backoff: 400ms, 900ms, 1800ms, 3000ms
-          const delayMs =
-            400 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 250);
-          await new Promise((r) => setTimeout(r, delayMs));
-          continue;
-        }
+        continue;
+      }
+      if (res.status === 503 && attempt + 1 < maxAttempts) {
+        attempt++;
+        await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+        continue;
       }
       return res;
     } catch (e) {
@@ -111,7 +141,8 @@ async function fetchWarEra(
       throw e;
     }
   }
-  return fetch(url, init);
+  if (lastResponse) return lastResponse;
+  throw new Error("WarEra API isteği tamamlanamadı");
 }
 
 // Beceriye dayalı yaklaşım (Ülke İstatistikleri ile birebir aynı formül):
@@ -168,7 +199,7 @@ async function processSingleArmy(
       JSON.stringify({ muId: army.id }),
     )}`;
     const muRes = await fetchWarEra(muUrl);
-    if (!muRes.ok) throw new Error(`Status ${muRes.status}`);
+    if (!muRes.ok) throw upstreamError(muRes, `Ordu bilgisi alınamadı`);
 
     const muJson = await muRes.json();
     const muData = muJson?.result?.data?.json || muJson?.result?.data;
@@ -190,49 +221,33 @@ async function processSingleArmy(
       chunks.push(memberIds.slice(i, i + 10));
     }
 
-    const rawUsers: any[] = [];
-    for (const chunk of chunks) {
-      try {
-        const endpoints = chunk.map(() => "user.getUserById").join(",");
-        const batchInput: Record<string, { userId: string }> = {};
-        chunk.forEach((id, idx) => {
-          batchInput[idx.toString()] = { userId: id };
-        });
-        const batchUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(
-          JSON.stringify(batchInput),
-        )}`;
-        const uRes = await fetchWarEra(batchUrl);
-        if (uRes.ok) {
-          const uJson = await uRes.json();
-          if (Array.isArray(uJson)) {
-            uJson.forEach((item) => {
-              const userData = item?.result?.data?.json || item?.result?.data;
-              if (userData) rawUsers.push(userData);
-            });
-          }
-        }
-      } catch (e) {
-        console.error(`Batch fetch error for army ${army.id}:`, e);
+    const profileBatches = await mapWithConcurrency(chunks, 2, async (chunk) => {
+      const endpoints = chunk.map(() => "user.getUserById").join(",");
+      const batchInput: Record<string, { userId: string }> = {};
+      chunk.forEach((id, idx) => {
+        batchInput[idx.toString()] = { userId: id };
+      });
+      const batchUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(
+        JSON.stringify(batchInput),
+      )}`;
+      const response = await fetchWarEra(batchUrl);
+      if (!response.ok) throw upstreamError(response, "Üye profilleri alınamadı");
+      const payload = await response.json();
+      if (!Array.isArray(payload) || payload.length !== chunk.length) {
+        throw new Error(`Ordu ${army.name}: Üye profili yanıtı eksik`);
       }
-    }
-
-    // If some users weren't fetched in batch, fetch userLite fallback
+      const users = payload.map((item: any) =>
+        item?.result?.data?.json || item?.result?.data,
+      );
+      if (users.some((user: any) => !user?._id && !user?.id)) {
+        throw new Error(`Ordu ${army.name}: Üye profili yanıtı eksik`);
+      }
+      return users;
+    });
+    const rawUsers = profileBatches.flat();
     const fetchedIds = new Set(rawUsers.map((u) => u._id || u.id));
-    const missingIds = memberIds.filter((id) => !fetchedIds.has(id));
-    if (missingIds.length > 0) {
-      for (const id of missingIds) {
-        try {
-          const liteUrl = `https://api2.warera.io/trpc/user.getUserLite?input=${encodeURIComponent(
-            JSON.stringify({ userId: id }),
-          )}`;
-          const lRes = await fetchWarEra(liteUrl);
-          if (lRes.ok) {
-            const lJson = await lRes.json();
-            const userData = lJson?.result?.data?.json || lJson?.result?.data;
-            if (userData) rawUsers.push(userData);
-          }
-        } catch {}
-      }
+    if (memberIds.some((id) => !fetchedIds.has(id))) {
+      throw new Error(`Ordu ${army.name}: Tüm üye profilleri alınamadı`);
     }
 
     // Identify eligible members who have donation obligations
@@ -257,8 +272,11 @@ async function processSingleArmy(
     const userDonationsMap: Record<string, number> = {};
     const donationUserIds = Array.from(targetCheckUserIds);
     const donationBatchSize = 8;
+    const donationBatches: string[][] = [];
     for (let i = 0; i < donationUserIds.length; i += donationBatchSize) {
-      const batch = donationUserIds.slice(i, i + donationBatchSize);
+      donationBatches.push(donationUserIds.slice(i, i + donationBatchSize));
+    }
+    await mapWithConcurrency(donationBatches, 2, async (batch) => {
       const endpoints = batch
         .map(() => "transaction.getPaginatedTransactions")
         .join(",");
@@ -270,20 +288,24 @@ async function processSingleArmy(
         batchInput[String(index)] = { userId, transactionType: "donation" };
       });
 
-      try {
-        const txUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(
-          JSON.stringify(batchInput),
-        )}`;
-        const txRes = await fetchWarEra(txUrl);
-        if (!txRes.ok) continue;
+      const txUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(
+        JSON.stringify(batchInput),
+      )}`;
+      const txRes = await fetchWarEra(txUrl);
+      if (!txRes.ok) throw upstreamError(txRes, "Bağış işlemleri alınamadı");
 
-        const txJson = await txRes.json();
-        const txResults = Array.isArray(txJson) ? txJson : [txJson];
-        txResults.forEach((item: any, index: number) => {
+      const txJson = await txRes.json();
+      const txResults = Array.isArray(txJson) ? txJson : [txJson];
+      if (txResults.length !== batch.length) {
+        throw new Error(`Ordu ${army.name}: Bağış yanıtı eksik`);
+      }
+      txResults.forEach((item: any, index: number) => {
           const userId = batch[index];
           const txData = item?.result?.data?.json || item?.result?.data;
-          const txList = txData?.items || [];
-          if (!userId || !Array.isArray(txList)) return;
+          const txList = txData?.items;
+          if (!userId || !Array.isArray(txList)) {
+            throw new Error(`Ordu ${army.name}: Bağış yanıtı eksik`);
+          }
 
           const totalOnDate = txList.reduce(
             (total: number, transaction: any) => {
@@ -306,10 +328,7 @@ async function processSingleArmy(
 
           if (totalOnDate > 0) userDonationsMap[userId] = totalOnDate;
         });
-      } catch (e) {
-        console.error(`Donation batch error for army ${army.id}:`, e);
-      }
-    }
+    });
 
     // Aggregates for Health, Hunger, Damage, and Donations
     let totalHealthCurrent = 0;
@@ -494,32 +513,10 @@ async function processSingleArmy(
       members: memberStats,
     };
 
-    armyLastKnownData.set(army.id, result);
     return result;
   } catch (err: any) {
     console.error(`Error processing army ${army.id}:`, err);
-    if (armyLastKnownData.has(army.id)) {
-      return armyLastKnownData.get(army.id);
-    }
-    return {
-      muId: army.id,
-      name: army.name,
-      avatarUrl: army.avatarUrl,
-      memberCount: 20,
-      health: { current: 1600, max: 2000, percentage: 80 },
-      hunger: { current: 170, max: 200, percentage: 85 },
-      todayDamage: 0,
-      weeklyDamage: 0,
-      donations: {
-        targetDonation: 0,
-        collectedDonation: 0,
-        remainingDonation: 0,
-        completionPercentage: 100,
-        eligibleMemberCount: 0,
-        completedMemberCount: 0,
-      },
-      members: [],
-    };
+    throw err;
   }
 }
 
@@ -543,12 +540,17 @@ export default async function handler(req: any, res: any) {
   const todayDateStr = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Istanbul",
   }).format(now);
+  const isValidDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  };
   const effectiveDate =
-    targetDateQuery && /^\d{4}-\d{2}-\d{2}$/.test(targetDateQuery)
+    isValidDate(targetDateQuery)
       ? targetDateQuery
       : todayDateStr;
 
-  const cacheKey = `mgmt_overview_v6_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v7_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return res.status(200).json(cached.data);
@@ -571,18 +573,12 @@ export default async function handler(req: any, res: any) {
     const dates = Object.keys(snapshots).sort();
     const baselineDate =
       dates.length > 0 ? dates[dates.length - 1] : "2026-10-03";
-    // 2. Process armies in controlled chunks of 2 with small breathers to avoid 429 rate limit
-    const armyOverviews: any[] = [];
-    for (let i = 0; i < PRESET_8_ARMIES.length; i += 2) {
-      const chunk = PRESET_8_ARMIES.slice(i, i + 2);
-      const chunkResults = await Promise.all(
-        chunk.map((army) => processSingleArmy(army, snapshots, effectiveDate)),
-      );
-      armyOverviews.push(...chunkResults);
-      if (i + 2 < PRESET_8_ARMIES.length) {
-        await new Promise((r) => setTimeout(r, 120));
-      }
-    }
+    // Distribute each parallel request across the configured API keys.
+    const armyOverviews = await Promise.all(
+      PRESET_8_ARMIES.map((army) =>
+        processSingleArmy(army, snapshots, effectiveDate),
+      ),
+    );
 
     // Alliance Aggregates
     const totalAllHealthCurrent = Number(
@@ -672,9 +668,14 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json(payload);
   } catch (error: any) {
     console.error("API Error in /api/management-overview:", error);
-    return res.status(500).json({
+    const statusCode = error.statusCode === 429 ? 429 : 502;
+    if (statusCode === 429) res.setHeader("Retry-After", error.retryAfter || "60");
+    return res.status(statusCode).json({
       success: false,
-      error: error.message || "Yönetim mod verileri alınamadı",
+      error:
+        statusCode === 429
+          ? "WarEra API istek sınırına ulaşıldı. Limit sıfırlanınca tekrar deneyin."
+          : error.message || "Yönetim mod verileri alınamadı",
     });
   }
 }

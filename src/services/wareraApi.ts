@@ -2388,15 +2388,19 @@ const MANAGEMENT_REQUIRED_MU_ID = "693d20605669127e9d45f9b8";
 function managementOverviewIncludesRequiredArmies(
   response: ManagementOverviewResponse | null | undefined,
 ): response is ManagementOverviewResponse {
+  const armyIds = response?.armies?.map((army) => army.muId) ?? [];
   return Boolean(
     response?.success &&
-    response.armies?.some((army) => army.muId === MANAGEMENT_REQUIRED_MU_ID),
+    armyIds.length === 8 &&
+    new Set(armyIds).size === 8 &&
+    armyIds.includes(MANAGEMENT_REQUIRED_MU_ID),
   );
 }
 
 export async function fetchManagementOverview(
   date?: string,
   forceRefresh = false,
+  signal?: AbortSignal,
 ): Promise<ManagementOverviewResponse> {
   const params = new URLSearchParams();
   if (date) params.set("date", date);
@@ -2420,31 +2424,47 @@ export async function fetchManagementOverview(
     return managementOverviewClientCache.data;
   }
 
-  let res = await fetch(`/api/management-overview${queryStr}`);
+  let res = await fetch(`/api/management-overview${queryStr}`, { signal });
+  for (let retry = 0; res.status === 429 && retry < 2; retry++) {
+    const retryAfter = Math.max(
+      1,
+      Number(res.headers.get("Retry-After")) || 60,
+    );
+    await new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new DOMException("Request aborted", "AbortError"));
+        return;
+      }
+      const onAbort = () => {
+        clearTimeout(timeout);
+        reject(new DOMException("Request aborted", "AbortError"));
+      };
+      const timeout = setTimeout(() => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      }, retryAfter * 1000);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+    res = await fetch(`/api/management-overview${queryStr}`, { signal });
+  }
   if (!res.ok) {
-    throw new Error(`Yönetim modu verileri alınamadı (${res.status})`);
+    if (res.status === 429) {
+      throw new Error(
+        "WarEra API istek sınırına ulaşıldı. Limit sıfırlanınca Yenile ile tekrar deneyin.",
+      );
+    }
+    let errorMessage = `Yönetim modu verileri alınamadı (${res.status})`;
+    try {
+      const errorPayload = await res.json();
+      if (errorPayload?.error) errorMessage = errorPayload.error;
+    } catch {}
+    throw new Error(errorMessage);
   }
 
   let payload: ManagementOverviewResponse = await res.json();
 
-  // Retry stale server/Supabase payloads that predate DTX registration.
-  if (!managementOverviewIncludesRequiredArmies(payload) && !forceRefresh) {
-    const refreshParams = new URLSearchParams(params);
-    refreshParams.set("refresh", "true");
-    try {
-      res = await fetch(`/api/management-overview?${refreshParams.toString()}`);
-      if (res.ok) {
-        const refreshedPayload: ManagementOverviewResponse = await res.json();
-        if (managementOverviewIncludesRequiredArmies(refreshedPayload)) {
-          payload = refreshedPayload;
-        }
-      }
-    } catch (refreshError) {
-      console.warn(
-        "Management overview refresh failed; using available data.",
-        refreshError,
-      );
-    }
+  if (!managementOverviewIncludesRequiredArmies(payload)) {
+    throw new Error("Bağış takip verileri eksik; doğru veri alınana kadar gösterim durduruldu.");
   }
 
   managementOverviewClientCache = { timestamp: Date.now(), data: payload };

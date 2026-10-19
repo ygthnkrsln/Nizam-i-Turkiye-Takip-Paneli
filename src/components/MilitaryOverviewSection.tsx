@@ -20,7 +20,7 @@ import {
   Flame 
 } from 'lucide-react';
 import { MilitaryOverviewData, PRESET_MILITARY_UNITS } from '../types';
-import { fetchMilitaryOverview, getCachedMilitaryOverview } from '../services/wareraApi';
+import { fetchMilitaryOverview } from '../services/wareraApi';
 import { ActiveTab } from '../App';
 
 interface MilitaryOverviewSectionProps {
@@ -34,8 +34,8 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
   onMuIdChange,
   onNavigateTab,
 }) => {
-  const [data, setData] = useState<MilitaryOverviewData | null>(() => getCachedMilitaryOverview(muId));
-  const [isLoading, setIsLoading] = useState(!data);
+  const [data, setData] = useState<MilitaryOverviewData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
@@ -68,14 +68,10 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
   const loadData = async (forceRefresh = false) => {
     if (forceRefresh) {
       setIsRefreshing(true);
+      setData(null);
+      setIsLoading(true);
     } else {
-      const cached = getCachedMilitaryOverview(muId);
-      if (cached) {
-        setData(cached);
-        setIsLoading(false);
-      } else {
-        setIsLoading(true);
-      }
+      setIsLoading(true);
     }
     setError(null);
 
@@ -84,6 +80,7 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
       setData(overview);
     } catch (err: any) {
       console.error('Error fetching military overview:', err);
+      setData(null);
       setError(err.message || 'Ordu bilgileri yüklenemedi');
     } finally {
       setIsLoading(false);
@@ -92,7 +89,7 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
   };
 
   useEffect(() => {
-    loadData();
+    loadData(true);
   }, [muId]);
 
   const handleSelectMu = (newId: string) => {
@@ -105,6 +102,20 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
   const activePreset = PRESET_MILITARY_UNITS.find((m) => m.id === muId);
   const currentDisplayName = data?.muInfo?.name || activePreset?.name || 'Turkic Tribe';
   const currentAvatarUrl = data?.muInfo?.avatarUrl || activePreset?.avatarUrl;
+
+  if (!data && isLoading) {
+    return <div className="rounded-xl bg-[#182329] border border-[#3282B8]/30 p-6 text-center text-[#BBE1FA]/80 font-mono">Ordu verileri WarEra API&apos;den güncelleniyor…</div>;
+  }
+  if (!data && error) {
+    return (
+      <div className="rounded-xl bg-rose-950/30 border border-rose-500/30 p-6 text-center text-rose-200 font-mono space-y-3">
+        <p>Ordu verileri güncellenemedi: {error}</p>
+        <button type="button" onClick={() => loadData(true)} className="px-3 py-1.5 rounded-lg bg-rose-950/80 border border-rose-500/40 font-bold hover:bg-rose-900">
+          Tekrar dene
+        </button>
+      </div>
+    );
+  }
 
   // Formatters
   const formatDamage = (dmg?: number) => {

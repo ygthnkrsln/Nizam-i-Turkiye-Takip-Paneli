@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Coins,
   Target,
@@ -39,6 +39,8 @@ export const ManagementDonationTrackingSection: React.FC<
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
+  const activeRequest = useRef<AbortController | null>(null);
 
   // Selected date in YYYY-MM-DD
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -58,23 +60,39 @@ export const ManagementDonationTrackingSection: React.FC<
   >("all");
 
   const loadData = async (forceRefresh = false) => {
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    const requestId = ++requestSequence.current;
     if (forceRefresh) setIsRefreshing(true);
     else if (!data) setIsLoading(true);
+    setData(null);
     setError(null);
     try {
-      const res = await fetchManagementOverview(selectedDate, forceRefresh);
+      const res = await fetchManagementOverview(
+        selectedDate,
+        true,
+        controller.signal,
+      );
+      if (requestId !== requestSequence.current) return;
       setData(res);
     } catch (err: any) {
+      if (controller.signal.aborted) return;
+      if (requestId !== requestSequence.current) return;
       console.error("Error fetching management donation overview:", err);
       setError(err.message || "Bağış takip verileri yüklenemedi");
+      setData(null);
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      if (requestId === requestSequence.current && !controller.signal.aborted) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadData(false);
+    loadData(true);
+    return () => activeRequest.current?.abort();
   }, [selectedDate]);
 
   // Keep activeDrilldownMuId in sync if currentMuId changes
@@ -233,8 +251,26 @@ export const ManagementDonationTrackingSection: React.FC<
         </div>
       </div>
 
+      {(isLoading || isRefreshing) && (
+        <div className="rounded-xl bg-[#141C21] border border-[#3282B8]/30 p-4 text-sm text-[#BBE1FA]/80">
+          Bağış ve üye verileri API anahtarları üzerinden güncelleniyor…
+        </div>
+      )}
+      {error && (
+        <div className="rounded-xl bg-rose-950/30 border border-rose-500/30 p-4 text-sm text-rose-200 flex flex-wrap items-center justify-between gap-3">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => loadData(true)}
+            className="px-3 py-1.5 rounded-lg bg-rose-950/80 border border-rose-500/40 font-bold hover:bg-rose-900"
+          >
+            Tekrar dene
+          </button>
+        </div>
+      )}
+
       {/* 3. İTTİFAK TOPLAM GÖSTERGE KARTLARI (Hedef, Toplanan, Kalan, Başarı) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`${data ? "grid" : "hidden"} grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4`}>
         {/* KART 1: TOPLAM HEDEF BAĞIŞ */}
         <div className="rounded-xl bg-[#182329]/80 border border-emerald-500/30 p-4 shadow-lg flex flex-col justify-between">
           <div className="flex items-center justify-between text-emerald-400 mb-2">
@@ -315,7 +351,7 @@ export const ManagementDonationTrackingSection: React.FC<
       </div>
 
       {/* 4. 8 ORDUNUN HEDEF VE TOPLANAN BAĞIŞ LİSTESİ */}
-      <div className="rounded-xl bg-[#182329]/90 border border-emerald-500/30 overflow-hidden shadow-xl">
+      <div className={`${data ? "block" : "hidden"} rounded-xl bg-[#182329]/90 border border-emerald-500/30 overflow-hidden shadow-xl`}>
         <div className="p-3.5 bg-[#141C21] border-b border-emerald-500/20 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Award className="w-4 h-4 text-emerald-400" />

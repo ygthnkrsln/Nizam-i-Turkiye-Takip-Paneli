@@ -36,7 +36,7 @@ export default async function handler(req: any, res: any) {
   const targetMuId = (req.query?.muId as string) || DEFAULT_MU_ID;
   const forceRefresh = req.query?.refresh === "true";
 
-  const cacheKey = `mil_details_v2_${targetMuId}`;
+  const cacheKey = `mil_details_v3_${targetMuId}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return res.status(200).json(cached.data);
@@ -123,7 +123,7 @@ export default async function handler(req: any, res: any) {
     const leaderUser = allUsers.find((u) => u._id === leaderId);
     const leaderUsername = leaderUser?.username || "Muhtarr";
 
-    // 4. Map and rank members (sorted by weeklyDamage descending)
+    // 4. Map members with activity status and lifetime ranking data
     const mappedMembers = allUsers.map((u) => {
       const isLeader = u._id === leaderId;
       const isCommander = commanders.includes(u._id);
@@ -150,6 +150,11 @@ export default async function handler(req: any, res: any) {
         allTimeTier: u.rankings?.userDamages?.tier || "bronze",
         allTimeRank: u.rankings?.userDamages?.rank || 0,
         wealth: u.rankings?.userWealth?.value || 0,
+        isInactive: Boolean(
+          u.dates?.lastConnectionAt &&
+            Date.now() - new Date(u.dates.lastConnectionAt).getTime() >
+              3 * 24 * 60 * 60 * 1000,
+        ),
         role,
         roleBadge: isLeader ? "L" : isCommander ? "C" : isManager ? "M" : "",
         roleLabel: isLeader
@@ -162,8 +167,11 @@ export default async function handler(req: any, res: any) {
       };
     });
 
-    // Sort descending by weekly damage
-    mappedMembers.sort((a, b) => b.weeklyDamage - a.weeklyDamage);
+    // Keep recently active members first; use lifetime damage for their order.
+    mappedMembers.sort((a, b) => {
+      if (a.isInactive !== b.isInactive) return a.isInactive ? 1 : -1;
+      return b.allTimeDamage - a.allTimeDamage;
+    });
 
     // 5. Structure Final Output
     const rankings = muData.rankings || {};

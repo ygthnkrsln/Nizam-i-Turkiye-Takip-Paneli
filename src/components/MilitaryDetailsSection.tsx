@@ -21,7 +21,7 @@ import {
   Target
 } from 'lucide-react';
 import { MilitaryDetailsData, MilitaryDetailMember } from '../types';
-import { fetchMilitaryDetails, getCachedMilitaryDetails } from '../services/wareraApi';
+import { fetchMilitaryDetails } from '../services/wareraApi';
 import { ActiveTab } from '../App';
 
 interface MilitaryDetailsSectionProps {
@@ -88,8 +88,8 @@ export const MilitaryDetailsSection: React.FC<MilitaryDetailsSectionProps> = ({
   onMuIdChange,
   onNavigateTab,
 }) => {
-  const [data, setData] = useState<MilitaryDetailsData | null>(() => getCachedMilitaryDetails(muId));
-  const [isLoading, setIsLoading] = useState(!data);
+  const [data, setData] = useState<MilitaryDetailsData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -106,14 +106,10 @@ export const MilitaryDetailsSection: React.FC<MilitaryDetailsSectionProps> = ({
   const loadData = async (forceRefresh = false) => {
     if (forceRefresh) {
       setIsRefreshing(true);
+      setData(null);
+      setIsLoading(true);
     } else {
-      const cached = getCachedMilitaryDetails(muId);
-      if (cached) {
-        setData(cached);
-        setIsLoading(false);
-      } else {
-        setIsLoading(true);
-      }
+      setIsLoading(true);
     }
     setError(null);
 
@@ -122,6 +118,7 @@ export const MilitaryDetailsSection: React.FC<MilitaryDetailsSectionProps> = ({
       setData(details);
     } catch (err: any) {
       console.error('Error fetching military details:', err);
+      setData(null);
       setError(err.message || 'Birlik detayları yüklenemedi');
     } finally {
       setIsLoading(false);
@@ -130,7 +127,7 @@ export const MilitaryDetailsSection: React.FC<MilitaryDetailsSectionProps> = ({
   };
 
   useEffect(() => {
-    loadData();
+    loadData(true);
   }, [muId]);
 
   const handleCopyId = (id: string, e?: React.MouseEvent) => {
@@ -180,6 +177,20 @@ export const MilitaryDetailsSection: React.FC<MilitaryDetailsSectionProps> = ({
   });
 
   const mu = data?.muInfo;
+
+  if (!data && isLoading) {
+    return <div className="rounded-xl bg-[#182329] border border-[#3282B8]/30 p-6 text-center text-[#BBE1FA]/80 font-mono">Ordu üyeleri ve aktivite bilgileri WarEra API&apos;den güncelleniyor…</div>;
+  }
+  if (!data && error) {
+    return (
+      <div className="rounded-xl bg-rose-950/30 border border-rose-500/30 p-6 text-center text-rose-200 font-mono space-y-3">
+        <p>Ordu detayları güncellenemedi: {error}</p>
+        <button type="button" onClick={() => loadData(true)} className="px-3 py-1.5 rounded-lg bg-rose-950/80 border border-rose-500/40 font-bold hover:bg-rose-900">
+          Tekrar dene
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full space-y-6 text-white font-mono">
@@ -565,7 +576,7 @@ export const MilitaryDetailsSection: React.FC<MilitaryDetailsSectionProps> = ({
               <div
                 key={member.userId}
                 onClick={() => setSelectedMember(member)}
-                className="rounded-xl bg-[#141C21]/80 hover:bg-[#182329] border border-rose-500/15 hover:border-rose-500/45 p-3.5 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md cursor-pointer group"
+                className={`rounded-xl bg-[#141C21]/80 hover:bg-[#182329] border border-rose-500/15 hover:border-rose-500/45 p-3.5 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md cursor-pointer group ${member.isInactive ? 'opacity-45 grayscale' : ''}`}
               >
                 {/* Sol Elemanlar: Sıralama No, Avatar, Lv, İsim, Rozetler */}
                 <div className="flex items-center gap-3 min-w-0">
@@ -606,6 +617,11 @@ export const MilitaryDetailsSection: React.FC<MilitaryDetailsSectionProps> = ({
                       <span className="font-bold text-sm text-white font-mono group-hover:text-rose-200 transition-colors truncate">
                         {member.username}
                       </span>
+                      {member.isInactive && (
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-500/30 text-slate-400 text-[9px] font-bold">
+                          Pasif
+                        </span>
+                      )}
 
                       {/* Komutan (C) / Lider (L) / Yönetici (M) rozeti */}
                       {isLeader ? (
