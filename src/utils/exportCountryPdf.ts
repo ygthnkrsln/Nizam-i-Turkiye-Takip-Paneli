@@ -93,7 +93,7 @@ export function exportCountryStatsToPDF(data: CountryStatsResponse, viewMode: 'c
   doc.setFontSize(9);
   doc.setTextColor(187, 225, 250); // #BBE1FA
   doc.text(
-    cleanPdfText('6 Askeri Birlik Genel Analizi (Turkic Tribe, ASHINA, ASHINA Reserve, Legio Panthera, BEASTs, Deliler)'),
+    cleanPdfText('8 Askeri Birlik Genel Analizi (Turkic Tribe, ASHINA, ASHINA Reserve, SANCAK, BEAST, Deliler, DTX, BEASTs)'),
     35,
     46
   );

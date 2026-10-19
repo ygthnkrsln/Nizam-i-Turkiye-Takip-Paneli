@@ -80,12 +80,12 @@ export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
   let tabSlug = segments[0] || '';
   let urlMuId: string | null = null;
 
-  // 1. Direct hex MU ID in first segment: e.g. "/68e0f3b86351b310a982d79e"
+  // 1. Direct hex MU ID in first segment.
   if (/^[a-f0-9]{24}$/.test(tabSlug)) {
     urlMuId = tabSlug;
     tabSlug = 'bagis-takibi';
   } else if (segments[1] && /^[a-f0-9]{24}$/.test(segments[1])) {
-    // 2. MU ID in second segment: e.g. "/bagis-takibi/68e0f3b86351b310a982d79e"
+    // 2. MU ID in second segment.
     urlMuId = segments[1];
   }
 
@@ -96,7 +96,7 @@ export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
     urlMuId = queryMuId.toLowerCase();
   }
 
-  // 4. Hash fallback: e.g. "#/bagis-takibi/68e0f3b86351b310a982d79e"
+  // 4. Hash fallback.
   const hash = window.location.hash.toLowerCase().replace(/^#\/?/, '');
   const hashSegments = hash.split('/').filter(Boolean);
   if (!tabSlug && hashSegments[0]) {
@@ -375,6 +375,7 @@ export default function App() {
     let totalActiveFactories = 0;
     let totalAllFactories = 0;
     let totalActiveEnginePower = 0;
+    let totalWealth = 0;
 
     players.forEach((p) => {
       const isAct = p.isActive ?? Boolean(
@@ -388,6 +389,7 @@ export default function App() {
       totalActiveFactories += activeFCount;
       totalAllFactories += allFCount;
       totalActiveEnginePower += p.totalAutomatedLevel || 0;
+      totalWealth += p.wealth || 0;
     });
 
     return {
@@ -395,6 +397,7 @@ export default function App() {
       totalActiveFactories,
       totalAllFactories,
       totalActiveEnginePower,
+      totalWealth,
     };
   }, [players]);
 
@@ -452,6 +455,8 @@ export default function App() {
                 totalActiveFactories={armyMetrics.totalActiveFactories}
                 totalAllFactories={armyMetrics.totalAllFactories}
                 totalActiveEnginePower={armyMetrics.totalActiveEnginePower}
+                totalWealth={armyMetrics.totalWealth}
+                showWealthMetrics={activeTab === 'armyStats'}
                 muData={muData}
                 currentMuId={muId}
                 onMuIdChange={handleMuIdChange}
@@ -480,6 +485,7 @@ export default function App() {
                 isRefreshing={isRefreshing}
                 onRefresh={() => fetchData(true)}
                 muName={muData?.name || 'Turkic Tribe'}
+                muId={muId}
               />
             ) : (
               <CountryStatsPanel />

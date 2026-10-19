@@ -1,3 +1,4 @@
+
 export interface DonationItem {
   id: string;
   amount: number;
@@ -18,57 +19,12 @@ export interface MilitaryUnitPreset {
   isDefault?: boolean;
 }
 
-export const PRESET_MILITARY_UNITS: MilitaryUnitPreset[] = [
-  {
-    id: "69c229c4449287ea1a26a5b3",
-    name: "Turkic Tribe",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png",
-    isDefault: true,
-  },
-  {
-    id: "689f69064e095b8b9f1b885a",
-    name: "ASHINA",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png",
-  },
-  {
-    id: "68bc9bcb4870c8e343e42855",
-    name: "ASHINA Reserve",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png",
-  },
-  {
-    id: "690088ce4864a132a2d92d07",
-    name: "Legio Panthera",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png",
-  },
-  {
-    id: "6902269a560184d196a6fba8",
-    name: "BEASTs",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg",
-  },
-  {
-    id: "6a0f1495478fe2a58d2868d6",
-    name: "Deliler",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png",
-  },
-  {
-    id: "68e0f3b86351b310a982d79e",
-    name: "WAVVE",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-68e0f3b86351b310a982d79e-1786113114746-rr3s4yb3.png",
-  },
-  {
-    id: "693d20605669127e9d45f9b8",
-    name: "DTX",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-693d20605669127e9d45f9b8-1777019037251-2qmzl25l.png",
-  },
-];
+export const PRESET_MILITARY_UNITS: MilitaryUnitPreset[] = TRACKED_ARMIES.map(
+  (army) => ({
+    ...army,
+    ...(army.id === "69c229c4449287ea1a26a5b3" ? { isDefault: true } : {}),
+  }),
+);
 
 export interface FactoryItem {
   id: string;
@@ -114,6 +70,11 @@ export interface PlayerStats {
   ecoSkillPoints?: number; // Ekonomi becerilerine (entrepreneurship, energy, production, companies, management) harcanan SP
   totalSkillPoints?: number; // Harcanan / toplam beceri puanı
   skills?: Record<string, any>;
+  rankings?: Record<string, any>;
+  dates?: Record<string, any>;
+  stats?: Record<string, any>;
+  totalXp?: number;
+  prestigeLevel?: number;
 }
 
 export interface MilitaryUnitData {
@@ -428,7 +389,7 @@ export interface DailyDamageSnapshotItem {
       muId: string;
       armyTotalWeeklyDamage: number;
       memberCount: number;
-      members: Record<string, { username: string; weeklyDamage: number }>;
+      members: Record<string, { username: string; weeklyDamage: number; wealth?: number; dailyDamage?: number }>;
     }
   >;
 }
@@ -442,3 +403,4 @@ export interface DailyDamageSnapshotsResponse {
   snapshots: Record<string, DailyDamageSnapshotItem>;
   error?: string;
 }
+import { TRACKED_ARMIES } from "./config/trackedArmies";

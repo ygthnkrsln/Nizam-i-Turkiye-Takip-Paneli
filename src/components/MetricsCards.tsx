@@ -8,6 +8,8 @@ interface MetricsCardsProps {
   totalActiveFactories: number;
   totalAllFactories: number;
   totalActiveEnginePower: number;
+  totalWealth?: number;
+  showWealthMetrics?: boolean;
   muData: MilitaryUnitData | null;
   currentMuId: string;
   onMuIdChange: (newId: string) => void;
@@ -19,6 +21,8 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
   totalActiveFactories,
   totalAllFactories,
   totalActiveEnginePower,
+  totalWealth = 0,
+  showWealthMetrics = false,
   muData,
   currentMuId,
   onMuIdChange,
@@ -62,7 +66,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
   const activeRate = totalMembers > 0 ? Math.round((activePlayers / totalMembers) * 100) : 0;
 
   return (
-    <div id="metrics-summary-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-stretch">
+    <div id="metrics-summary-grid" className={`grid grid-cols-1 sm:grid-cols-2 ${showWealthMetrics ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4 mb-6 items-stretch`}>
       {/* 1. Askeri Birlik (Ordu) Seçimi */}
       <div
         id="card-mu-selector"
@@ -221,6 +225,11 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
         </div>
       </div>
 
+      {showWealthMetrics ? <div className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-amber-500/20 rounded-xl p-5 flex flex-col justify-between shadow-lg shadow-black/20">
+        <div className="text-[11px] font-semibold text-[#BBE1FA]/70 uppercase tracking-widest font-mono">Toplam Servet</div>
+        <div className="mt-3 font-mono text-3xl font-extrabold text-amber-200">${totalWealth.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</div>
+        <div className="mt-2 text-[11px] text-[#BBE1FA]/50">Ordu üyelerinin güncel toplam serveti</div>
+      </div> : <>
       {/* 3. Aktif Fabrika */}
       <div
         id="metric-active-factories"
@@ -278,6 +287,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
           Aktif fabrikaların toplam otomasyon motor seviyesi
         </div>
       </div>
+      </>}
     </div>
   );
 };

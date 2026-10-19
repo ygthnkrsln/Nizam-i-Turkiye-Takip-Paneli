@@ -8,18 +8,11 @@ import {
   fetchSnapshotsFromSupabase,
   isSupabaseConnected,
 } from "../../lib/supabaseStorage.js";
+import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
+import { calculateDailyDamageFromSnapshot } from "../../lib/dailyDamage.js";
 export { isSupabaseConnected };
 
-const PRESET_MILITARY_UNITS = [
-  { id: "69c229c4449287ea1a26a5b3", name: "Turkic Tribe" },
-  { id: "689f69064e095b8b9f1b885a", name: "ASHINA" },
-  { id: "68bc9bcb4870c8e343e42855", name: "ASHINA Reserve" },
-  { id: "690088ce4864a132a2d92d07", name: "Legio Panthera" },
-  { id: "6902269a560184d196a6fba8", name: "BEASTs" },
-  { id: "6a0f1495478fe2a58d2868d6", name: "Deliler" },
-  { id: "68e0f3b86351b310a982d79e", name: "WAVVE" },
-  { id: "693d20605669127e9d45f9b8", name: "DTX" },
-];
+const PRESET_MILITARY_UNITS = TRACKED_ARMIES;
 
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
 
@@ -87,8 +80,10 @@ export async function readSnapshotsWithSupabase(): Promise<
     const supabaseStore = await fetchSnapshotsFromSupabase(30);
     if (supabaseStore && Object.keys(supabaseStore).length > 0) {
       const merged = { ...diskStore, ...supabaseStore };
-      global.__DAILY_DAMAGE_SNAPSHOTS__ = merged;
-      return merged;
+      const dates = Object.keys(merged).sort().slice(-30);
+      const retained = Object.fromEntries(dates.map((date) => [date, merged[date]]));
+      global.__DAILY_DAMAGE_SNAPSHOTS__ = retained;
+      return retained;
     } else if (
       isSupabaseConnected() &&
       diskStore &&
@@ -105,6 +100,9 @@ export async function readSnapshotsWithSupabase(): Promise<
     console.error("Error fetching snapshots from Supabase:", err);
   }
 
+  const dates = Object.keys(diskStore || {}).sort().slice(-30);
+  diskStore = Object.fromEntries(dates.map((date) => [date, diskStore[date]]));
+  global.__DAILY_DAMAGE_SNAPSHOTS__ = diskStore;
   return diskStore;
 }
 
@@ -116,6 +114,8 @@ export async function snapshotAllArmies() {
   const timestamp = now.getTime();
 
   let currentStore = await readSnapshotsWithSupabase();
+  const previousDate = Object.keys(currentStore).filter((date) => date < dateStr).sort().at(-1);
+  const previousSnapshot = previousDate ? currentStore[previousDate] : undefined;
   if (!currentStore[dateStr]) {
     currentStore[dateStr] = {
       date: dateStr,
@@ -141,10 +141,7 @@ export async function snapshotAllArmies() {
         chunks.push(members.slice(i, i + 10));
       }
 
-      const memberDamages: Record<
-        string,
-        { username: string; weeklyDamage: number }
-      > = {};
+      const memberDamages: Record<string, { username: string; weeklyDamage: number; wealth?: number; dailyDamage?: number }> = {};
 
       await Promise.all(
         chunks.map(async (chunk) => {
@@ -165,6 +162,13 @@ export async function snapshotAllArmies() {
                     memberDamages[u._id] = {
                       username: u.username || "Bilinmeyen Asker",
                       weeklyDamage: u.rankings?.weeklyUserDamages?.value || 0,
+                      wealth: Number(u.rankings?.userWealth?.value ?? u.wealth ?? 0),
+                      dailyDamage: previousSnapshot?.armies?.[mu.id]?.members?.[u._id]
+                        ? calculateDailyDamageFromSnapshot(
+                            Number(u.rankings?.weeklyUserDamages?.value || 0),
+                            Number(previousSnapshot.armies[mu.id].members[u._id].weeklyDamage || 0),
+                          )
+                        : undefined,
                     };
                   }
                 }
@@ -190,6 +194,9 @@ export async function snapshotAllArmies() {
       console.error(`Error snapshotting MU ${mu.name}:`, e);
     }
   }
+
+  const retainedDates = Object.keys(currentStore).sort().slice(-30);
+  currentStore = Object.fromEntries(retainedDates.map((date) => [date, currentStore[date]]));
 
   // 1. Write to local file/memory
   writeSnapshotsToDisk(currentStore);

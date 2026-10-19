@@ -71,7 +71,7 @@ export interface DailySnapshotRecord {
       muId: string;
       armyTotalWeeklyDamage: number;
       memberCount: number;
-      members: Record<string, { username: string; weeklyDamage: number }>;
+      members: Record<string, { username: string; weeklyDamage: number; wealth?: number; dailyDamage?: number }>;
     }
   >;
   created_at?: string;
@@ -115,6 +115,11 @@ export async function saveSnapshotToSupabase(
       return false;
     }
 
+    const cutoff = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" })
+      .format(Date.now() - 29 * 24 * 60 * 60 * 1000);
+    const { error: pruneError } = await client.from("daily_snapshots").delete().lt("date", cutoff);
+    if (pruneError) console.warn("[Supabase] Could not prune old daily snapshots:", pruneError.message);
+
     console.log(
       `[Supabase] Daily snapshot for ${snapshot.date} successfully saved to Supabase.`,
     );
@@ -140,7 +145,7 @@ export async function fetchSnapshotsFromSupabase(
     const { data, error } = await client
       .from("daily_snapshots")
       .select("*")
-      .order("date", { ascending: true })
+      .order("date", { ascending: false })
       .limit(limitDays);
 
     if (error) {
@@ -153,7 +158,7 @@ export async function fetchSnapshotsFromSupabase(
     }
 
     const store: Record<string, DailySnapshotRecord> = {};
-    for (const row of data) {
+    for (const row of [...data].reverse()) {
       if (row.date && row.armies) {
         store[row.date] = {
           date: row.date,

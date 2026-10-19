@@ -1,3 +1,4 @@
+import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
 // Vercel Serverless Function: GET /api/mu-data
 // Handles Military Unit data fetching with token rotation and 7-donation resolution
 
@@ -10,43 +11,9 @@ const KNOWN_COUNTRIES: Record<string, { name: string; code: string }> = {
   "6873d0ea1758b40e712b5ef5": { name: "Kamerun", code: "CM" },
 };
 
-const KNOWN_MUS: Record<string, { name: string; avatarUrl: string }> = {
-  "69c229c4449287ea1a26a5b3": {
-    name: "Turkic Tribe",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png",
-  },
-  "689f69064e095b8b9f1b885a": {
-    name: "ASHINA",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png",
-  },
-  "68bc9bcb4870c8e343e42855": {
-    name: "ASHINA Reserve",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png",
-  },
-  "690088ce4864a132a2d92d07": {
-    name: "Legio Panthera",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png",
-  },
-  "6902269a560184d196a6fba8": {
-    name: "BEASTs",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg",
-  },
-  "6a0f1495478fe2a58d2868d6": {
-    name: "Deliler",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png",
-  },
-  "68e0f3b86351b310a982d79e": {
-    name: "WAVVE",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-68e0f3b86351b310a982d79e-1786113114746-rr3s4yb3.png",
-  },
-};
+const KNOWN_MUS: Record<string, { name: string; avatarUrl: string }> = Object.fromEntries(
+  TRACKED_ARMIES.map(({ id, name, avatarUrl }) => [id, { name, avatarUrl }]),
+);
 
 async function fetchWarEra(
   url: string,
@@ -793,6 +760,11 @@ export default async function handler(req: any, res: any) {
           ecoSkillPoints,
           totalSkillPoints: effectiveTotalSP,
           skills: userProfile?.skills,
+          rankings: userProfile?.rankings,
+          dates: userProfile?.dates,
+          stats: userProfile?.stats,
+          totalXp: userProfile?.experience?.totalXp ?? userProfile?.totalXp ?? 0,
+          prestigeLevel: userProfile?.leveling?.prestigeLevel ?? userProfile?.prestigeLevel ?? 0,
         };
       });
 

@@ -17,6 +17,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const muId = req.query?.muId as string;
+  const userId = req.query?.userId as string;
   let store = await readSnapshotsWithSupabase();
 
   // If no snapshots exist at all yet, take an initial baseline snapshot now
@@ -29,6 +30,13 @@ export default async function handler(req: any, res: any) {
 
   // Get dates sorted
   const dates = Object.keys(store).sort();
+  if (userId && muId) {
+    const history = dates.slice(-30).map((date) => {
+      const member = store[date]?.armies?.[muId]?.members?.[userId];
+      return { date, wealth: member?.wealth, dailyDamage: member?.dailyDamage };
+    });
+    return res.status(200).json({ success: true, history });
+  }
   const latestDate = dates[dates.length - 1];
   const previousDate = dates.length > 1 ? dates[dates.length - 2] : null;
 

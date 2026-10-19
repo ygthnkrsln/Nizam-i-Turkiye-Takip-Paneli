@@ -1,3 +1,4 @@
+import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
 // Vercel Serverless Function: GET /api/management-overview
 // Serves Management Mode:
 // 1. "Ordu Takibi": Live health & hunger bar percentages + today's damage across all 8 armies
@@ -16,56 +17,7 @@ import {
 } from "../../lib/dailyDamage.js";
 import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
 
-export const PRESET_8_ARMIES = [
-  {
-    id: "69c229c4449287ea1a26a5b3",
-    name: "Turkic Tribe",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-69c229c4449287ea1a26a5b3-1787680897144-8qglepbh.png",
-  },
-  {
-    id: "689f69064e095b8b9f1b885a",
-    name: "ASHINA",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-689f69064e095b8b9f1b885a-1781036697919-z15zttgr.png",
-  },
-  {
-    id: "68bc9bcb4870c8e343e42855",
-    name: "ASHINA Reserve",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-68bc9bcb4870c8e343e42855-1788975231586-trvgqowg.png",
-  },
-  {
-    id: "690088ce4864a132a2d92d07",
-    name: "Legio Panthera",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-690088ce4864a132a2d92d07-1789328739738-1v6foes6.png",
-  },
-  {
-    id: "6902269a560184d196a6fba8",
-    name: "BEASTs",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg",
-  },
-  {
-    id: "6a0f1495478fe2a58d2868d6",
-    name: "Deliler",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-6a0f1495478fe2a58d2868d6-1779887796291-bfgxnrms.png",
-  },
-  {
-    id: "68e0f3b86351b310a982d79e",
-    name: "WAVVE",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-68e0f3b86351b310a982d79e-1786113114746-rr3s4yb3.png",
-  },
-  {
-    id: "693d20605669127e9d45f9b8",
-    name: "DTX",
-    avatarUrl:
-      "https://media.warera.io/avatars/mu/mu-693d20605669127e9d45f9b8-1777019037251-2qmzl25l.png",
-  },
-];
+export const PRESET_8_ARMIES = TRACKED_ARMIES;
 
 interface CacheItem {
   timestamp: number;
@@ -561,7 +513,7 @@ export default async function handler(req: any, res: any) {
       ? targetDateQuery
       : todayDateStr;
 
-  const cacheKey = `mgmt_overview_v8_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v9_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return res.status(200).json(cached.data);

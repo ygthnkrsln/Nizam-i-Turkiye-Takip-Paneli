@@ -20,8 +20,9 @@ export const TARGET_MILITARY_UNITS = [
   { id: "69c229c4449287ea1a26a5b3", name: "Turkic Tribe" },
   { id: "689f69064e095b8b9f1b885a", name: "ASHINA" },
   { id: "68bc9bcb4870c8e343e42855", name: "ASHINA Reserve" },
-  { id: "690088ce4864a132a2d92d07", name: "Legio Panthera" },
+  { id: "690088ce4864a132a2d92d07", name: "SANCAK" },
   { id: "6902269a560184d196a6fba8", name: "BEASTs" },
+  { id: "69ab3f2fd0fc128eeeba7a65", name: "BEAST" },
   { id: "6a0f1495478fe2a58d2868d6", name: "Deliler" },
   { id: "693d20605669127e9d45f9b8", name: "DTX" },
 ];
