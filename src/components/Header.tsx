@@ -58,17 +58,17 @@ const groups: {
 const colors = {
   emerald: {
     label: 'text-emerald-300', dot: 'bg-emerald-400',
-    active: 'border-emerald-400 bg-emerald-950/50 text-emerald-100',
+    active: 'border-emerald-500/50 bg-[#1B2B34] text-white',
     hover: 'hover:bg-emerald-950/30',
   },
   rose: {
     label: 'text-rose-300', dot: 'bg-rose-400',
-    active: 'border-rose-400 bg-rose-950/50 text-rose-100',
+    active: 'border-rose-500/50 bg-[#1B2B34] text-white',
     hover: 'hover:bg-rose-950/30',
   },
   amber: {
     label: 'text-amber-300', dot: 'bg-amber-400',
-    active: 'border-amber-400 bg-amber-950/50 text-amber-100',
+    active: 'border-amber-500/50 bg-[#1B2B34] text-white',
     hover: 'hover:bg-amber-950/30',
   },
 };
@@ -157,9 +157,9 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, open, on
                         onTabChange(id);
                         if (window.innerWidth < 768) onToggle();
                       }}
-                      className={`flex w-full items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-left text-[13px] font-medium transition-colors ${
+                      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-[13px] font-medium transition-colors ${
                         selected
-                          ? `${color.active} shadow-sm`
+                          ? color.active
                           : `border-transparent text-[#BBE1FA]/75 ${color.hover} hover:text-white`
                       } ${open ? '' : 'justify-center px-0'}`}
                     >

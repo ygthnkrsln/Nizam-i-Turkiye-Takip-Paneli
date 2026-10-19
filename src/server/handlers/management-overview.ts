@@ -111,12 +111,13 @@ async function fetchWarEra(
   }
   const maxAttempts = Math.max(retries + 1, configuredTokens.length);
   let lastResponse: Response | null = null;
+  const firstToken = getNextWarEraToken();
+  const firstTokenIndex = Math.max(0, configuredTokens.indexOf(firstToken));
   while (attempt < maxAttempts) {
-    const token = getNextWarEraToken();
+    const token = configuredTokens[(firstTokenIndex + attempt) % configuredTokens.length];
     const headers: Record<string, string> = {
       Accept: "application/json",
       "X-API-Key": token,
-      Authorization: `Bearer ${token}`,
       ...((init?.headers as Record<string, string>) || {}),
     };
     try {
@@ -125,6 +126,12 @@ async function fetchWarEra(
         lastResponse = res;
         attempt++;
         continue;
+      }
+      if (res.status === 401 || res.status === 403) {
+        lastResponse = res;
+        attempt++;
+        if (attempt < configuredTokens.length) continue;
+        return res;
       }
       if (res.status === 503 && attempt + 1 < maxAttempts) {
         attempt++;
