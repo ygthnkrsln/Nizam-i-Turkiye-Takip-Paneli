@@ -9,7 +9,3 @@ export function getTransactionItems(payload: any): any[] | null {
   return Array.isArray(data?.items) ? data.items : null;
 }
 
-export function getTransactionAmount(item: any): number {
-  const amount = Number(item?.money ?? item?.amount ?? item?.value);
-  return Number.isFinite(amount) ? amount : 0;
-}

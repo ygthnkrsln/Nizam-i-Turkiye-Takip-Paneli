@@ -1,5 +1,5 @@
 import { TRACKED_ARMIES } from "../config/trackedArmies";
-import { getTrpcData, getTransactionAmount, getTransactionItems } from "../utils/wareraTransactions";
+import { getTrpcData } from "../utils/wareraTransactions";
 import {
   ApiResponse,
   DonationItem,
@@ -1116,18 +1116,6 @@ SEED_DATA.players = SEED_DATA.players.map((p) => {
   return p;
 });
 
-const KNOWN_COUNTRIES: Record<string, { name: string; code: string }> = {
-  "683ddd2c24b5a2e114af15b5": { name: "Birleşik Arap Emirlikleri", code: "AE" },
-  "6813b6d446e731854c7ac7eb": { name: "Türkiye", code: "TR" },
-  "6813b6d546e731854c7ac8d1": { name: "Azerbaycan", code: "AZ" },
-  "6873d0ea1758b40e712b5ef5": { name: "Kamerun", code: "CM" },
-};
-
-const KNOWN_MUS: Record<string, { name: string; avatarUrl: string }> = Object.fromEntries(
-  TRACKED_ARMIES.map(({ id, name, avatarUrl }) => [id, { name, avatarUrl }]),
-);
-
-// Deterministic fallback donations generator for players when transactions API is limited
 /**
  * Secure client-side request helper:
  * Routes WarEra API requests through the server-side /api/warera-proxy endpoint
@@ -1204,13 +1192,12 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
   // 2. Fetch all members with user.getUserLite
   const playersList: PlayerStats[] = [];
   const batchSize = 4;
-  let hasAnyLiveDonations = false;
 
   for (let i = 0; i < memberIds.length; i += batchSize) {
     const batch = memberIds.slice(i, i + batchSize);
     const batchPromises = batch.map(async (userId) => {
       let userProfile: any = null;
-      let donations: DonationItem[] = [];
+      const donations: DonationItem[] = [];
 
       try {
         const userUrl = `https://api2.warera.io/trpc/user.getUserLite?input=${encodeURIComponent(
@@ -1225,104 +1212,6 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
         console.warn(`Could not fetch userLite for ${userId}`, e);
       }
 
-      // Try fetching live transactions
-      let calculatedTotal = 0;
-
-      try {
-        const txUrl = `https://api2.warera.io/trpc/transaction.getPaginatedTransactions?input=${encodeURIComponent(
-            JSON.stringify({ userId, transactionType: "donation" }),
-        )}`;
-        const txRes = await fetchWithTokens(txUrl);
-        if (!txRes.ok) throw new Error(`Donation API returned HTTP ${txRes.status} for ${userId}`);
-        const txJson = await txRes.json();
-        const items = getTransactionItems(txJson);
-        if (!items) throw new Error(`Donation API returned an invalid response for ${userId}`);
-        {
-            if (items.length > 0) {
-              hasAnyLiveDonations = true;
-              calculatedTotal = items.reduce(
-                (sum: number, item: any) =>
-                  sum + getTransactionAmount(item),
-                0,
-              );
-
-              // Sort by creation date descending (most recent first)
-              const sortedItems = [...items].sort(
-                (a: any, b: any) =>
-                  new Date(b.createdAt || 0).getTime() -
-                  new Date(a.createdAt || 0).getTime(),
-              );
-
-              donations = sortedItems
-                .slice(0, 7)
-                .map((item: any, idx: number) => {
-                  const targetType = String(
-                    item.targetType || item.recipientType || "",
-                  ).toLowerCase();
-                  const desc = String(
-                    item.description || item.title || "",
-                  ).toLowerCase();
-                  const sellerMuId = String(item.sellerMuId || "");
-                  const isMU =
-                    Boolean(sellerMuId) ||
-                    targetType.includes("mu") ||
-                    targetType.includes("military") ||
-                    desc.includes("military unit") ||
-                    desc.includes("birlik") ||
-                    desc.includes("dormitor") ||
-                    desc.includes("headquarters");
-
-                  const sellerCountryId = String(item.sellerCountryId || "");
-                  let countryName = "Türkiye";
-                  let countryCode: string | undefined = "TR";
-
-                  if (KNOWN_COUNTRIES[sellerCountryId]) {
-                    countryName = KNOWN_COUNTRIES[sellerCountryId].name;
-                    countryCode = KNOWN_COUNTRIES[sellerCountryId].code;
-                  } else if (item.countryName) {
-                    countryName = item.countryName;
-                    countryCode = item.countryCode || "TR";
-                  }
-
-                  let armyName = muData.name || "Turkic Tribe";
-                  let armyAvatarUrl = muData.avatarUrl;
-                  if (sellerMuId && KNOWN_MUS[sellerMuId]) {
-                    armyName = KNOWN_MUS[sellerMuId].name;
-                    armyAvatarUrl = KNOWN_MUS[sellerMuId].avatarUrl;
-                  }
-
-                  if (isMU) {
-                    countryCode = undefined;
-                  }
-
-                  return {
-                    id: item._id || `tx-${userId}-${idx}`,
-                    amount: Number(
-                      item.money ?? item.amount ?? item.value ?? 0,
-                    ),
-                    currency: item.currency || item.itemCode || "Gold",
-                    timestamp: item.createdAt || new Date().toISOString(),
-                    description:
-                      item.description ||
-                      (isMU
-                        ? `${armyName} Fonu Katkısı`
-                        : `${countryName} Hazinesi Bağışı`),
-                    type: item.transactionType || item.type || "donation",
-                    target: isMU ? ("mu" as const) : ("country" as const),
-                    targetName: isMU ? armyName : countryName,
-                    targetAvatarUrl: isMU ? armyAvatarUrl : undefined,
-                    countryCode,
-                  };
-                });
-            } else {
-              donations = [];
-              calculatedTotal = 0;
-            }
-        }
-      } catch (e) {
-        throw e;
-      }
-
       const wealth = userProfile?.rankings?.userWealth?.value || 5000;
       const level = userProfile?.leveling?.level || 1;
 
@@ -1332,10 +1221,7 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
       );
 
-      const totalDonations =
-        calculatedTotal > 0
-          ? calculatedTotal
-          : donations.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+      const totalDonations = 0;
 
       let role: PlayerStats["role"] = "Member";
       if (userId === leaderId) role = "Leader";
@@ -1456,7 +1342,7 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
   return {
     success: true,
     timestamp: Date.now(),
-    isLiveDonations: hasAnyLiveDonations,
+    isLiveDonations: false,
     hasApiToken: true,
     militaryUnit: {
       id: muData._id,

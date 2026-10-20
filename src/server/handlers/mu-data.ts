@@ -1,20 +1,8 @@
-import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
 // Vercel Serverless Function: GET /api/mu-data
-// Handles Military Unit data fetching with token rotation and 7-donation resolution
+// Handles shared military unit and player statistics, without donation history lookups.
 
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
-import { getTrpcData, getTransactionAmount, getTransactionItems } from "../../utils/wareraTransactions.js";
-
-const KNOWN_COUNTRIES: Record<string, { name: string; code: string }> = {
-  "683ddd2c24b5a2e114af15b5": { name: "Birleşik Arap Emirlikleri", code: "AE" },
-  "6813b6d446e731854c7ac7eb": { name: "Türkiye", code: "TR" },
-  "6813b6d546e731854c7ac8d1": { name: "Azerbaycan", code: "AZ" },
-  "6873d0ea1758b40e712b5ef5": { name: "Kamerun", code: "CM" },
-};
-
-const KNOWN_MUS: Record<string, { name: string; avatarUrl: string }> = Object.fromEntries(
-  TRACKED_ARMIES.map(({ id, name, avatarUrl }) => [id, { name, avatarUrl }]),
-);
+import { getTrpcData } from "../../utils/wareraTransactions.js";
 
 async function fetchWarEra(
   url: string,
@@ -347,8 +335,8 @@ export default async function handler(req: any, res: any) {
       const batch = memberIds.slice(i, i + batchSize);
       const batchPromises = batch.map(async (userId) => {
         let userProfile: any = null;
-        let donations: any[] = [];
-        let calculatedTotal = 0;
+        const donations: any[] = [];
+        const calculatedTotal = 0;
 
         try {
           const userUrl = `https://api2.warera.io/trpc/user.getUserLite?input=${encodeURIComponent(
@@ -361,98 +349,6 @@ export default async function handler(req: any, res: any) {
           }
         } catch (e) {
           console.error(`Error user ${userId}:`, e);
-        }
-
-        try {
-          const txUrl = `https://api2.warera.io/trpc/transaction.getPaginatedTransactions?input=${encodeURIComponent(
-            JSON.stringify({ userId, transactionType: "donation" }),
-          )}`;
-          const txRes = await fetchWarEra(txUrl);
-          if (!txRes.ok) throw new Error(`Donation API returned HTTP ${txRes.status} for ${userId}`);
-          const txJson = await txRes.json();
-          const items = getTransactionItems(txJson);
-          if (!items) throw new Error(`Donation API returned an invalid response for ${userId}`);
-          {
-              if (items.length > 0) {
-                isLiveDonations = true;
-                calculatedTotal = items.reduce(
-                  (sum: number, item: any) =>
-                    sum + getTransactionAmount(item),
-                  0,
-                );
-
-                const sorted = [...items].sort(
-                  (a: any, b: any) =>
-                    new Date(b.createdAt || 0).getTime() -
-                    new Date(a.createdAt || 0).getTime(),
-                );
-
-                donations = sorted.slice(0, 7).map((item: any, idx: number) => {
-                  const targetType = String(
-                    item.targetType || item.recipientType || "",
-                  ).toLowerCase();
-                  const desc = String(
-                    item.description || item.title || "",
-                  ).toLowerCase();
-                  const sellerMuId = String(item.sellerMuId || "");
-                  const isMU =
-                    Boolean(sellerMuId) ||
-                    targetType.includes("mu") ||
-                    targetType.includes("military") ||
-                    desc.includes("military unit") ||
-                    desc.includes("birlik") ||
-                    desc.includes("dormitor") ||
-                    desc.includes("headquarters");
-
-                  const sellerCountryId = String(item.sellerCountryId || "");
-                  let countryName = "Türkiye";
-                  let countryCode: string | undefined = "TR";
-
-                  if (KNOWN_COUNTRIES[sellerCountryId]) {
-                    countryName = KNOWN_COUNTRIES[sellerCountryId].name;
-                    countryCode = KNOWN_COUNTRIES[sellerCountryId].code;
-                  } else if (item.countryName) {
-                    countryName = item.countryName;
-                    countryCode = item.countryCode || "TR";
-                  }
-
-                  let armyName = muData.name || "Turkic Tribe";
-                  let armyAvatarUrl = muData.avatarUrl;
-                  if (sellerMuId && KNOWN_MUS[sellerMuId]) {
-                    armyName = KNOWN_MUS[sellerMuId].name;
-                    armyAvatarUrl = KNOWN_MUS[sellerMuId].avatarUrl;
-                  }
-
-                  if (isMU) {
-                    countryCode = undefined;
-                  }
-
-                  return {
-                    id: item._id || `tx-${userId}-${idx}`,
-                    amount: Number(
-                      getTransactionAmount(item),
-                    ),
-                    currency: item.currency || item.itemCode || "Gold",
-                    timestamp: item.createdAt || new Date().toISOString(),
-                    description:
-                      item.description ||
-                      (isMU
-                        ? `${armyName} Fonu Katkısı`
-                        : `${countryName} Hazinesi Bağışı`),
-                    type: item.transactionType || item.type || "donation",
-                    target: isMU ? ("mu" as const) : ("country" as const),
-                    targetName: isMU ? armyName : countryName,
-                    targetAvatarUrl: isMU ? armyAvatarUrl : undefined,
-                    countryCode,
-                  };
-                });
-              } else {
-                donations = [];
-                calculatedTotal = 0;
-              }
-          }
-        } catch (e) {
-          throw e;
         }
 
         const wealth = userProfile?.rankings?.userWealth?.value || 1000;

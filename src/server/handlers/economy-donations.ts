@@ -1,4 +1,4 @@
-import { getNextWarEraToken } from "../../lib/wareraTokens.js";
+import { getNextWarEraToken, getWarEraTokens } from "../../lib/wareraTokens.js";
 import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
 import { getTransactionItems } from "../../utils/wareraTransactions.js";
 
@@ -15,17 +15,21 @@ const ARMY_DETAILS = new Map(
 async function fetchTransactions(userId: string, userToken?: string) {
   const input = { limit: 7, userId, transactionType: "donation" };
   const url = `https://api2.warera.io/trpc/transaction.getPaginatedTransactions?input=${encodeURIComponent(JSON.stringify(input))}`;
-  const token = userToken?.trim() || getNextWarEraToken();
-  let response = await fetch(url, {
-    headers: { Accept: "application/json", "X-API-Key": token },
-  });
+  const tokens = Array.from(new Set([
+    userToken?.trim() || "",
+    getNextWarEraToken(),
+    ...getWarEraTokens(),
+  ].filter(Boolean)));
+  if (tokens.length === 0) throw new Error("WarEra API anahtarı yapılandırılmamış");
 
-  if ((response.status === 401 || response.status === 403 || response.status === 429) && userToken) {
+  let response: Response | undefined;
+  for (const token of tokens) {
     response = await fetch(url, {
-      headers: { Accept: "application/json", "X-API-Key": getNextWarEraToken() },
+      headers: { Accept: "application/json", "X-API-Key": token },
     });
+    if (response.ok || (response.status !== 401 && response.status !== 403 && response.status !== 429)) break;
   }
-  if (!response.ok) throw new Error(`WarEra transactions returned HTTP ${response.status} for ${userId}`);
+  if (!response?.ok) throw new Error(`WarEra transactions returned HTTP ${response?.status || 502} for ${userId}`);
 
   const payload = await response.json();
   const items = getTransactionItems(payload);
