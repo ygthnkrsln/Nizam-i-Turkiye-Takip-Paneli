@@ -24,7 +24,6 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
-app.post("/api/economy-donations", economyDonationsHandler);
 
 // Enable permissive CORS for iframe and preview environments
 app.use((req, res, next) => {
@@ -768,6 +767,8 @@ app.get("/api/mu-data", async (req, res) => {
     });
   }
 });
+
+app.post("/api/mu-data", economyDonationsHandler);
 
 // API Route: Fetch individual player factories on demand
 app.get("/api/player-factories", async (req, res) => {

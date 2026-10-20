@@ -1153,7 +1153,7 @@ export async function fetchEconomyDonationHistory(
   const userKey = getUserApiKey();
   if (userKey) headers["X-User-Api-Key"] = userKey;
 
-  const response = await fetch("/api/economy-donations", {
+  const response = await fetch("/api/mu-data", {
     method: "POST",
     headers,
     body: JSON.stringify({ userIds }),
