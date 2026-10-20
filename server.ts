@@ -17,6 +17,7 @@ import {
 import { COUNTRY_STATS_ARMIES } from "./src/config/countryStatsArmies.js";
 import { getTrpcData } from "./src/utils/wareraTransactions.js";
 import economyDonationsHandler from "./src/server/handlers/economy-donations.js";
+import { getNextWarEraToken } from "./src/lib/wareraTokens.js";
 
 dotenv.config();
 
@@ -2246,6 +2247,30 @@ app.get("/api/warera-proxy", async (req, res) => {
     return res
       .status(500)
       .json({ error: err.message || "WarEra Proxy failure" });
+  }
+});
+
+app.post("/api/warera-proxy", async (req, res) => {
+  if (req.query.path !== "user.getUserLite") {
+    return res.status(405).json({ error: "POST is only supported for user.getUserLite" });
+  }
+  try {
+    const userApiKey = req.headers["x-user-api-key"] as string | undefined;
+    const token = (userApiKey && userApiKey.trim()) || getNextWarEraToken();
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+    if (token) headers["X-API-Key"] = token;
+    const upstreamRes = await fetch("https://api2.warera.io/trpc/user.getUserLite", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(req.body),
+    });
+    return res.status(upstreamRes.status).json(await upstreamRes.json());
+  } catch (err: any) {
+    console.error("Error in /api/warera-proxy user.getUserLite POST:", err);
+    return res.status(500).json({ error: err.message || "WarEra Proxy failure" });
   }
 });
 

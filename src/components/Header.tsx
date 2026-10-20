@@ -2,6 +2,7 @@ import React from 'react';
 import {
   BarChart3,
   Building2,
+  Calculator,
   ChevronLeft,
   ChevronRight,
   Coins,
@@ -24,7 +25,7 @@ interface HeaderProps {
 
 const groups: {
   label: string;
-  theme: 'emerald' | 'rose' | 'amber';
+  theme: 'emerald' | 'rose' | 'amber' | 'sky';
   tabs: { id: ActiveTab; title: string; icon: React.ElementType }[];
 }[] = [
   {
@@ -53,6 +54,13 @@ const groups: {
       { id: 'mgmtDonations', title: 'Bağış Takibi', icon: Coins },
     ],
   },
+  {
+    label: 'Araçlar',
+    theme: 'sky',
+    tabs: [
+      { id: 'levelCalculator', title: 'Seviye Hesaplayıcı', icon: Calculator },
+    ],
+  },
 ];
 
 const colors = {
@@ -70,6 +78,11 @@ const colors = {
     label: 'text-amber-300', dot: 'bg-amber-400',
     active: 'border-amber-500/50 bg-[#1B2B34] text-white',
     hover: 'hover:bg-amber-950/30',
+  },
+  sky: {
+    label: 'text-cyan-300', dot: 'bg-cyan-400',
+    active: 'border-cyan-500/50 bg-[#1B2B34] text-white',
+    hover: 'hover:bg-cyan-950/30',
   },
 };
 

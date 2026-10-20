@@ -66,8 +66,8 @@ export default async function handler(req: any, res: any) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ success: false, error: "Method not allowed" });
 
-  const userIds = Array.isArray(req.body?.userIds)
-    ? [...new Set(req.body.userIds.filter((id: unknown) => typeof id === "string" && id.length > 0))]
+  const userIds: string[] = Array.isArray(req.body?.userIds)
+    ? [...new Set((req.body.userIds as unknown[]).filter((id): id is string => typeof id === "string" && id.length > 0))]
     : [];
   if (userIds.length === 0 || userIds.length > 300) {
     return res.status(400).json({ success: false, error: "userIds must contain between 1 and 300 player IDs" });

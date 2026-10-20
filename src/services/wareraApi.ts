@@ -1146,6 +1146,38 @@ async function fetchWithTokens(
   return fetch(url, { ...init, headers });
 }
 
+export interface UserLevelingProfile {
+  username?: string;
+  leveling: {
+    level: number;
+    xp: number;
+    prestigeLevel: number;
+  };
+}
+
+export async function fetchUserLevelingProfile(userId: string): Promise<UserLevelingProfile> {
+  const response = await fetchWithTokens("https://api2.warera.io/trpc/user.getUserLite", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId: userId.trim() }),
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || `Oyuncu bilgisi alınamadı (${response.status})`);
+  }
+  const profile = getTrpcData(payload);
+  const level = Number(profile?.leveling?.level);
+  const xp = Number(profile?.leveling?.xp);
+  const prestigeLevel = Number(profile?.leveling?.prestigeLevel ?? 0);
+  if (!Number.isFinite(level) || !Number.isFinite(xp)) {
+    throw new Error("API yanıtında seviye veya XP bilgisi bulunamadı.");
+  }
+  return {
+    username: profile.username,
+    leveling: { level, xp, prestigeLevel: Number.isFinite(prestigeLevel) ? prestigeLevel : 0 },
+  };
+}
+
 export async function fetchEconomyDonationHistory(
   userIds: string[],
 ): Promise<Record<string, DonationItem[]>> {
