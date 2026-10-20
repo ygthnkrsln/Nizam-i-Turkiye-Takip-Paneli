@@ -3,7 +3,7 @@ import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
 // Handles Military Unit data fetching with token rotation and 7-donation resolution
 
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
-import { getTrpcData, getTransactionAmount, getTransactionItems } from "../../utils/wareraTransactions.js";
+import { buildEconomyDonationInput, getTrpcData, getTransactionAmount, getTransactionItems } from "../../utils/wareraTransactions.js";
 
 const KNOWN_COUNTRIES: Record<string, { name: string; code: string }> = {
   "683ddd2c24b5a2e114af15b5": { name: "Birleşik Arap Emirlikleri", code: "AE" },
@@ -297,7 +297,7 @@ export default async function handler(req: any, res: any) {
   const forceRefresh = req.query?.refresh === "true";
   const userApiKey =
     (req.headers["x-user-api-key"] as string) || (req.query?.apiKey as string);
-  const cacheKey = `mu_v5_${muId}`;
+  const cacheKey = `mu_v6_${muId}`;
 
   const cached = cache.get(cacheKey);
   if (
@@ -365,7 +365,7 @@ export default async function handler(req: any, res: any) {
 
         try {
           const txUrl = `https://api2.warera.io/trpc/transaction.getPaginatedTransactions?input=${encodeURIComponent(
-            JSON.stringify({ userId, transactionType: "donation" }),
+            JSON.stringify(buildEconomyDonationInput(userId, muData.country)),
           )}`;
           const txRes = await fetchWarEra(txUrl);
           if (!txRes.ok) throw new Error(`Donation API returned HTTP ${txRes.status} for ${userId}`);

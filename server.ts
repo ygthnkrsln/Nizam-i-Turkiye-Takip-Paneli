@@ -15,7 +15,7 @@ import {
   getMilitaryUnitWeeklyDamage,
 } from "./src/lib/dailyDamage.ts";
 import { COUNTRY_STATS_ARMIES } from "./src/config/countryStatsArmies.js";
-import { getTrpcData, getTransactionAmount, getTransactionItems } from "./src/utils/wareraTransactions.js";
+import { buildEconomyDonationInput, getTrpcData, getTransactionAmount, getTransactionItems } from "./src/utils/wareraTransactions.js";
 
 dotenv.config();
 
@@ -473,7 +473,7 @@ app.get("/api/mu-data", async (req, res) => {
   const forceRefresh = req.query.refresh === "true";
   const userApiKey =
     (req.headers["x-user-api-key"] as string) || (req.query.apiKey as string);
-  const cacheKey = `mu_v5_${muId}`;
+  const cacheKey = `mu_v6_${muId}`;
 
   const cached = cache.get(cacheKey);
   if (
@@ -549,7 +549,7 @@ app.get("/api/mu-data", async (req, res) => {
         // Fetch User Donations using token rotation
         try {
           const txUrl = `https://api2.warera.io/trpc/transaction.getPaginatedTransactions?input=${encodeURIComponent(
-            JSON.stringify({ userId, transactionType: "donation" }),
+            JSON.stringify(buildEconomyDonationInput(userId, muData.country)),
           )}`;
 
           const txRes = await fetchWarEra(txUrl);

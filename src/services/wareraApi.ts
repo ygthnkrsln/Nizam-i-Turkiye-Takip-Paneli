@@ -1,5 +1,5 @@
 import { TRACKED_ARMIES } from "../config/trackedArmies";
-import { getTrpcData, getTransactionAmount, getTransactionItems } from "../utils/wareraTransactions";
+import { buildEconomyDonationInput, getTrpcData, getTransactionAmount, getTransactionItems } from "../utils/wareraTransactions";
 import {
   ApiResponse,
   DonationItem,
@@ -1211,7 +1211,7 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
 
       try {
         const txUrl = `https://api2.warera.io/trpc/transaction.getPaginatedTransactions?input=${encodeURIComponent(
-          JSON.stringify({ userId, transactionType: "donation" }),
+          JSON.stringify(buildEconomyDonationInput(userId, muData.country)),
         )}`;
         const txRes = await fetchWithTokens(txUrl);
         if (!txRes.ok) throw new Error(`Donation API returned HTTP ${txRes.status} for ${userId}`);
@@ -1475,7 +1475,7 @@ export async function fetchMilitaryUnitData(
   muId: string = DEFAULT_MU_ID,
   forceRefresh = false,
 ): Promise<ApiResponse> {
-  const cacheKey = `${CACHE_KEY_PREFIX}${muId}_v6`;
+  const cacheKey = `${CACHE_KEY_PREFIX}${muId}_v7`;
 
   // Check client-side storage cache if not forcing refresh
   if (!forceRefresh) {
