@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { AlertCircle, Calculator, Check, Clock3, LoaderCircle, Sparkles } from "lucide-react";
+import { AlertCircle, Calculator, Clock3, LoaderCircle, Sparkles } from "lucide-react";
 import { fetchUserLevelingProfile } from "../services/wareraApi";
 import {
   levelForXp,
@@ -7,8 +7,7 @@ import {
   MISSION_XP,
   MissionKey,
   prestigeXpMultiplier,
-  simulateYearlyProgression,
-  simulateLevelMilestones,
+  simulateYearlyTimeline,
   totalXpForLevel,
   xpRequiredForLevel,
 } from "../utils/levelProgression";
@@ -34,24 +33,11 @@ export const LevelCalculatorSection: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const multiplier = profile ? prestigeXpMultiplier(profile.leveling.prestigeLevel) : 1;
-  const milestones = useMemo(() => {
-    if (!profile) return [];
-    return simulateLevelMilestones(
-      profile.leveling.xp,
-      profile.leveling.level,
-      profile.leveling.prestigeLevel,
-      {
-        daily: completed.daily ? 0 : remaining.daily,
-        weekly: completed.weekly ? 0 : remaining.weekly,
-        monthly: completed.monthly ? 0 : remaining.monthly,
-      },
-    );
-  }, [profile, completed, remaining]);
-
   const yearlyProjection = useMemo(() => {
     if (!profile) return null;
-    return simulateYearlyProgression(
+    return simulateYearlyTimeline(
       profile.leveling.xp,
+      profile.leveling.level,
       profile.leveling.prestigeLevel,
       {
         daily: completed.daily ? 0 : remaining.daily,
@@ -85,7 +71,6 @@ export const LevelCalculatorSection: React.FC = () => {
   const remainingTaskXp = profile
     ? missionKeys.reduce((total, key) => total + (completed[key] ? 0 : remaining[key]), 0)
     : 0;
-  const visibleMilestones = milestones.filter((milestone) => milestone.level >= currentLevel);
 
   return (
     <section className="space-y-5" aria-labelledby="level-calculator-title">
@@ -203,69 +188,39 @@ export const LevelCalculatorSection: React.FC = () => {
           </section>
 
           {yearlyProjection && (
-            <section className="rounded-2xl border border-cyan-500/20 bg-[#182329] p-5 sm:p-6">
-              <div className="mb-4 flex items-start gap-3">
-                <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-2.5 text-cyan-300"><Clock3 className="h-5 w-5" /></div>
+            <section className="overflow-hidden rounded-2xl border border-[#3282B8]/20 bg-[#182329]">
+              <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#3282B8]/15 p-5 sm:px-6">
                 <div>
-                  <h2 className="text-base font-bold text-white">1 yıllık ilerleme tahmini</h2>
-                  <p className="mt-1 text-xs text-[#BBE1FA]/55">Görevlerin her yenilenmede tamamlandığı ve 50. seviyede hemen prestij yapıldığı varsayılır.</p>
+                  <h2 className="text-base font-bold text-white">1 yıllık seviye takvimi</h2>
+                  <p className="mt-1 text-xs text-[#BBE1FA]/55">Tahmini ulaşma tarihleri, her prestij dönemine göre gruplanır.</p>
                 </div>
+                <div className="text-xs text-cyan-200">+{yearlyProjection.earnedPrestiges} prestij · Yıl sonu: Prestij {yearlyProjection.endingPrestigeLevel}, Seviye {yearlyProjection.endingLevel}</div>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-xl border border-cyan-500/15 bg-[#11191E]/70 p-4">
-                  <p className="text-xs text-[#BBE1FA]/55">Kazanılacak prestij</p>
-                  <p className="mt-1 font-mono text-2xl font-bold text-cyan-300">{numberFormat.format(yearlyProjection.earnedPrestiges)}</p>
-                </div>
-                <div className="rounded-xl border border-cyan-500/15 bg-[#11191E]/70 p-4">
-                  <p className="text-xs text-[#BBE1FA]/55">Yıl sonu prestij seviyesi</p>
-                  <p className="mt-1 font-mono text-2xl font-bold text-white">{numberFormat.format(yearlyProjection.endingPrestigeLevel)}</p>
-                </div>
-                <div className="rounded-xl border border-cyan-500/15 bg-[#11191E]/70 p-4">
-                  <p className="text-xs text-[#BBE1FA]/55">Yıl sonu seviyesi</p>
-                  <p className="mt-1 font-mono text-2xl font-bold text-white">{numberFormat.format(yearlyProjection.endingLevel)}<span className="ml-1 text-sm text-[#BBE1FA]/45">/ 50</span></p>
-                </div>
-                <div className="rounded-xl border border-cyan-500/15 bg-[#11191E]/70 p-4">
-                  <p className="text-xs text-[#BBE1FA]/55">Yükselinen toplam seviye</p>
-                  <p className="mt-1 font-mono text-2xl font-bold text-white">{numberFormat.format(yearlyProjection.levelsGained)}</p>
-                </div>
+              <div className="max-h-[620px] overflow-auto">
+                {yearlyProjection.events.map((event, index) => event.type === "period" ? (
+                  <div key={`prestige-${event.prestigeLevel}-${index}`} className={`flex items-center justify-between gap-3 border-t-2 px-5 py-3 ${index === 0 ? "border-t-0" : "border-cyan-500/35"} bg-[#11191E]/75`}>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="rounded-md border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-[11px] font-bold tracking-wide text-cyan-200">PRESTİJ {event.prestigeLevel}</span>
+                      <span className="truncate text-xs text-[#BBE1FA]/55">{event.date ? `Seviye ${event.resetLevel}’e sıfırlandı` : `Mevcut dönem · Seviye ${event.resetLevel}`}</span>
+                    </div>
+                    {event.date && <span className="shrink-0 text-xs text-[#BBE1FA]/65">{formatDate(event.date)}</span>}
+                  </div>
+                ) : (
+                  <div key={`level-${event.level}-${index}`} className={`flex items-center justify-between border-t border-[#3282B8]/10 px-5 py-3 ${event.current ? "bg-amber-400/[0.05]" : ""}`}>
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-7 min-w-8 items-center justify-center rounded-md border border-[#3282B8]/20 bg-[#1B2B34] px-2 font-mono text-sm font-bold text-white">{event.level}</span>
+                      <span className="text-sm text-[#BBE1FA]/75">Seviye {event.level}</span>
+                      {event.current && <span className="rounded-full border border-amber-400/20 px-2 py-0.5 text-[10px] font-semibold text-amber-200">Mevcut</span>}
+                    </div>
+                    <span className={`text-sm ${event.current ? "text-amber-200" : "text-cyan-200"}`}>{event.date ? formatDate(event.date) : "Şu an"}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 border-t border-[#3282B8]/15 px-5 py-3 text-[11px] text-[#BBE1FA]/45">
+                <Clock3 className="h-3.5 w-3.5 shrink-0" />Tahmin; görevlerin her dönemde tamamlandığını, UTC sıfırlanmalarını ve 50. seviyede hemen prestij yapıldığını varsayar.
               </div>
             </section>
           )}
-
-          <section className="overflow-hidden rounded-2xl border border-[#3282B8]/20 bg-[#182329]">
-            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#3282B8]/15 p-5 sm:px-6">
-              <div>
-                <h2 className="text-base font-bold text-white">50. seviyeye kadar tahmin</h2>
-                <p className="mt-1 text-xs text-[#BBE1FA]/55">Gelecek görev ödüllerinin tamamlandığı ve UTC sıfırlanmalarının izlendiği varsayılır.</p>
-              </div>
-              <div className="inline-flex items-center gap-1.5 text-xs text-[#BBE1FA]/55"><Clock3 className="h-3.5 w-3.5" />Mevcut görev XP’si bugün eklenir</div>
-            </div>
-            <div className="max-h-[520px] overflow-auto">
-              <table className="w-full min-w-[520px] border-collapse text-left text-sm">
-                <thead className="sticky top-0 z-10 bg-[#141C21] text-[11px] uppercase tracking-wide text-[#BBE1FA]/50">
-                  <tr>
-                    <th className="px-5 py-3 font-semibold">Seviye</th>
-                    <th className="px-5 py-3 font-semibold">Gerekli toplam XP</th>
-                    <th className="px-5 py-3 font-semibold">Ulaşma durumu / tarihi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleMilestones.map((milestone) => (
-                    <tr key={milestone.level} className={`border-t border-[#3282B8]/10 ${milestone.status === "current" ? "bg-amber-400/[0.06]" : ""}`}>
-                      <td className="px-5 py-2.5 font-mono font-semibold text-white">{milestone.level}</td>
-                      <td className="px-5 py-2.5 font-mono text-[#BBE1FA]/65">{numberFormat.format(milestone.requiredXp)} XP</td>
-                      <td className="px-5 py-2.5">
-                        {milestone.status === "reached" ? <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300"><Check className="h-3.5 w-3.5" />Ulaşıldı</span>
-                          : milestone.status === "current" ? <span className="text-xs font-semibold text-amber-200">Mevcut seviye</span>
-                            : milestone.date ? <span className="text-xs text-cyan-200">{formatDate(milestone.date)}</span>
-                              : <span className="text-xs text-[#BBE1FA]/40">Hesaplanamadı</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
         </>
       )}
     </section>

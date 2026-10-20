@@ -42,18 +42,15 @@ export function prestigeXpMultiplier(prestigeLevel: number): number {
   return prestigeLevel > 0 ? 1.5 + (prestigeLevel - 1) * 0.1 : 1;
 }
 
-export interface LevelMilestone {
-  level: number;
-  requiredXp: number;
-  date: Date | null;
-  status: "reached" | "current" | "projected";
-}
+export type YearlyTimelineEvent =
+  | { type: "period"; prestigeLevel: number; date: Date | null; resetLevel: number }
+  | { type: "level"; level: number; date: Date | null; current?: boolean };
 
-export interface YearlyProjection {
+export interface YearlyTimeline {
+  events: YearlyTimelineEvent[];
   earnedPrestiges: number;
   endingPrestigeLevel: number;
   endingLevel: number;
-  levelsGained: number;
 }
 
 function recurringMissionXp(date: Date): number {
@@ -63,97 +60,53 @@ function recurringMissionXp(date: Date): number {
   return reward;
 }
 
-export function simulateLevelMilestones(
+export function simulateYearlyTimeline(
   currentXp: number,
   currentLevel: number,
   prestigeLevel: number,
   remainingXp: Record<MissionKey, number>,
   startDate = new Date(),
-): LevelMilestone[] {
-  const safeXp = Math.max(0, Number.isFinite(currentXp) ? currentXp : 0);
-  const derivedLevel = levelForXp(safeXp);
-  const effectiveLevel = Math.max(1, Math.min(50, Math.max(derivedLevel, Math.min(currentLevel, 50))));
-  const milestoneDates = new Map<number, Date>();
-  const multiplier = prestigeXpMultiplier(prestigeLevel);
-  let simulatedXp = safeXp;
-  let cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
-
-  const addXp = (rawXp: number, date: Date) => {
-    const previousLevel = levelForXp(simulatedXp);
-    simulatedXp += rawXp * multiplier;
-    const nextLevel = levelForXp(simulatedXp);
-    for (let level = Math.max(effectiveLevel + 1, previousLevel + 1); level <= nextLevel; level++) {
-      milestoneDates.set(level, new Date(date));
-    }
-  };
-
-  addXp(
-    (remainingXp.daily || 0) + (remainingXp.weekly || 0) + (remainingXp.monthly || 0),
-    cursor,
-  );
-
-  // Future recurring mission rewards are added on their UTC reset dates.
-  for (let day = 1; day <= 3650 && simulatedXp < totalXpForLevel(50); day++) {
-    cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate() + 1));
-    addXp(recurringMissionXp(cursor), cursor);
-  }
-
-  return Array.from({ length: 50 }, (_, index) => {
-    const level = index + 1;
-    const status: LevelMilestone["status"] = level < effectiveLevel
-      ? "reached"
-      : level === effectiveLevel
-        ? "current"
-        : "projected";
-    return {
-      level,
-      requiredXp: totalXpForLevel(level),
-      date: level > effectiveLevel ? milestoneDates.get(level) || null : null,
-      status,
-    };
-  });
-}
-
-export function simulateYearlyProgression(
-  currentXp: number,
-  prestigeLevel: number,
-  remainingXp: Record<MissionKey, number>,
-  startDate = new Date(),
-): YearlyProjection {
+): YearlyTimeline {
   let xp = Math.max(0, Number.isFinite(currentXp) ? currentXp : 0);
   let prestige = Math.max(0, Math.floor(prestigeLevel));
   let earnedPrestiges = 0;
-  let levelsGained = 0;
-  const startLevel = levelForXp(xp);
-  let previousLevel = startLevel;
+  const startLevel = Math.max(1, Math.min(50, Math.floor(currentLevel || levelForXp(xp))));
+  const events: YearlyTimelineEvent[] = [
+    { type: "period", prestigeLevel: prestige, date: null, resetLevel: startLevel },
+    { type: "level", level: startLevel, date: null, current: true },
+  ];
   const start = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
 
-  const applyXp = (rawXp: number) => {
+  const applyXp = (rawXp: number, date: Date) => {
+    const previousLevel = levelForXp(xp);
     xp += rawXp * prestigeXpMultiplier(prestige);
     let level = levelForXp(xp);
+    for (let reached = Math.max(previousLevel + 1, 2); reached <= Math.min(level, 50); reached++) {
+      events.push({ type: "level", level: reached, date: new Date(date) });
+    }
     while (level >= 50) {
-      levelsGained += Math.max(0, 50 - previousLevel);
       const overflow = Math.max(0, xp - totalXpForLevel(50));
       earnedPrestiges++;
       prestige++;
       xp = totalXpForLevel(25) + overflow;
-      previousLevel = 25;
+      events.push({ type: "period", prestigeLevel: prestige, date: new Date(date), resetLevel: 25 });
       level = levelForXp(xp);
+      for (let reached = 26; reached <= Math.min(level, 50); reached++) {
+        events.push({ type: "level", level: reached, date: new Date(date) });
+      }
     }
-    levelsGained += Math.max(0, level - previousLevel);
-    previousLevel = level;
   };
 
-  applyXp((remainingXp.daily || 0) + (remainingXp.weekly || 0) + (remainingXp.monthly || 0));
+  applyXp((remainingXp.daily || 0) + (remainingXp.weekly || 0) + (remainingXp.monthly || 0), start);
   for (let day = 1; day <= 365; day++) {
     const date = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + day));
-    applyXp(recurringMissionXp(date));
+    applyXp(recurringMissionXp(date), date);
   }
 
   return {
+    events,
     earnedPrestiges,
     endingPrestigeLevel: prestige,
     endingLevel: levelForXp(xp),
-    levelsGained,
   };
 }
