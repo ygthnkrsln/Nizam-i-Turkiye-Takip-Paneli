@@ -544,8 +544,8 @@ export default function App() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-bold text-white hover:text-[#BBE1FA] transition-colors"
-              >
-                Muhtarr
+                >
+                h4N
               </a>
             </span>
           </div>

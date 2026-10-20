@@ -17,7 +17,6 @@ import {
 import { COUNTRY_STATS_ARMIES } from "./src/config/countryStatsArmies.js";
 import { getTrpcData } from "./src/utils/wareraTransactions.js";
 import economyDonationsHandler from "./src/server/handlers/economy-donations.js";
-import { getNextWarEraToken } from "./src/lib/wareraTokens.js";
 
 dotenv.config();
 
@@ -2256,17 +2255,15 @@ app.post("/api/warera-proxy", async (req, res) => {
   }
   try {
     const userApiKey = req.headers["x-user-api-key"] as string | undefined;
-    const token = (userApiKey && userApiKey.trim()) || getNextWarEraToken();
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    };
-    if (token) headers["X-API-Key"] = token;
-    const upstreamRes = await fetch("https://api2.warera.io/trpc/user.getUserLite", {
-      method: "POST",
-      headers,
-      body: JSON.stringify(req.body),
-    });
+    const upstreamRes = await fetchWarEra(
+      "https://api2.warera.io/trpc/user.getUserLite",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req.body),
+      },
+      userApiKey,
+    );
     return res.status(upstreamRes.status).json(await upstreamRes.json());
   } catch (err: any) {
     console.error("Error in /api/warera-proxy user.getUserLite POST:", err);

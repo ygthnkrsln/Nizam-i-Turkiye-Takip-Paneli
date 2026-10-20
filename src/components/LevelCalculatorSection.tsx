@@ -7,6 +7,7 @@ import {
   MISSION_XP,
   MissionKey,
   prestigeXpMultiplier,
+  simulateYearlyProgression,
   simulateLevelMilestones,
   totalXpForLevel,
   xpRequiredForLevel,
@@ -47,6 +48,19 @@ export const LevelCalculatorSection: React.FC = () => {
     );
   }, [profile, completed, remaining]);
 
+  const yearlyProjection = useMemo(() => {
+    if (!profile) return null;
+    return simulateYearlyProgression(
+      profile.leveling.xp,
+      profile.leveling.prestigeLevel,
+      {
+        daily: completed.daily ? 0 : remaining.daily,
+        weekly: completed.weekly ? 0 : remaining.weekly,
+        monthly: completed.monthly ? 0 : remaining.monthly,
+      },
+    );
+  }, [profile, completed, remaining]);
+
   const handleLookup = async (event: React.FormEvent) => {
     event.preventDefault();
     const normalizedId = userId.trim();
@@ -71,6 +85,7 @@ export const LevelCalculatorSection: React.FC = () => {
   const remainingTaskXp = profile
     ? missionKeys.reduce((total, key) => total + (completed[key] ? 0 : remaining[key]), 0)
     : 0;
+  const visibleMilestones = milestones.filter((milestone) => milestone.level >= currentLevel);
 
   return (
     <section className="space-y-5" aria-labelledby="level-calculator-title">
@@ -187,6 +202,36 @@ export const LevelCalculatorSection: React.FC = () => {
             </div>
           </section>
 
+          {yearlyProjection && (
+            <section className="rounded-2xl border border-cyan-500/20 bg-[#182329] p-5 sm:p-6">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-2.5 text-cyan-300"><Clock3 className="h-5 w-5" /></div>
+                <div>
+                  <h2 className="text-base font-bold text-white">1 yıllık ilerleme tahmini</h2>
+                  <p className="mt-1 text-xs text-[#BBE1FA]/55">Görevlerin her yenilenmede tamamlandığı ve 50. seviyede hemen prestij yapıldığı varsayılır.</p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-xl border border-cyan-500/15 bg-[#11191E]/70 p-4">
+                  <p className="text-xs text-[#BBE1FA]/55">Kazanılacak prestij</p>
+                  <p className="mt-1 font-mono text-2xl font-bold text-cyan-300">{numberFormat.format(yearlyProjection.earnedPrestiges)}</p>
+                </div>
+                <div className="rounded-xl border border-cyan-500/15 bg-[#11191E]/70 p-4">
+                  <p className="text-xs text-[#BBE1FA]/55">Yıl sonu prestij seviyesi</p>
+                  <p className="mt-1 font-mono text-2xl font-bold text-white">{numberFormat.format(yearlyProjection.endingPrestigeLevel)}</p>
+                </div>
+                <div className="rounded-xl border border-cyan-500/15 bg-[#11191E]/70 p-4">
+                  <p className="text-xs text-[#BBE1FA]/55">Yıl sonu seviyesi</p>
+                  <p className="mt-1 font-mono text-2xl font-bold text-white">{numberFormat.format(yearlyProjection.endingLevel)}<span className="ml-1 text-sm text-[#BBE1FA]/45">/ 50</span></p>
+                </div>
+                <div className="rounded-xl border border-cyan-500/15 bg-[#11191E]/70 p-4">
+                  <p className="text-xs text-[#BBE1FA]/55">Yükselinen toplam seviye</p>
+                  <p className="mt-1 font-mono text-2xl font-bold text-white">{numberFormat.format(yearlyProjection.levelsGained)}</p>
+                </div>
+              </div>
+            </section>
+          )}
+
           <section className="overflow-hidden rounded-2xl border border-[#3282B8]/20 bg-[#182329]">
             <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#3282B8]/15 p-5 sm:px-6">
               <div>
@@ -205,7 +250,7 @@ export const LevelCalculatorSection: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {milestones.map((milestone) => (
+                  {visibleMilestones.map((milestone) => (
                     <tr key={milestone.level} className={`border-t border-[#3282B8]/10 ${milestone.status === "current" ? "bg-amber-400/[0.06]" : ""}`}>
                       <td className="px-5 py-2.5 font-mono font-semibold text-white">{milestone.level}</td>
                       <td className="px-5 py-2.5 font-mono text-[#BBE1FA]/65">{numberFormat.format(milestone.requiredXp)} XP</td>
