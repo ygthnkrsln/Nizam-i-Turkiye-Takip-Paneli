@@ -15,6 +15,7 @@ import {
   getMilitaryUnitWeeklyDamage,
 } from "./src/lib/dailyDamage.ts";
 import { COUNTRY_STATS_ARMIES } from "./src/config/countryStatsArmies.js";
+import { getTrpcData, getTransactionAmount, getTransactionItems } from "./src/utils/wareraTransactions.js";
 
 dotenv.config();
 
@@ -466,162 +467,13 @@ async function fetchUserCompanies(userId: string): Promise<UserFactoryData> {
 }
 
 // Deterministic fallback donations generator for players when API token is not provided or transactions endpoint returns 401
-function generateFallbackDonations(
-  userId: string,
-  wealth: number = 5000,
-  level: number = 10,
-  muName: string = "Turkic Tribe",
-  muAvatarUrl?: string,
-) {
-  // Simple hash of userId string to generate consistent values
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
-  }
-
-  const baseScales = [
-    Math.max(50, Math.floor((wealth * 0.05 + level * 20) % 5000)),
-    Math.max(25, Math.floor((wealth * 0.03 + level * 15) % 3500)),
-    Math.max(10, Math.floor((wealth * 0.02 + level * 10) % 2000)),
-    Math.max(30, Math.floor((wealth * 0.04 + level * 18) % 4000)),
-    Math.max(20, Math.floor((wealth * 0.025 + level * 12) % 3000)),
-    Math.max(40, Math.floor((wealth * 0.035 + level * 16) % 3800)),
-    Math.max(15, Math.floor((wealth * 0.015 + level * 8) % 2500)),
-  ];
-
-  const now = Date.now();
-  const times = [
-    now - ((hash % 12) + 1) * 3600 * 1000 * 4, // 4-48 hours ago
-    now - ((hash % 24) + 14) * 3600 * 1000 * 4, // 2-5 days ago
-    now - ((hash % 30) + 38) * 3600 * 1000 * 4, // 6-12 days ago
-    now - ((hash % 36) + 68) * 3600 * 1000 * 4, // 11-18 days ago
-    now - ((hash % 42) + 98) * 3600 * 1000 * 4, // 16-25 days ago
-    now - ((hash % 48) + 130) * 3600 * 1000 * 4, // 21-32 days ago
-    now - ((hash % 54) + 165) * 3600 * 1000 * 4, // 27-40 days ago
-  ];
-
-  const amounts = [
-    Math.max(100, Math.round(baseScales[0] * (0.8 + (hash % 17) / 40))),
-    Math.max(80, Math.round(baseScales[1] * (0.7 + ((hash >> 4) % 19) / 40))),
-    Math.max(50, Math.round(baseScales[2] * (0.9 + ((hash >> 8) % 23) / 40))),
-    Math.max(90, Math.round(baseScales[3] * (0.75 + ((hash >> 12) % 21) / 40))),
-    Math.max(60, Math.round(baseScales[4] * (0.85 + ((hash >> 16) % 18) / 40))),
-    Math.max(110, Math.round(baseScales[5] * (0.8 + ((hash >> 20) % 22) / 40))),
-    Math.max(45, Math.round(baseScales[6] * (0.95 + ((hash >> 24) % 15) / 40))),
-  ];
-
-  const profileType = hash % 4;
-
-  return times.map((t, i) => {
-    let target: "country" | "mu" = "country";
-    let targetName = "Türkiye";
-    let countryCode: string | undefined = "TR";
-    let targetAvatarUrl: string | undefined = undefined;
-    let description = "Türkiye Cumhuriyeti Devlet Hazinesi";
-
-    if (profileType === 1) {
-      // Primarily Ordu (Army)
-      if (i === 5 && hash % 4 === 0) {
-        target = "country";
-        targetName = "Türkiye";
-        countryCode = "TR";
-        description = "Devlet Hazinesi Altın Katkısı";
-      } else {
-        target = "mu";
-        targetName = muName || "Turkic Tribe";
-        targetAvatarUrl = muAvatarUrl;
-        countryCode = undefined;
-        description =
-          i % 2 === 0
-            ? "Ordu Karargah ve Teçhizat Katkısı"
-            : "Askeri Birlik Geliştirme Fonu";
-      }
-    } else if (profileType === 2) {
-      // UAE & Mixed
-      if (i % 2 === 0) {
-        target = "country";
-        targetName = "Birleşik Arap Emirlikleri";
-        countryCode = "AE";
-        description = "BAE Devlet Hazinesi Katkısı";
-      } else if (i === 3) {
-        target = "mu";
-        targetName = muName || "Turkic Tribe";
-        targetAvatarUrl = muAvatarUrl;
-        countryCode = undefined;
-        description = "Ordu Lojistik ve İkmal Desteği";
-      } else {
-        target = "country";
-        targetName = "Türkiye";
-        countryCode = "TR";
-        description = "Milli Savunma ve Savaş Fonu";
-      }
-    } else if (profileType === 3) {
-      // Azerbaijan / Cameroon
-      if (i % 3 === 0) {
-        target = "country";
-        targetName = "Azerbaycan";
-        countryCode = "AZ";
-        description = "Azerbaycan Savunma Fonu";
-      } else if (i === 4 && hash % 2 === 0) {
-        target = "country";
-        targetName = "Kamerun";
-        countryCode = "CM";
-        description = "Kamerun Hazinesi Katkısı";
-      } else if (i === 1) {
-        target = "mu";
-        targetName = muName || "Turkic Tribe";
-        targetAvatarUrl = muAvatarUrl;
-        countryCode = undefined;
-        description = "Ordu Geliştirme Katkısı";
-      } else {
-        target = "country";
-        targetName = "Türkiye";
-        countryCode = "TR";
-        description = "Ülke Hazinesi Altın Katkısı";
-      }
-    } else {
-      // Primarily Turkey
-      if (i === 4 && hash % 3 === 0) {
-        target = "mu";
-        targetName = muName || "Turkic Tribe";
-        targetAvatarUrl = muAvatarUrl;
-        countryCode = undefined;
-        description = "Birlik Cephanelik ve Savunma Desteği";
-      } else if (i === 2 && hash % 3 === 1) {
-        target = "country";
-        targetName = "Birleşik Arap Emirlikleri";
-        countryCode = "AE";
-        description = "Devlet Hazinesi Katkısı";
-      } else {
-        target = "country";
-        targetName = "Türkiye";
-        countryCode = "TR";
-        description = "Ülke Hazinesi Altın Katkısı";
-      }
-    }
-
-    return {
-      id: `tx-${userId}-${i + 1}`,
-      amount: amounts[i],
-      currency: "Gold",
-      timestamp: new Date(t).toISOString(),
-      description,
-      type: "donation",
-      target,
-      targetName,
-      targetAvatarUrl,
-      countryCode,
-    };
-  });
-}
-
 // API Route: Fetch Military Unit and Player Stats + Donations
 app.get("/api/mu-data", async (req, res) => {
   const muId = (req.query.muId as string) || "69c229c4449287ea1a26a5b3";
   const forceRefresh = req.query.refresh === "true";
   const userApiKey =
     (req.headers["x-user-api-key"] as string) || (req.query.apiKey as string);
-  const cacheKey = `mu_v4_${muId}`;
+  const cacheKey = `mu_v5_${muId}`;
 
   const cached = cache.get(cacheKey);
   if (
@@ -652,7 +504,7 @@ app.get("/api/mu-data", async (req, res) => {
     }
 
     const muJson = await muResponse.json();
-    const muData = muJson?.result?.data;
+    const muData = getTrpcData(muJson);
 
     if (!muData) {
       return res.status(404).json({
@@ -679,7 +531,6 @@ app.get("/api/mu-data", async (req, res) => {
         let userProfile: any = null;
         let donations: any[] = [];
         let calculatedTotal = 0;
-        let hasQueriedLive = false;
 
         // Fetch User Lite using token rotation
         try {
@@ -689,7 +540,7 @@ app.get("/api/mu-data", async (req, res) => {
           const userRes = await fetchWarEra(userUrl);
           if (userRes.ok) {
             const userJson = await userRes.json();
-            userProfile = userJson?.result?.data;
+            userProfile = getTrpcData(userJson);
           }
         } catch (e) {
           console.error(`Error fetching user profile for ${userId}:`, e);
@@ -702,18 +553,16 @@ app.get("/api/mu-data", async (req, res) => {
           )}`;
 
           const txRes = await fetchWarEra(txUrl);
-          let allItemsCount = 0;
-
-          if (txRes.ok) {
-            const txJson = await txRes.json();
-            const items = txJson?.result?.data?.items;
-            if (Array.isArray(items)) {
-              hasQueriedLive = true;
+          if (!txRes.ok) throw new Error(`Donation API returned HTTP ${txRes.status} for ${userId}`);
+          const txJson = await txRes.json();
+          const items = getTransactionItems(txJson);
+          if (!items) throw new Error(`Donation API returned an invalid response for ${userId}`);
+          {
               if (items.length > 0) {
                 isLiveDonations = true;
                 calculatedTotal = items.reduce(
                   (sum: number, item: any) =>
-                    sum + Number(item.money ?? item.amount ?? item.value ?? 0),
+                    sum + getTransactionAmount(item),
                   0,
                 );
 
@@ -766,7 +615,7 @@ app.get("/api/mu-data", async (req, res) => {
                   return {
                     id: item._id || `tx-${userId}-${idx}`,
                     amount: Number(
-                      item.money ?? item.amount ?? item.value ?? 0,
+                      getTransactionAmount(item),
                     ),
                     currency: item.currency || item.itemCode || "Gold",
                     timestamp: item.createdAt || new Date().toISOString(),
@@ -787,10 +636,9 @@ app.get("/api/mu-data", async (req, res) => {
                 donations = [];
                 calculatedTotal = 0;
               }
-            }
           }
         } catch (e) {
-          console.error(`Error fetching transactions for ${userId}:`, e);
+          throw e;
         }
 
         const wealth = userProfile?.rankings?.userWealth?.value || 1000;
@@ -798,21 +646,6 @@ app.get("/api/mu-data", async (req, res) => {
 
         // Only generate fallback donations if live API was completely unqueried (e.g. no API token)
         // AND only for some players so players without donations are realistically represented
-        if (donations.length === 0 && !hasQueriedLive && !hasValidToken) {
-          const hashVal =
-            userId.charCodeAt(0) + userId.charCodeAt(userId.length - 1);
-          // If hashVal is even, generate donations; if odd, leave with 0 donations
-          if (hashVal % 2 === 0) {
-            donations = generateFallbackDonations(
-              userId,
-              wealth,
-              level,
-              muData?.name || "Turkic Tribe",
-              muData?.avatarUrl,
-            );
-          }
-        }
-
         const totalDonations =
           calculatedTotal > 0
             ? calculatedTotal
@@ -1029,12 +862,7 @@ app.get("/api/mu-data", async (req, res) => {
     res.json(payload);
   } catch (error: any) {
     console.error("API Error in /api/mu-data:", error);
-    // Return stale cache if available
-    const stale = cache.get(cacheKey);
-    if (stale && stale.data) {
-      return res.json({ ...stale.data, cached: true, isStale: true });
-    }
-    res.json({
+    res.status(502).json({
       success: false,
       error: error.message || "Internal error while fetching WarEra data",
     });

@@ -1,4 +1,5 @@
 import { TRACKED_ARMIES } from "../config/trackedArmies";
+import { getTrpcData, getTransactionAmount, getTransactionItems } from "../utils/wareraTransactions";
 import {
   ApiResponse,
   DonationItem,
@@ -1127,150 +1128,6 @@ const KNOWN_MUS: Record<string, { name: string; avatarUrl: string }> = Object.fr
 );
 
 // Deterministic fallback donations generator for players when transactions API is limited
-function generateFallbackDonations(
-  userId: string,
-  wealth: number = 5000,
-  level: number = 10,
-  muName: string = "Turkic Tribe",
-  muAvatarUrl?: string,
-): DonationItem[] {
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
-  }
-
-  const baseScales = [
-    Math.max(50, Math.floor((wealth * 0.05 + level * 20) % 5000)),
-    Math.max(25, Math.floor((wealth * 0.03 + level * 15) % 3500)),
-    Math.max(10, Math.floor((wealth * 0.02 + level * 10) % 2000)),
-    Math.max(30, Math.floor((wealth * 0.04 + level * 18) % 4000)),
-    Math.max(20, Math.floor((wealth * 0.025 + level * 12) % 3000)),
-    Math.max(40, Math.floor((wealth * 0.035 + level * 16) % 3800)),
-    Math.max(15, Math.floor((wealth * 0.015 + level * 8) % 2500)),
-  ];
-
-  const now = Date.now();
-  const times = [
-    now - ((hash % 12) + 1) * 3600 * 1000 * 4,
-    now - ((hash % 24) + 14) * 3600 * 1000 * 4,
-    now - ((hash % 30) + 38) * 3600 * 1000 * 4,
-    now - ((hash % 36) + 68) * 3600 * 1000 * 4,
-    now - ((hash % 42) + 98) * 3600 * 1000 * 4,
-    now - ((hash % 48) + 130) * 3600 * 1000 * 4,
-    now - ((hash % 54) + 165) * 3600 * 1000 * 4,
-  ];
-
-  const amounts = [
-    Math.max(100, Math.round(baseScales[0] * (0.8 + (hash % 17) / 40))),
-    Math.max(80, Math.round(baseScales[1] * (0.7 + ((hash >> 4) % 19) / 40))),
-    Math.max(50, Math.round(baseScales[2] * (0.9 + ((hash >> 8) % 23) / 40))),
-    Math.max(90, Math.round(baseScales[3] * (0.75 + ((hash >> 12) % 21) / 40))),
-    Math.max(60, Math.round(baseScales[4] * (0.85 + ((hash >> 16) % 18) / 40))),
-    Math.max(110, Math.round(baseScales[5] * (0.8 + ((hash >> 20) % 22) / 40))),
-    Math.max(45, Math.round(baseScales[6] * (0.95 + ((hash >> 24) % 15) / 40))),
-  ];
-
-  const profileType = hash % 4;
-
-  return times.map((t, i) => {
-    let target: "country" | "mu" = "country";
-    let targetName = "Türkiye";
-    let countryCode: string | undefined = "TR";
-    let targetAvatarUrl: string | undefined = undefined;
-    let description = "Türkiye Cumhuriyeti Devlet Hazinesi";
-
-    if (profileType === 1) {
-      if (i === 5 && hash % 4 === 0) {
-        target = "country";
-        targetName = "Türkiye";
-        countryCode = "TR";
-        description = "Devlet Hazinesi Altın Katkısı";
-      } else {
-        target = "mu";
-        targetName = muName || "Turkic Tribe";
-        targetAvatarUrl = muAvatarUrl;
-        countryCode = undefined;
-        description =
-          i % 2 === 0
-            ? "Ordu Karargah ve Teçhizat Katkısı"
-            : "Askeri Birlik Geliştirme Fonu";
-      }
-    } else if (profileType === 2) {
-      if (i % 2 === 0) {
-        target = "country";
-        targetName = "Birleşik Arap Emirlikleri";
-        countryCode = "AE";
-        description = "BAE Devlet Hazinesi Katkısı";
-      } else if (i === 3) {
-        target = "mu";
-        targetName = muName || "Turkic Tribe";
-        targetAvatarUrl = muAvatarUrl;
-        countryCode = undefined;
-        description = "Ordu Lojistik ve İkmal Desteği";
-      } else {
-        target = "country";
-        targetName = "Türkiye";
-        countryCode = "TR";
-        description = "Milli Savunma ve Savaş Fonu";
-      }
-    } else if (profileType === 3) {
-      if (i % 3 === 0) {
-        target = "country";
-        targetName = "Azerbaycan";
-        countryCode = "AZ";
-        description = "Azerbaycan Savunma Fonu";
-      } else if (i === 4 && hash % 2 === 0) {
-        target = "country";
-        targetName = "Kamerun";
-        countryCode = "CM";
-        description = "Kamerun Hazinesi Katkısı";
-      } else if (i === 1) {
-        target = "mu";
-        targetName = muName || "Turkic Tribe";
-        targetAvatarUrl = muAvatarUrl;
-        countryCode = undefined;
-        description = "Ordu Geliştirme Katkısı";
-      } else {
-        target = "country";
-        targetName = "Türkiye";
-        countryCode = "TR";
-        description = "Ülke Hazinesi Altın Katkısı";
-      }
-    } else {
-      if (i === 4 && hash % 3 === 0) {
-        target = "mu";
-        targetName = muName || "Turkic Tribe";
-        targetAvatarUrl = muAvatarUrl;
-        countryCode = undefined;
-        description = "Birlik Cephanelik ve Savunma Desteği";
-      } else if (i === 2 && hash % 3 === 1) {
-        target = "country";
-        targetName = "Birleşik Arap Emirlikleri";
-        countryCode = "AE";
-        description = "Devlet Hazinesi Katkısı";
-      } else {
-        target = "country";
-        targetName = "Türkiye";
-        countryCode = "TR";
-        description = "Ülke Hazinesi Altın Katkısı";
-      }
-    }
-
-    return {
-      id: `tx-${userId}-${i + 1}`,
-      amount: amounts[i],
-      currency: "Gold",
-      timestamp: new Date(t).toISOString(),
-      description,
-      type: "donation",
-      target,
-      targetName,
-      targetAvatarUrl,
-      countryCode,
-    };
-  });
-}
-
 /**
  * Secure client-side request helper:
  * Routes WarEra API requests through the server-side /api/warera-proxy endpoint
@@ -1313,7 +1170,7 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
     throw new Error(`WarEra MU API responded with HTTP ${muRes.status}`);
   }
   const muJson = await muRes.json();
-  const muData = muJson?.result?.data;
+  const muData = getTrpcData(muJson);
   if (!muData) {
     throw new Error("Military Unit data not found");
   }
@@ -1343,7 +1200,7 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
         const userRes = await fetchWithTokens(userUrl);
         if (userRes.ok) {
           const uJson = await userRes.json();
-          userProfile = uJson?.result?.data;
+          userProfile = getTrpcData(uJson);
         }
       } catch (e) {
         console.warn(`Could not fetch userLite for ${userId}`, e);
@@ -1351,23 +1208,22 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
 
       // Try fetching live transactions
       let calculatedTotal = 0;
-      let hasQueriedLive = false;
 
       try {
         const txUrl = `https://api2.warera.io/trpc/transaction.getPaginatedTransactions?input=${encodeURIComponent(
           JSON.stringify({ userId, transactionType: "donation" }),
         )}`;
         const txRes = await fetchWithTokens(txUrl);
-        if (txRes.ok) {
-          const txJson = await txRes.json();
-          const items = txJson?.result?.data?.items;
-          if (Array.isArray(items)) {
-            hasQueriedLive = true;
+        if (!txRes.ok) throw new Error(`Donation API returned HTTP ${txRes.status} for ${userId}`);
+        const txJson = await txRes.json();
+        const items = getTransactionItems(txJson);
+        if (!items) throw new Error(`Donation API returned an invalid response for ${userId}`);
+        {
             if (items.length > 0) {
               hasAnyLiveDonations = true;
               calculatedTotal = items.reduce(
                 (sum: number, item: any) =>
-                  sum + Number(item.money ?? item.amount ?? item.value ?? 0),
+                  sum + getTransactionAmount(item),
                 0,
               );
 
@@ -1443,29 +1299,13 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
               donations = [];
               calculatedTotal = 0;
             }
-          }
         }
       } catch (e) {
-        // Transactions endpoint may fail or be throttled; fallback will be used
+        throw e;
       }
 
       const wealth = userProfile?.rankings?.userWealth?.value || 5000;
       const level = userProfile?.leveling?.level || 1;
-
-      // Only generate fallback donations if live API was completely unqueried
-      if (donations.length === 0 && !hasQueriedLive) {
-        const hashVal =
-          userId.charCodeAt(0) + userId.charCodeAt(userId.length - 1);
-        if (hashVal % 2 === 0) {
-          donations = generateFallbackDonations(
-            userId,
-            wealth,
-            level,
-            muData.name || "Turkic Tribe",
-            muData.avatarUrl,
-          );
-        }
-      }
 
       // Ensure donations are sorted newest to oldest
       donations.sort(
@@ -1629,13 +1469,13 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
  * 1. Checks memory / localStorage cache first (if not forceRefresh).
  * 2. Tries local backend endpoint `/api/mu-data`.
  * 3. If local backend fails (e.g. static Vite SPA mode or proxy drop), directly fetches from https://api2.warera.io.
- * 4. If all fail (e.g. offline), falls back safely to cached/seed data.
+ * 4. If all fail, surfaces an error instead of displaying fabricated donations.
  */
 export async function fetchMilitaryUnitData(
   muId: string = DEFAULT_MU_ID,
   forceRefresh = false,
 ): Promise<ApiResponse> {
-  const cacheKey = `${CACHE_KEY_PREFIX}${muId}_v5`;
+  const cacheKey = `${CACHE_KEY_PREFIX}${muId}_v6`;
 
   // Check client-side storage cache if not forcing refresh
   if (!forceRefresh) {
@@ -1722,10 +1562,7 @@ export async function fetchMilitaryUnitData(
       }
     }
   } catch (err) {
-    console.warn(
-      "Backend proxy /api/mu-data not available or timed out, trying direct WarEra API fetch...",
-      err,
-    );
+    console.warn("Backend proxy /api/mu-data not available, trying direct WarEra API fetch...", err);
   }
 
   // Step 2: Fallback to direct WarEra API fetch
@@ -1737,19 +1574,7 @@ export async function fetchMilitaryUnitData(
     console.error("Direct WarEra API fetch failed:", directErr);
   }
 
-  // Step 3: Check if we have any stale cached data in localStorage
-  try {
-    const stored = localStorage.getItem(cacheKey);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed.data) {
-        return parsed.data;
-      }
-    }
-  } catch (e) {}
-
-  // Step 4: Return robust default seed data so the app NEVER crashes with "Failed to fetch"
-  return SEED_DATA;
+  throw new Error("Bağış verileri WarEra API'sinden alınamadı. Lütfen API limitinin yenilenmesini bekleyip tekrar deneyin.");
 }
 
 /**

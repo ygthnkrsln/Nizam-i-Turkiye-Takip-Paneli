@@ -3,6 +3,7 @@ import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
 // Handles Military Unit data fetching with token rotation and 7-donation resolution
 
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
+import { getTrpcData, getTransactionAmount, getTransactionItems } from "../../utils/wareraTransactions.js";
 
 const KNOWN_COUNTRIES: Record<string, { name: string; code: string }> = {
   "683ddd2c24b5a2e114af15b5": { name: "Birleşik Arap Emirlikleri", code: "AE" },
@@ -43,150 +44,6 @@ async function fetchWarEra(
     }
     throw err;
   }
-}
-
-function generateFallbackDonations(
-  userId: string,
-  wealth = 5000,
-  level = 10,
-  muName = "Turkic Tribe",
-  muAvatarUrl?: string,
-) {
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
-  }
-
-  const baseScales = [
-    Math.max(50, Math.floor((wealth * 0.05 + level * 20) % 5000)),
-    Math.max(25, Math.floor((wealth * 0.03 + level * 15) % 3500)),
-    Math.max(10, Math.floor((wealth * 0.02 + level * 10) % 2000)),
-    Math.max(30, Math.floor((wealth * 0.04 + level * 18) % 4000)),
-    Math.max(20, Math.floor((wealth * 0.025 + level * 12) % 3000)),
-    Math.max(40, Math.floor((wealth * 0.035 + level * 16) % 3800)),
-    Math.max(15, Math.floor((wealth * 0.015 + level * 8) % 2500)),
-  ];
-
-  const now = Date.now();
-  const times = [
-    now - ((hash % 12) + 1) * 3600 * 1000 * 4,
-    now - ((hash % 24) + 14) * 3600 * 1000 * 4,
-    now - ((hash % 30) + 38) * 3600 * 1000 * 4,
-    now - ((hash % 36) + 68) * 3600 * 1000 * 4,
-    now - ((hash % 42) + 98) * 3600 * 1000 * 4,
-    now - ((hash % 48) + 130) * 3600 * 1000 * 4,
-    now - ((hash % 54) + 165) * 3600 * 1000 * 4,
-  ];
-
-  const amounts = [
-    Math.max(100, Math.round(baseScales[0] * (0.8 + (hash % 17) / 40))),
-    Math.max(80, Math.round(baseScales[1] * (0.7 + ((hash >> 4) % 19) / 40))),
-    Math.max(50, Math.round(baseScales[2] * (0.9 + ((hash >> 8) % 23) / 40))),
-    Math.max(90, Math.round(baseScales[3] * (0.75 + ((hash >> 12) % 21) / 40))),
-    Math.max(60, Math.round(baseScales[4] * (0.85 + ((hash >> 16) % 18) / 40))),
-    Math.max(110, Math.round(baseScales[5] * (0.8 + ((hash >> 20) % 22) / 40))),
-    Math.max(45, Math.round(baseScales[6] * (0.95 + ((hash >> 24) % 15) / 40))),
-  ];
-
-  const profileType = hash % 4;
-
-  return times.map((t, i) => {
-    let target: "country" | "mu" = "country";
-    let targetName = "Türkiye";
-    let countryCode: string | undefined = "TR";
-    let targetAvatarUrl: string | undefined = undefined;
-    let description = "Türkiye Cumhuriyeti Devlet Hazinesi";
-
-    if (profileType === 1) {
-      if (i === 5 && hash % 4 === 0) {
-        target = "country";
-        targetName = "Türkiye";
-        countryCode = "TR";
-        description = "Devlet Hazinesi Altın Katkısı";
-      } else {
-        target = "mu";
-        targetName = muName || "Turkic Tribe";
-        targetAvatarUrl = muAvatarUrl;
-        countryCode = undefined;
-        description =
-          i % 2 === 0
-            ? "Ordu Karargah ve Teçhizat Katkısı"
-            : "Askeri Birlik Geliştirme Fonu";
-      }
-    } else if (profileType === 2) {
-      if (i % 2 === 0) {
-        target = "country";
-        targetName = "Birleşik Arap Emirlikleri";
-        countryCode = "AE";
-        description = "BAE Devlet Hazinesi Katkısı";
-      } else if (i === 3) {
-        target = "mu";
-        targetName = muName || "Turkic Tribe";
-        targetAvatarUrl = muAvatarUrl;
-        countryCode = undefined;
-        description = "Ordu Lojistik ve İkmal Desteği";
-      } else {
-        target = "country";
-        targetName = "Türkiye";
-        countryCode = "TR";
-        description = "Milli Savunma ve Savaş Fonu";
-      }
-    } else if (profileType === 3) {
-      if (i % 3 === 0) {
-        target = "country";
-        targetName = "Azerbaycan";
-        countryCode = "AZ";
-        description = "Azerbaycan Savunma Fonu";
-      } else if (i === 4 && hash % 2 === 0) {
-        target = "country";
-        targetName = "Kamerun";
-        countryCode = "CM";
-        description = "Kamerun Hazinesi Katkısı";
-      } else if (i === 1) {
-        target = "mu";
-        targetName = muName || "Turkic Tribe";
-        targetAvatarUrl = muAvatarUrl;
-        countryCode = undefined;
-        description = "Ordu Geliştirme Katkısı";
-      } else {
-        target = "country";
-        targetName = "Türkiye";
-        countryCode = "TR";
-        description = "Ülke Hazinesi Altın Katkısı";
-      }
-    } else {
-      if (i === 4 && hash % 3 === 0) {
-        target = "mu";
-        targetName = muName || "Turkic Tribe";
-        targetAvatarUrl = muAvatarUrl;
-        countryCode = undefined;
-        description = "Birlik Cephanelik ve Savunma Desteği";
-      } else if (i === 2 && hash % 3 === 1) {
-        target = "country";
-        targetName = "Birleşik Arap Emirlikleri";
-        countryCode = "AE";
-        description = "Devlet Hazinesi Katkısı";
-      } else {
-        target = "country";
-        targetName = "Türkiye";
-        countryCode = "TR";
-        description = "Ülke Hazinesi Altın Katkısı";
-      }
-    }
-
-    return {
-      id: `tx-${userId}-${i + 1}`,
-      amount: amounts[i],
-      currency: "Gold",
-      timestamp: new Date(t).toISOString(),
-      description,
-      type: "donation",
-      target,
-      targetName,
-      targetAvatarUrl,
-      countryCode,
-    };
-  });
 }
 
 interface UserFactoryData {
@@ -440,7 +297,7 @@ export default async function handler(req: any, res: any) {
   const forceRefresh = req.query?.refresh === "true";
   const userApiKey =
     (req.headers["x-user-api-key"] as string) || (req.query?.apiKey as string);
-  const cacheKey = `mu_v4_${muId}`;
+  const cacheKey = `mu_v5_${muId}`;
 
   const cached = cache.get(cacheKey);
   if (
@@ -467,7 +324,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const muJson = await muResponse.json();
-    const muData = muJson?.result?.data;
+    const muData = getTrpcData(muJson);
 
     if (!muData) {
       return res
@@ -492,7 +349,6 @@ export default async function handler(req: any, res: any) {
         let userProfile: any = null;
         let donations: any[] = [];
         let calculatedTotal = 0;
-        let hasQueriedLive = false;
 
         try {
           const userUrl = `https://api2.warera.io/trpc/user.getUserLite?input=${encodeURIComponent(
@@ -501,7 +357,7 @@ export default async function handler(req: any, res: any) {
           const userRes = await fetchWarEra(userUrl);
           if (userRes.ok) {
             const userJson = await userRes.json();
-            userProfile = userJson?.result?.data;
+            userProfile = getTrpcData(userJson);
           }
         } catch (e) {
           console.error(`Error user ${userId}:`, e);
@@ -512,17 +368,16 @@ export default async function handler(req: any, res: any) {
             JSON.stringify({ userId, transactionType: "donation" }),
           )}`;
           const txRes = await fetchWarEra(txUrl);
-
-          if (txRes.ok) {
-            const txJson = await txRes.json();
-            const items = txJson?.result?.data?.items;
-            if (Array.isArray(items)) {
-              hasQueriedLive = true;
+          if (!txRes.ok) throw new Error(`Donation API returned HTTP ${txRes.status} for ${userId}`);
+          const txJson = await txRes.json();
+          const items = getTransactionItems(txJson);
+          if (!items) throw new Error(`Donation API returned an invalid response for ${userId}`);
+          {
               if (items.length > 0) {
                 isLiveDonations = true;
                 calculatedTotal = items.reduce(
                   (sum: number, item: any) =>
-                    sum + Number(item.money ?? item.amount ?? item.value ?? 0),
+                    sum + getTransactionAmount(item),
                   0,
                 );
 
@@ -575,7 +430,7 @@ export default async function handler(req: any, res: any) {
                   return {
                     id: item._id || `tx-${userId}-${idx}`,
                     amount: Number(
-                      item.money ?? item.amount ?? item.value ?? 0,
+                      getTransactionAmount(item),
                     ),
                     currency: item.currency || item.itemCode || "Gold",
                     timestamp: item.createdAt || new Date().toISOString(),
@@ -595,28 +450,13 @@ export default async function handler(req: any, res: any) {
                 donations = [];
                 calculatedTotal = 0;
               }
-            }
           }
         } catch (e) {
-          console.error(`Error tx ${userId}:`, e);
+          throw e;
         }
 
         const wealth = userProfile?.rankings?.userWealth?.value || 1000;
         const level = userProfile?.leveling?.level || 1;
-
-        if (donations.length === 0 && !hasQueriedLive) {
-          const hashVal =
-            userId.charCodeAt(0) + userId.charCodeAt(userId.length - 1);
-          if (hashVal % 2 === 0) {
-            donations = generateFallbackDonations(
-              userId,
-              wealth,
-              level,
-              muData.name || "Turkic Tribe",
-              muData.avatarUrl,
-            );
-          }
-        }
 
         donations.sort(
           (a, b) =>
@@ -832,9 +672,9 @@ export default async function handler(req: any, res: any) {
     cache.set(cacheKey, { data: responseData, timestamp: Date.now() });
     return res.json(responseData);
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(502).json({
       success: false,
-      error: `Server internal error: ${error.message || error}`,
+      error: `Bağış verileri güvenilir biçimde alınamadı: ${error.message || error}`,
     });
   }
 }
