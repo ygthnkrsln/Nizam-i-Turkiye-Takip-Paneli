@@ -15,7 +15,8 @@ import {
   getMilitaryUnitWeeklyDamage,
 } from "./src/lib/dailyDamage.ts";
 import { COUNTRY_STATS_ARMIES } from "./src/config/countryStatsArmies.js";
-import { buildEconomyDonationInput, getTrpcData, getTransactionAmount, getTransactionItems } from "./src/utils/wareraTransactions.js";
+import { getTrpcData, getTransactionAmount, getTransactionItems } from "./src/utils/wareraTransactions.js";
+import economyDonationsHandler from "./src/server/handlers/economy-donations.js";
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+app.post("/api/economy-donations", economyDonationsHandler);
 
 // Enable permissive CORS for iframe and preview environments
 app.use((req, res, next) => {
@@ -473,7 +475,7 @@ app.get("/api/mu-data", async (req, res) => {
   const forceRefresh = req.query.refresh === "true";
   const userApiKey =
     (req.headers["x-user-api-key"] as string) || (req.query.apiKey as string);
-  const cacheKey = `mu_v6_${muId}`;
+  const cacheKey = `mu_v7_${muId}`;
 
   const cached = cache.get(cacheKey);
   if (
@@ -549,7 +551,7 @@ app.get("/api/mu-data", async (req, res) => {
         // Fetch User Donations using token rotation
         try {
           const txUrl = `https://api2.warera.io/trpc/transaction.getPaginatedTransactions?input=${encodeURIComponent(
-            JSON.stringify(buildEconomyDonationInput(userId, muData.country)),
+            JSON.stringify({ userId, transactionType: "donation" }),
           )}`;
 
           const txRes = await fetchWarEra(txUrl);

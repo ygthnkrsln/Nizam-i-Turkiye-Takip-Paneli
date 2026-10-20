@@ -1,5 +1,5 @@
 import { TRACKED_ARMIES } from "../config/trackedArmies";
-import { buildEconomyDonationInput, getTrpcData, getTransactionAmount, getTransactionItems } from "../utils/wareraTransactions";
+import { getTrpcData, getTransactionAmount, getTransactionItems } from "../utils/wareraTransactions";
 import {
   ApiResponse,
   DonationItem,
@@ -1158,6 +1158,25 @@ async function fetchWithTokens(
   return fetch(url, { ...init, headers });
 }
 
+export async function fetchEconomyDonationHistory(
+  userIds: string[],
+): Promise<Record<string, DonationItem[]>> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const userKey = getUserApiKey();
+  if (userKey) headers["X-User-Api-Key"] = userKey;
+
+  const response = await fetch("/api/economy-donations", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ userIds }),
+  });
+  const payload = await response.json();
+  if (!response.ok || payload?.success !== true) {
+    throw new Error(payload?.error || `Economy donation request failed (${response.status})`);
+  }
+  return payload.donationsByUserId || {};
+}
+
 // Fetch directly via server-side WarEra proxy
 async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
   // 1. Fetch Military Unit
@@ -1211,7 +1230,7 @@ async function fetchDirectFromWarEra(muId: string): Promise<ApiResponse> {
 
       try {
         const txUrl = `https://api2.warera.io/trpc/transaction.getPaginatedTransactions?input=${encodeURIComponent(
-          JSON.stringify(buildEconomyDonationInput(userId, muData.country)),
+            JSON.stringify({ userId, transactionType: "donation" }),
         )}`;
         const txRes = await fetchWithTokens(txUrl);
         if (!txRes.ok) throw new Error(`Donation API returned HTTP ${txRes.status} for ${userId}`);
@@ -1475,7 +1494,7 @@ export async function fetchMilitaryUnitData(
   muId: string = DEFAULT_MU_ID,
   forceRefresh = false,
 ): Promise<ApiResponse> {
-  const cacheKey = `${CACHE_KEY_PREFIX}${muId}_v7`;
+  const cacheKey = `${CACHE_KEY_PREFIX}${muId}_v8`;
 
   // Check client-side storage cache if not forcing refresh
   if (!forceRefresh) {

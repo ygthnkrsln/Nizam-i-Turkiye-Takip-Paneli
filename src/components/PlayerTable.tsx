@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { PlayerStats, SortField, SortDirection } from '../types';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { DonationItem, PlayerStats, SortField, SortDirection } from '../types';
+import { fetchEconomyDonationHistory } from '../services/wareraApi';
 import { 
   ArrowUpDown, 
   ArrowUp, 
@@ -44,6 +45,34 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [modeFilter, setModeFilter] = useState<'all' | 'combat' | 'economy'>('all');
   const [isExporting, setIsExporting] = useState(false);
+  const [donationsByUserId, setDonationsByUserId] = useState<Record<string, DonationItem[]>>({});
+  const [isLoadingDonations, setIsLoadingDonations] = useState(false);
+  const [donationLoadError, setDonationLoadError] = useState<string | null>(null);
+  const userIdsKey = useMemo(() => players.map((player) => player.userId).filter(Boolean).join(','), [players]);
+
+  const loadEconomyDonations = useCallback(async () => {
+    const userIds = userIdsKey ? userIdsKey.split(',') : [];
+    if (userIds.length === 0) return;
+    setIsLoadingDonations(true);
+    setDonationLoadError(null);
+    try {
+      setDonationsByUserId(await fetchEconomyDonationHistory(userIds));
+    } catch (error: any) {
+      setDonationsByUserId({});
+      setDonationLoadError(error?.message || 'Bağış verileri alınamadı.');
+    } finally {
+      setIsLoadingDonations(false);
+    }
+  }, [userIdsKey]);
+
+  useEffect(() => {
+    void loadEconomyDonations();
+  }, [loadEconomyDonations]);
+
+  const donationAwarePlayers = useMemo(
+    () => players.map((player) => ({ ...player, latestDonations: donationsByUserId[player.userId] || [] })),
+    [players, donationsByUserId],
+  );
 
   // Aggregate mode counts for filter buttons
   const modeCounts = useMemo(() => {
@@ -112,7 +141,7 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
   };
 
   const filteredAndSortedPlayers = useMemo(() => {
-    return players
+    return donationAwarePlayers
       .filter((player) => {
         // Mode filter (all / combat / economy)
         if (modeFilter !== 'all') {
@@ -187,7 +216,7 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
         if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
         return 0;
       });
-  }, [players, searchQuery, sortField, sortDirection, modeFilter]);
+  }, [donationAwarePlayers, searchQuery, sortField, sortDirection, modeFilter]);
 
   const renderSortIndicator = (field: SortField) => {
     if (sortField !== field) {
@@ -333,17 +362,23 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
             <button
               id="table-manual-refresh-btn"
               type="button"
-              onClick={onRefresh}
-              disabled={isLoading || isRefreshing}
+              onClick={() => { void loadEconomyDonations(); onRefresh?.(); }}
+              disabled={isLoading || isRefreshing || isLoadingDonations}
               title="Verileri API'den yenile"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium bg-[#141C21] hover:bg-emerald-950/40 text-[#BBE1FA] hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 transition-all disabled:opacity-50 cursor-pointer shadow-sm"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${(isLoading || isRefreshing) ? 'animate-spin text-emerald-300' : 'text-emerald-400'}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${(isLoading || isRefreshing || isLoadingDonations) ? 'animate-spin text-emerald-300' : 'text-emerald-400'}`} />
               <span>Yenile</span>
             </button>
           )}
         </div>
       </div>
+
+      {(isLoadingDonations || donationLoadError) && (
+        <div className={`px-4 py-2 text-xs border-b border-emerald-500/15 ${donationLoadError ? 'text-rose-300' : 'text-emerald-300/80'}`} role="status">
+          {donationLoadError || 'Oyuncuların son 7 bağışı yükleniyor…'}
+        </div>
+      )}
 
       {/* Main Responsive Data Table */}
       <div className="overflow-x-auto">
