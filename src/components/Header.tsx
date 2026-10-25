@@ -10,6 +10,7 @@ import {
   Flame,
   HeartHandshake,
   Menu,
+  Sparkles,
   Shield,
   X,
 } from 'lucide-react';
@@ -58,7 +59,8 @@ const groups: {
     label: 'Araçlar',
     theme: 'sky',
     tabs: [
-      { id: 'levelCalculator', title: 'Prestij - Hasar Optimizasyonu', icon: Calculator },
+      { id: 'levelCalculator', title: 'Seviye Hesaplayıcı', icon: Calculator },
+      { id: 'prestigeOptimizer', title: 'Prestij - Hasar Optimizasyonu', icon: Sparkles },
     ],
   },
 ];
