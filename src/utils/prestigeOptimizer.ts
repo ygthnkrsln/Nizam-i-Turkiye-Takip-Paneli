@@ -1,4 +1,4 @@
-import { MissionKey, MISSION_XP, prestigeXpMultiplier, xpRequiredForLevel } from "./levelProgression";
+import { MissionKey, MISSION_XP, prestigeXpMultiplier, totalXpForLevel, xpRequiredForLevel } from "./levelProgression";
 
 export interface LevelDamageRate {
   level: number;
@@ -8,9 +8,7 @@ export interface LevelDamageRate {
 export interface PrestigeOptimizerSettings {
   damageTiming: "start_of_day" | "end_of_day";
   prestigeDamageBonusPercent: number;
-  pauseXpBonusAtMaxLevel: boolean;
   carryoverExcessXp: boolean;
-  accumulatedXpThreshold: number;
   rounding: "round" | "floor" | "ceil";
 }
 
@@ -80,31 +78,31 @@ export const DEFAULT_LEVEL_DAMAGE: LevelDamageRate[] = [
 export const DEFAULT_OPTIMIZER_SETTINGS: PrestigeOptimizerSettings = {
   damageTiming: "start_of_day",
   prestigeDamageBonusPercent: 20,
-  pauseXpBonusAtMaxLevel: true,
   carryoverExcessXp: true,
-  accumulatedXpThreshold: 65_000,
   rounding: "round",
 };
+
+const ACCUMULATED_XP_THRESHOLD = totalXpForLevel(50) - totalXpForLevel(25);
 
 const STRATEGIES = [
   {
     id: "immediate" as const,
     name: "Hemen prestij",
-    description: "50. seviyeye ulaştığı gün prestij yapar; kalan XP yeni döngüye taşınır.",
+    description: "50. seviyeye ulaşıldığı gün prestij yapılır ve savaş buildinde devam edilir.",
     color: "#22d3ee",
     holdWeeklyMonthly: false,
   },
   {
     id: "month-end" as const,
     name: "Ay sonunda prestij",
-    description: "50. seviyede ay sonuna kadar kalır; haftalık ve aylık görev XP’sini prestij sonrasına saklar.",
+    description: "50. seviyeye hangi ayda ulaşılırsa ulaşılsın o ay sonuna kadar savaş buildinde devam edilir. Ay sonunda haftalık ve aylık görevler toplanmadan prestij basılır. Prestij basıldıktan sonra görevler toplanır ve yeni ayda tüm görevler sıfırlanmış olarak savaş buildinde devam edilir.",
     color: "#a78bfa",
     holdWeeklyMonthly: true,
   },
   {
     id: "accumulated-xp" as const,
     name: "XP biriktirerek prestij",
-    description: "50. seviyede belirlenen XP eşiğine kadar bekler, ardından taşan XP ile yeni seviyeleri açar.",
+    description: "50. seviyeye gelindiğinde XP bonusundan feragat edilerek savaş buildinde kalınır ve yeniden 50. seviye olmaya yetecek XP birikene kadar prestij basılmaz.",
     color: "#34d399",
     holdWeeklyMonthly: false,
   },
@@ -116,7 +114,7 @@ function roundXp(value: number, method: PrestigeOptimizerSettings["rounding"]): 
   return Math.round(value);
 }
 
-function xpMultiplier(prestige: number, settings: PrestigeOptimizerSettings): number {
+function xpMultiplier(prestige: number): number {
   return prestigeXpMultiplier(prestige);
 }
 
@@ -200,9 +198,9 @@ export function simulatePrestigeOptimization(input: PrestigeOptimizerInput): Pre
 
       const baseXp = dailyXp + weeklyXp + monthlyXp;
       const isAtMaxAtStart = level >= 50;
-      const bonusPaused = isAtMaxAtStart && input.settings.pauseXpBonusAtMaxLevel;
+      const bonusPaused = isAtMaxAtStart;
       const appliedXp = roundXp(
-        baseXp * (bonusPaused ? 1 : xpMultiplier(prestige, input.settings)),
+        baseXp * (bonusPaused ? 1 : xpMultiplier(prestige)),
         input.settings.rounding,
       );
       xpInLevel += appliedXp;
@@ -227,7 +225,7 @@ export function simulatePrestigeOptimization(input: PrestigeOptimizerInput): Pre
       if (level >= 50) {
         if (strategy.id === "immediate") shouldPrestige = true;
         if (strategy.id === "month-end" && lastDayOfMonth(date)) shouldPrestige = true;
-        if (strategy.id === "accumulated-xp" && xpInLevel >= input.settings.accumulatedXpThreshold) shouldPrestige = true;
+        if (strategy.id === "accumulated-xp" && xpInLevel >= ACCUMULATED_XP_THRESHOLD) shouldPrestige = true;
       }
 
       if (shouldPrestige) {
@@ -241,7 +239,7 @@ export function simulatePrestigeOptimization(input: PrestigeOptimizerInput): Pre
 
         const heldBaseXp = heldWeeklyXp + heldMonthlyXp;
         if (heldBaseXp > 0) {
-          const heldEarnedXp = roundXp(heldBaseXp * xpMultiplier(prestige, input.settings), input.settings.rounding);
+          const heldEarnedXp = roundXp(heldBaseXp * xpMultiplier(prestige), input.settings.rounding);
           xpInLevel += heldEarnedXp;
           heldXpClaimedToday = heldBaseXp;
           heldEarnedToday = heldEarnedXp;

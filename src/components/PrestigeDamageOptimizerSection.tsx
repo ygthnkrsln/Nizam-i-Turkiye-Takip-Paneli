@@ -254,14 +254,9 @@ export const PrestigeDamageOptimizerSection: React.FC = () => {
                     Prestij başına hasar bonusu (%)
                     <input type="number" min={0} max={200} value={optimizerSettings.prestigeDamageBonusPercent} onChange={(event) => setOptimizerSettings((settings) => ({ ...settings, prestigeDamageBonusPercent: Math.max(0, Number(event.target.value) || 0) }))} className="mt-2 w-full rounded-lg border border-[#3282B8]/20 bg-[#0D1418] px-3 py-2 font-mono text-sm text-white" />
                   </label>
-                  <label className="rounded-xl border border-[#3282B8]/15 bg-[#11191E]/60 p-3 text-xs text-[#BBE1FA]/70">
-                    XP biriktirme planı eşiği
-                    <input type="number" min={10000} max={500000} step={1000} value={optimizerSettings.accumulatedXpThreshold} onChange={(event) => setOptimizerSettings((settings) => ({ ...settings, accumulatedXpThreshold: Math.max(10000, Number(event.target.value) || 65000) }))} className="mt-2 w-full rounded-lg border border-[#3282B8]/20 bg-[#0D1418] px-3 py-2 font-mono text-sm text-white" />
-                  </label>
-                  <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-[#3282B8]/15 bg-[#11191E]/60 p-3 text-xs text-[#BBE1FA]/70">
-                    <input type="checkbox" checked={optimizerSettings.pauseXpBonusAtMaxLevel} onChange={(event) => setOptimizerSettings((settings) => ({ ...settings, pauseXpBonusAtMaxLevel: event.target.checked }))} className="mt-0.5 accent-cyan-400" />
-                    50. seviyedeyken XP bonusunu durdur
-                  </label>
+                  <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/[0.04] p-3 text-xs leading-relaxed text-emerald-100/75">
+                    XP biriktirme planı, mevcut seviye XP tablosuna göre 25’ten 50’ye gereken XP’yi otomatik hesaplar. 50. seviyede XP bonusu uygulanmaz.
+                  </div>
                   <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-[#3282B8]/15 bg-[#11191E]/60 p-3 text-xs text-[#BBE1FA]/70">
                     <input type="checkbox" checked={optimizerSettings.carryoverExcessXp} onChange={(event) => setOptimizerSettings((settings) => ({ ...settings, carryoverExcessXp: event.target.checked }))} className="mt-0.5 accent-cyan-400" />
                     Prestijde mevcut seviye XP’sini koru
@@ -273,7 +268,7 @@ export const PrestigeDamageOptimizerSection: React.FC = () => {
                     </select>
                   </label>
                 </div>
-                <p className="px-5 pb-4 text-[11px] text-[#BBE1FA]/45">Görevler UTC 00.00’da yenilenir; haftalık görev Pazartesi, aylık görev ayın 1’inde yenilenir. 50. seviyede bonusun durması, XP taşıma ve hasar hesabı kaynak koddaki varsayımlara göre uygulanır.</p>
+                <p className="px-5 pb-4 text-[11px] text-[#BBE1FA]/45">Görevler UTC 00.00’da yenilenir; haftalık görev Pazartesi, aylık görev ayın 1’inde yenilenir. Seviye 50’de XP bonusu durur. Ay sonu planında haftalık ve aylık görev XP’si prestijden sonra uygulanır.</p>
               </details>
 
               <details className="rounded-2xl border border-[#3282B8]/20 bg-[#182329]">
@@ -335,6 +330,7 @@ export const PrestigeDamageOptimizerSection: React.FC = () => {
                           <span className="text-[#BBE1FA]/45">Yıl sonu</span><span className="text-right font-mono text-white">Sv. {strategy.endLevel} · P{strategy.endPrestige}</span>
                           <span className="text-[#BBE1FA]/45">Prestij sayısı</span><span className="text-right font-mono text-white">{strategy.prestigesPerformed}</span>
                           <span className="text-[#BBE1FA]/45">50. seviye günleri</span><span className="text-right font-mono text-white">{strategy.daysAtMaxLevel}</span>
+                          <span className="text-[#BBE1FA]/45">1 yılda kazanılan XP</span><span className="text-right font-mono text-cyan-200">{compactNumber(strategy.totalEarnedXp)} XP</span>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[#3282B8]/10 pt-3">
                           {strategy.prestigeDates.length ? strategy.prestigeDates.map((entry) => (
