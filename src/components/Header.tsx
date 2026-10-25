@@ -34,7 +34,6 @@ const groups: {
     theme: 'emerald',
     tabs: [
       { id: 'donations', title: 'Bağış Takip Paneli', icon: HeartHandshake },
-      { id: 'armyStats', title: 'Ordu İstatistikleri', icon: Building2 },
       { id: 'countryStats', title: 'Ülke İstatistikleri', icon: BarChart3 },
     ],
   },
@@ -43,6 +42,7 @@ const groups: {
     theme: 'rose',
     tabs: [
       { id: 'combatArmyInfo', title: 'Ordu Bilgisi', icon: Shield },
+      { id: 'armyStats', title: 'Ordu İstatistikleri', icon: Building2 },
       { id: 'combatDetails', title: 'Detaylı Bilgi', icon: Crosshair },
       { id: 'combatDamage', title: 'Hasar', icon: Flame },
     ],
