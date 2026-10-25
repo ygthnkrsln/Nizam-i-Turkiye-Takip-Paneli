@@ -1155,6 +1155,32 @@ export interface UserLevelingProfile {
   };
 }
 
+export interface TrackedPlayerDirectoryEntry {
+  userId: string;
+  username: string;
+  armyNames: string[];
+}
+
+let trackedPlayerDirectoryPromise: Promise<TrackedPlayerDirectoryEntry[]> | null = null;
+
+export async function fetchTrackedPlayerDirectory(): Promise<TrackedPlayerDirectoryEntry[]> {
+  if (!trackedPlayerDirectoryPromise) {
+    trackedPlayerDirectoryPromise = fetch("/api/daily-damage-snapshots?directory=true")
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok || payload?.success !== true || !Array.isArray(payload.players)) {
+          throw new Error(payload?.error || "Oyuncu listesi alınamadı.");
+        }
+        return payload.players as TrackedPlayerDirectoryEntry[];
+      })
+      .catch((error) => {
+        trackedPlayerDirectoryPromise = null;
+        throw error;
+      });
+  }
+  return trackedPlayerDirectoryPromise;
+}
+
 export async function fetchUserLevelingProfile(userId: string): Promise<UserLevelingProfile> {
   const response = await fetchWithTokens("https://api2.warera.io/trpc/user.getUserLite", {
     method: "POST",

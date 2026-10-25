@@ -6,6 +6,7 @@ import {
   readSnapshotsWithSupabase,
   snapshotAllArmies,
 } from "../services/daily-damage.js";
+import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -18,6 +19,45 @@ export default async function handler(req: any, res: any) {
 
   const muId = req.query?.muId as string;
   let store = await readSnapshotsWithSupabase();
+
+  if (req.query?.directory === "true") {
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(new Date());
+    const todayArmies = store[today]?.armies || {};
+    const incompleteTrackedArmy = TRACKED_ARMIES.some((army) => {
+      const snapshot = todayArmies[army.id];
+      return !snapshot || Object.keys(snapshot.members || {}).length < Number(snapshot.memberCount || 0);
+    });
+    if (!store[today] || incompleteTrackedArmy) {
+      try {
+        await snapshotAllArmies();
+        store = await readSnapshotsWithSupabase();
+      } catch (error) {
+        console.warn("Could not refresh player directory snapshot:", error);
+      }
+    }
+
+    const directory = new Map<string, { userId: string; username: string; armyNames: Set<string> }>();
+    const latestDate = Object.keys(store).sort().at(-1) || null;
+    const snapshotArmies = latestDate ? store[latestDate]?.armies || {} : {};
+    for (const army of TRACKED_ARMIES) {
+      const members = snapshotArmies[army.id]?.members || {};
+      for (const [userId, member] of Object.entries(members) as [string, { username?: string }][]) {
+        const entry = directory.get(userId) || { userId, username: "", armyNames: new Set<string>() };
+        if (member.username) entry.username = member.username;
+        entry.armyNames.add(army.name);
+        directory.set(userId, entry);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      latestDate,
+      players: Array.from(directory.values())
+        .filter((player) => player.username)
+        .map((player) => ({ ...player, armyNames: Array.from(player.armyNames) }))
+        .sort((a, b) => a.username.localeCompare(b.username, "tr")),
+    });
+  }
 
   // If no snapshots exist at all yet, take an initial baseline snapshot now
   if (Object.keys(store).length === 0) {

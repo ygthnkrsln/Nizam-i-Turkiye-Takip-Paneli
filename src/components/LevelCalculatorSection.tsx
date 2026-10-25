@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { AlertCircle, Calculator, LoaderCircle, Sparkles } from "lucide-react";
 import { fetchUserLevelingProfile } from "../services/wareraApi";
+import { PlayerDirectorySearch } from "./PlayerDirectorySearch";
 import { levelForXp, MISSION_LABELS, MISSION_XP, MissionKey, prestigeXpMultiplier, totalXpForLevel } from "../utils/levelProgression";
 
 const missionKeys: MissionKey[] = ["daily", "weekly", "monthly"];
@@ -76,9 +77,8 @@ export const LevelCalculatorSection: React.FC = () => {
       </header>
 
       <form onSubmit={handleLookup} className="rounded-2xl border border-[#3282B8]/20 bg-[#182329] p-5 sm:p-6">
-        <label htmlFor="level-user-id" className="mb-2 block text-sm font-semibold text-[#BBE1FA]">WarEra oyuncu ID’si</label>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <input id="level-user-id" value={userId} onChange={(event) => setUserId(event.target.value)} placeholder="Örn. 68305110bbd6e3b4179f0110" autoComplete="off" className="min-w-0 flex-1 rounded-xl border border-[#3282B8]/25 bg-[#11191E] px-4 py-3 text-sm text-white outline-none placeholder:text-[#BBE1FA]/35 focus:border-cyan-400/60" />
+          <div className="min-w-0 flex-1"><PlayerDirectorySearch onSelect={setUserId} onManualInput={setUserId} /></div>
           <button type="submit" disabled={loading || !userId.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-5 py-3 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-50">
             {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}{loading ? "Oyuncu aranıyor..." : "Oyuncuyu getir"}
           </button>
