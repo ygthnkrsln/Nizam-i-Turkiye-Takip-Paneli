@@ -113,7 +113,7 @@ export const MarketPricesSection: React.FC = () => {
         </div>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
         <SummaryCard label="Listelenen ürün" value={loading ? "—" : String(itemCount)} />
         <SummaryCard label="Ortalama fiyat" value={loading || !itemCount ? "—" : `${priceFormat.format(average)} G`} />
         <SummaryCard label="Son güncelleme" value={updatedAt ? updatedAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : "—"} />
@@ -124,7 +124,7 @@ export const MarketPricesSection: React.FC = () => {
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ürün adına göre ara..." aria-label="Ürün adına göre ara" className="w-full rounded-xl border border-[#3282B8]/20 bg-[#182329] py-3 pl-10 pr-4 text-sm text-white outline-none placeholder:text-[#BBE1FA]/35 focus:border-emerald-400/45" />
       </div>
 
-      {error && <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/20 bg-rose-950/15 p-4 text-sm text-rose-200"><span className="flex items-center gap-2"><AlertCircle className="h-4 w-4 shrink-0" />{error}</span><button type="button" onClick={() => void loadPrices(true)} className="shrink-0 rounded-lg border border-rose-500/25 px-3 py-1.5 text-xs hover:bg-rose-950/30">Tekrar dene</button></div>}
+      {error && <div role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-rose-500/20 bg-rose-950/15 p-4 text-sm text-rose-200 sm:flex-row sm:items-center sm:justify-between"><span className="flex items-center gap-2"><AlertCircle className="h-4 w-4 shrink-0" />{error}</span><button type="button" onClick={() => void loadPrices(true)} className="shrink-0 rounded-lg border border-rose-500/25 px-3 py-1.5 text-xs hover:bg-rose-950/30">Tekrar dene</button></div>}
 
       {loading ? <div className="grid min-h-48 place-items-center rounded-2xl border border-[#3282B8]/15 bg-[#182329]"><div className="flex items-center gap-2 text-sm text-[#BBE1FA]/60"><LoaderCircle className="h-4 w-4 animate-spin" />Market fiyatları yükleniyor...</div></div>
         : !itemCount && !error ? <div className="grid min-h-48 place-items-center rounded-2xl border border-[#3282B8]/15 bg-[#182329] text-sm text-[#BBE1FA]/50">API henüz fiyat verisi döndürmedi.</div>
@@ -134,12 +134,12 @@ export const MarketPricesSection: React.FC = () => {
               const CategoryIcon = style.icon;
               return <section key={category} className="space-y-3" aria-label={category}>
                 <h2 className={`flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] ${style.color}`}><CategoryIcon className="h-4 w-4" />{category}<span className="font-mono text-[10px] opacity-50">{entries.length}</span></h2>
-                <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-7">{entries.map(([key, price]) => {
+                <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-7">{entries.map(([key, price]) => {
                   const item = ITEMS[key];
                   const tone = item?.tone || style.tone;
-                  return <article key={key} className={`flex min-h-[68px] items-center gap-2.5 rounded-lg border ${style.border} p-2.5 transition duration-150 hover:brightness-110`} style={{ backgroundColor: `${tone}12`, borderColor: `${tone}45` }} title={`${item?.name || readableItemName(key)} · ${priceFormat.format(price)} G · ${key}`}>
-                    <span className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md border bg-[#11191E]/80" style={{ color: tone, borderColor: `${tone}55`, backgroundColor: `${tone}18` }}><CategoryIcon className="h-4 w-4" /><img src={`/assets/${key}.png`} alt="" className="absolute inset-0 h-full w-full object-contain" onError={(event) => { event.currentTarget.style.display = "none"; }} /></span>
-                    <div className="min-w-0 flex-1"><h3 className="truncate text-xs font-semibold text-white">{item?.name || readableItemName(key)}</h3><div className="mt-1 font-mono text-base font-bold leading-tight" style={{ color: tone }}>{priceFormat.format(price)}<span className="ml-1 text-[10px] font-medium text-[#BBE1FA]/60">G</span></div></div>
+                  return <article key={key} className={`flex min-h-[60px] items-center gap-2 rounded-lg border ${style.border} p-2 sm:min-h-[68px] sm:gap-2.5 sm:p-2.5 transition duration-150 hover:brightness-110`} style={{ backgroundColor: `${tone}12`, borderColor: `${tone}45` }} title={`${item?.name || readableItemName(key)} · ${priceFormat.format(price)} G · ${key}`}>
+                    <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-md border bg-[#11191E]/80 sm:h-10 sm:w-10" style={{ color: tone, borderColor: `${tone}55`, backgroundColor: `${tone}18` }}><CategoryIcon className="h-4 w-4" /><img src={`/assets/${key}.png`} alt="" className="absolute inset-0 h-full w-full object-contain" onError={(event) => { event.currentTarget.style.display = "none"; }} /></span>
+                    <div className="min-w-0 flex-1"><h3 className="truncate text-[11px] font-semibold text-white sm:text-xs">{item?.name || readableItemName(key)}</h3><div className="mt-1 font-mono text-sm font-bold leading-tight sm:text-base" style={{ color: tone }}>{priceFormat.format(price)}<span className="ml-1 text-[10px] font-medium text-[#BBE1FA]/60">G</span></div></div>
                   </article>;
                 })}</div>
               </section>;

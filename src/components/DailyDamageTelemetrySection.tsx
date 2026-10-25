@@ -1162,7 +1162,7 @@ export const DailyDamageTelemetrySection: React.FC<
       {/* 5. GRAFİK MODALI (Değişim Grafiği) */}
       {isChartModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="relative w-full max-w-xl bg-[#182329] border border-rose-500/40 rounded-2xl shadow-2xl p-6 overflow-hidden">
+          <div className="relative w-full max-w-xl max-h-[calc(100dvh-2rem)] overflow-hidden overflow-y-auto overscroll-contain sm:max-h-none sm:overflow-hidden bg-[#182329] border border-rose-500/40 rounded-2xl shadow-2xl p-6">
             <div className="flex items-center justify-between pb-4 border-b border-rose-500/20 mb-4">
               <div className="flex items-center gap-2 text-white">
                 <TrendingUp className="w-5 h-5 text-rose-400" />
@@ -1301,7 +1301,7 @@ export const DailyDamageTelemetrySection: React.FC<
       {/* 6. ÜYE DETAY MODALI */}
       {selectedMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="relative w-full max-w-md bg-[#182329] border border-rose-500/40 rounded-2xl shadow-2xl p-6 overflow-hidden font-mono">
+          <div className="relative w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-hidden overflow-y-auto overscroll-contain sm:max-h-none sm:overflow-hidden bg-[#182329] border border-rose-500/40 rounded-2xl shadow-2xl p-6 font-mono">
             <div className="flex items-start justify-between pb-3 border-b border-rose-500/20 mb-4">
               <div className="flex items-center gap-3">
                 <div className="relative">

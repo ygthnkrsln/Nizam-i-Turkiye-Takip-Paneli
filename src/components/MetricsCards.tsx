@@ -66,12 +66,12 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
   const activeRate = totalMembers > 0 ? Math.round((activePlayers / totalMembers) * 100) : 0;
 
   return (
-    <div id="metrics-summary-grid" className={`grid grid-cols-1 sm:grid-cols-2 ${showWealthMetrics ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4 mb-6 items-stretch`}>
+    <div id="metrics-summary-grid" className={`grid grid-cols-1 min-[390px]:grid-cols-2 sm:grid-cols-2 ${showWealthMetrics ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-3 sm:gap-4 mb-5 sm:mb-6 items-stretch`}>
       {/* 1. Askeri Birlik (Ordu) Seçimi */}
       <div
         id="card-mu-selector"
         ref={dropdownRef}
-        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full relative shadow-lg shadow-black/25 group"
+        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl p-3 sm:p-5 transition-all duration-300 flex flex-col justify-between h-full relative shadow-lg shadow-black/25 group"
       >
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -194,7 +194,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
       {/* 2. Aktif Asker */}
       <div
         id="metric-active-soldiers"
-        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
+        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl p-3 sm:p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
       >
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -225,7 +225,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
         </div>
       </div>
 
-      {showWealthMetrics ? <div className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-amber-500/20 rounded-xl p-5 flex flex-col justify-between shadow-lg shadow-black/20">
+      {showWealthMetrics ? <div className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-amber-500/20 rounded-xl p-3 sm:p-5 flex flex-col justify-between shadow-lg shadow-black/20">
         <div className="text-[11px] font-semibold text-[#BBE1FA]/70 uppercase tracking-widest font-mono">Toplam Servet</div>
         <div className="mt-3 font-mono text-3xl font-extrabold text-amber-200">${totalWealth.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</div>
         <div className="mt-2 text-[11px] text-[#BBE1FA]/50">Ordu üyelerinin güncel toplam serveti</div>
@@ -233,7 +233,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
       {/* 3. Aktif Fabrika */}
       <div
         id="metric-active-factories"
-        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
+        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl p-3 sm:p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
       >
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -262,7 +262,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
       {/* 4. Aktif Motor Gücü */}
       <div
         id="metric-active-engine-power"
-        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
+        className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl p-3 sm:p-5 transition-all duration-300 flex flex-col justify-between h-full shadow-lg shadow-black/25 group"
       >
         <div>
           <div className="flex items-center justify-between mb-3">

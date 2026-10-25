@@ -382,6 +382,31 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({
 
       {/* Main Responsive Data Table */}
       <div className="overflow-x-auto">
+        <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:hidden">
+          <label className="sr-only" htmlFor="mobile-donation-sort">Sıralama</label>
+          <select
+            id="mobile-donation-sort"
+            value={sortField}
+            onChange={(event) => {
+              const field = event.target.value as SortField;
+              setSortField(field);
+              setSortDirection(field === 'username' ? 'asc' : 'desc');
+            }}
+            className="min-w-0 rounded-lg border border-emerald-500/25 bg-[#141C21] px-3 py-2 text-xs text-[#BBE1FA]"
+          >
+            <option value="username">Oyuncu adına göre</option>
+            <option value="latestDonation">Son bağışa göre</option>
+            <option value="wealth">Servete göre</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setSortDirection((direction) => direction === 'asc' ? 'desc' : 'asc')}
+            className="rounded-lg border border-emerald-500/25 bg-[#141C21] px-3 py-2 text-xs text-[#BBE1FA]"
+            aria-label={`Sıralama yönü: ${sortDirection === 'asc' ? 'artan' : 'azalan'}`}
+          >
+            {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+          </button>
+        </div>
         <table id="donations-data-table" className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-emerald-500/20 bg-[#141C21]/90 text-[11px] font-semibold text-[#BBE1FA]/80 uppercase tracking-widest font-mono select-none">

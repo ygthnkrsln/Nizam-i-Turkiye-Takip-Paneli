@@ -378,7 +378,7 @@ export const PrestigeDamageOptimizerSection: React.FC = () => {
                       </div>
                     </div>
                   ) : event.type === "prestige" ? (
-                    <div key={`prestige-${index}`} className="flex items-center justify-between gap-3 border-t-2 border-amber-400/40 bg-[#11191E]/75 px-5 py-3">
+                    <div key={`prestige-${index}`} className="flex flex-col items-start gap-1 border-t-2 border-amber-400/40 bg-[#11191E]/75 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5">
                       <div className="flex items-center gap-2">
                         <span className="rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-2 py-1 text-[11px] font-bold tracking-wide text-amber-200">PRESTİJ {event.prestige}</span>
                         <span className="text-xs text-[#BBE1FA]/50">Seviye {event.resetLevel}’e sıfırlandı</span>
@@ -386,7 +386,7 @@ export const PrestigeDamageOptimizerSection: React.FC = () => {
                       <span className="shrink-0 text-xs text-[#BBE1FA]/65">{formatDate(event.date)}</span>
                     </div>
                   ) : (
-                    <div key={`level-${index}`} className={`flex items-center justify-between border-t border-[#3282B8]/10 px-5 py-2.5 ${event.current ? "bg-cyan-400/[0.04]" : ""}`}>
+                    <div key={`level-${index}`} className={`flex flex-col items-start gap-1 border-t border-[#3282B8]/10 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5 ${event.current ? "bg-cyan-400/[0.04]" : ""}`}>
                       <div className="flex items-center gap-3">
                         <span className="flex h-7 min-w-8 items-center justify-center rounded-md border border-[#3282B8]/20 bg-[#1B2B34] px-2 font-mono text-sm font-bold text-white">{event.level}</span>
                         <span className="text-sm text-[#BBE1FA]/75">Seviye {event.level}</span>

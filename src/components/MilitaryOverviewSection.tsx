@@ -676,7 +676,7 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
       {/* Tüm Üyeler Modal */}
       {isMembersModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-2xl max-h-[85vh] bg-[#182329] border border-rose-500/40 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+          <div className="relative w-full max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[85vh] overflow-hidden overflow-y-auto overscroll-contain sm:overflow-hidden bg-[#182329] border border-rose-500/40 rounded-2xl shadow-2xl flex flex-col">
             {/* Modal Header */}
             <div className="p-4 border-b border-rose-500/20 flex items-center justify-between bg-[#141C21]/80">
               <div className="flex items-center gap-2.5">

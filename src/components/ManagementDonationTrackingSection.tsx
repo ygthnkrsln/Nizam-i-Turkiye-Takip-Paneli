@@ -365,7 +365,7 @@ export const ManagementDonationTrackingSection: React.FC<
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs font-mono">
+          <table className="w-full min-w-[760px] md:min-w-0 text-left text-xs font-mono">
             <thead>
               <tr className="bg-[#141C21]/80 border-b border-emerald-500/20 text-[#BBE1FA]/70 text-[11px] uppercase tracking-wider">
                 <th className="py-3 px-4 text-center w-12">#</th>
@@ -594,7 +594,7 @@ export const ManagementDonationTrackingSection: React.FC<
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
+            <table className="w-full min-w-[760px] md:min-w-0 text-left text-xs font-mono">
               <thead>
                 <tr className="bg-[#141C21]/80 border-b border-emerald-500/20 text-[#BBE1FA]/70 text-[11px] uppercase tracking-wider">
                   <th className="py-2.5 px-4 text-center w-12">#</th>

@@ -91,11 +91,11 @@ const InteractiveLineChart: React.FC<ChartProps> = ({
     return { y, label };
   });
 
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!containerRef.current || points.length === 0) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const svgX = (mouseX / rect.width) * svgWidth;
+    const pointerX = e.clientX - rect.left;
+    const svgX = (pointerX / rect.width) * svgWidth;
 
     let closestIdx = 0;
     let minDiff = Infinity;
@@ -115,9 +115,10 @@ const InteractiveLineChart: React.FC<ChartProps> = ({
     <div ref={containerRef} className="relative w-full overflow-hidden select-none">
       <svg
         viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        className="w-full h-auto cursor-crosshair block"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setHoverIndex(null)}
+        className="w-full h-auto cursor-crosshair block touch-pan-y"
+        onPointerMove={handlePointerMove}
+        onPointerDown={handlePointerMove}
+        onPointerLeave={(event) => { if (event.pointerType !== 'touch') setHoverIndex(null); }}
       >
         <defs>
           <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
@@ -409,9 +410,9 @@ export const CountryStatsPanel: React.FC = () => {
   }, [data, activeStats, viewMode, totalPlayers, totalCombat, totalEconomy]);
 
   return (
-    <div id="country-stats-panel" className="space-y-6">
+    <div id="country-stats-panel" className="min-w-0 space-y-4 sm:space-y-6">
       {/* 1. Ülke Orduları Bilgi Banner'ı */}
-      <div className="bg-gradient-to-r from-[#182329]/95 via-[#1B262C]/95 to-[#182329]/95 border border-emerald-500/30 rounded-xl p-5 shadow-xl shadow-black/30 backdrop-blur-sm">
+      <div className="bg-gradient-to-r from-[#182329]/95 via-[#1B262C]/95 to-[#182329]/95 border border-emerald-500/30 rounded-xl p-3 sm:p-5 shadow-xl shadow-black/30 backdrop-blur-sm">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-3 flex-wrap">
@@ -421,7 +422,7 @@ export const CountryStatsPanel: React.FC = () => {
               </h2>
 
               {/* Gece / Gündüz mantığıyla çalışan Savaş vs. Ekonomi Modu Geçiş Butonu */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <div
                   role="button"
                   tabIndex={0}
@@ -501,7 +502,7 @@ export const CountryStatsPanel: React.FC = () => {
           </div>
 
           {/* Quick Metrics Badges (Önceki 4 temiz kart formatı) */}
-          <div className="flex items-center gap-3 shrink-0 flex-wrap">
+          <div className="grid grid-cols-2 gap-2 shrink-0 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
             {/* 1. Toplam Asker */}
             <div className={`px-3.5 py-2 rounded-lg bg-[#141C21] border text-right font-mono min-w-[110px] transition-colors ${
               viewMode === 'combat' ? 'border-rose-500/35' : viewMode === 'economy' ? 'border-emerald-500/35' : 'border-[#3282B8]/25'
@@ -600,7 +601,7 @@ export const CountryStatsPanel: React.FC = () => {
         </div>
 
         {/* Dahil Orduların Altı - Sağ Alt Köşe: Verileri Yenile & PDF İndir Butonları */}
-        <div className="mt-3 pt-2.5 border-t border-[#3282B8]/15 flex items-center justify-end gap-2.5">
+        <div className="mt-3 pt-2.5 border-t border-[#3282B8]/15 flex flex-wrap items-center justify-start gap-2.5 sm:justify-end">
           <button
             type="button"
             onClick={() => loadData(true)}
@@ -627,8 +628,8 @@ export const CountryStatsPanel: React.FC = () => {
       {/* 2. BÖLÜM 1: Seviye Başına Düşen Oyuncu Grafiği ve Tablosu */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         {/* Sol: Grafik */}
-        <div className="lg:col-span-8 bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl p-5 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between transition-colors">
-          <div className="flex items-center justify-between mb-4 border-b border-[#3282B8]/15 pb-3">
+        <div className="lg:col-span-8 bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl p-3 sm:p-5 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between transition-colors">
+          <div className="flex flex-col gap-2 mb-4 border-b border-[#3282B8]/15 pb-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-[11px] uppercase tracking-wider text-[#3282B8] font-mono font-bold flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5" />
@@ -668,14 +669,14 @@ export const CountryStatsPanel: React.FC = () => {
             />
           </div>
 
-          <div className="pt-3 border-t border-[#3282B8]/15 flex items-center justify-between text-xs text-[#BBE1FA]/60 font-mono">
+          <div className="pt-3 border-t border-[#3282B8]/15 flex flex-col gap-1 text-xs text-[#BBE1FA]/60 font-mono sm:flex-row sm:items-center sm:justify-between">
             <span>Yatay Eksen: Oyuncu Seviyesi (Level)</span>
             <span>Dikey Eksen: {activeSummary.modeLabel} Oyuncu Sayısı</span>
           </div>
         </div>
 
         {/* Sağ: Tablo */}
-        <div className="lg:col-span-4 bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl p-4 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between transition-colors">
+        <div className="lg:col-span-4 bg-[#182329]/95 border border-emerald-500/25 hover:border-emerald-500/40 rounded-xl p-3 sm:p-4 shadow-xl shadow-black/30 backdrop-blur-sm flex flex-col justify-between transition-colors">
           <div>
             <div className="flex items-center justify-between border-b border-[#3282B8]/15 pb-2 mb-3">
               <span className="text-xs font-bold text-white font-mono uppercase tracking-wider">

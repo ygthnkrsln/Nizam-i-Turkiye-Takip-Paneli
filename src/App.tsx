@@ -438,10 +438,10 @@ export default function App() {
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 relative z-10">
+      <main className="flex-1 min-w-0 max-w-7xl w-full mx-auto px-3 pt-16 pb-5 sm:px-6 sm:pb-6 lg:px-8 relative z-10 md:pt-6">
         {/* Error Alert */}
         {error && (
-          <div className="mb-6 p-4 rounded-xl bg-[#182329] border border-[#3282B8]/40 text-white flex items-center justify-between gap-3 text-sm shadow-xl">
+          <div className="mb-6 p-3 sm:p-4 rounded-xl bg-[#182329] border border-[#3282B8]/40 text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm shadow-xl">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-[#3282B8] shrink-0" />
               <span className="text-white font-medium">{error}</span>
@@ -527,7 +527,7 @@ export default function App() {
 
       {/* Footer with Canlı Senkron, Son Güncelleme Saati, and Credit */}
       <footer className="mt-auto border-t border-[#3282B8]/15 py-3.5 text-xs text-[#BBE1FA]/60 bg-[#141C21]/90 backdrop-blur-sm relative z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-center sm:text-left">
           {/* Left: Canlı Senkron & Son Güncelleme Saati */}
           <div className="flex items-center gap-2.5 flex-wrap">
             <button
