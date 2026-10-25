@@ -58,7 +58,7 @@ const groups: {
     label: 'Araçlar',
     theme: 'sky',
     tabs: [
-      { id: 'levelCalculator', title: 'Seviye Hesaplayıcı', icon: Calculator },
+      { id: 'levelCalculator', title: 'Prestij - Hasar Optimizasyonu', icon: Calculator },
     ],
   },
 ];

@@ -72,7 +72,7 @@ const TAB_TITLES: Record<ActiveTab, string> = {
   mgmtOrders: 'Nizam-ı Türkiye - Görev & Emirler (Yönetim Modu)',
   mgmtTreasury: 'Nizam-ı Türkiye - Kasa & Lojistik (Yönetim Modu)',
   mgmtDiplomacy: 'Nizam-ı Türkiye - İttifak & Diplomasi (Yönetim Modu)',
-  levelCalculator: 'Nizam-ı Türkiye - Seviye Hesaplayıcı',
+  levelCalculator: 'Nizam-ı Türkiye - Prestij - Hasar Optimizasyonu',
 };
 
 export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
