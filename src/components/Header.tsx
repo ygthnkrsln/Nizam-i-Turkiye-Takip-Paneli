@@ -10,6 +10,7 @@ import {
   Flame,
   HeartHandshake,
   Menu,
+  ShoppingCart,
   Sparkles,
   Shield,
   X,
@@ -34,6 +35,7 @@ const groups: {
     theme: 'emerald',
     tabs: [
       { id: 'donations', title: 'Bağış Takip Paneli', icon: HeartHandshake },
+      { id: 'marketPrices', title: 'Market Fiyatları', icon: ShoppingCart },
       { id: 'countryStats', title: 'Ülke İstatistikleri', icon: BarChart3 },
     ],
   },

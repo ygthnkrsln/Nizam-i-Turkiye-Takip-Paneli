@@ -18,6 +18,7 @@ const ManagementArmyTrackingSection = React.lazy(() => import('./components/Mana
 const ManagementDonationTrackingSection = React.lazy(() => import('./components/ManagementDonationTrackingSection').then((module) => ({ default: module.ManagementDonationTrackingSection })));
 const LevelCalculatorSection = React.lazy(() => import('./components/LevelCalculatorSection').then((module) => ({ default: module.LevelCalculatorSection })));
 const PrestigeDamageOptimizerSection = React.lazy(() => import('./components/PrestigeDamageOptimizerSection').then((module) => ({ default: module.PrestigeDamageOptimizerSection })));
+const MarketPricesSection = React.lazy(() => import('./components/MarketPricesSection').then((module) => ({ default: module.MarketPricesSection })));
 import { MilitaryUnitData, PlayerStats, ApiResponse } from './types';
 import { 
   fetchMilitaryUnitData, 
@@ -42,7 +43,8 @@ export type ActiveTab =
   | 'mgmtTreasury'
   | 'mgmtDiplomacy'
   | 'levelCalculator'
-  | 'prestigeOptimizer';
+  | 'prestigeOptimizer'
+  | 'marketPrices';
 
 
 export const TAB_TO_SLUG: Record<ActiveTab, string> = {
@@ -60,6 +62,7 @@ export const TAB_TO_SLUG: Record<ActiveTab, string> = {
   mgmtDiplomacy: 'ittifak-diplomasi',
   levelCalculator: 'seviye-hesaplayici',
   prestigeOptimizer: 'prestij-hasar-optimizasyonu',
+  marketPrices: 'market-fiyatlari',
 };
 
 const TAB_TITLES: Record<ActiveTab, string> = {
@@ -77,6 +80,7 @@ const TAB_TITLES: Record<ActiveTab, string> = {
   mgmtDiplomacy: 'Nizam-ı Türkiye - İttifak & Diplomasi (Yönetim Modu)',
   levelCalculator: 'Nizam-ı Türkiye - Seviye Hesaplayıcı',
   prestigeOptimizer: 'Nizam-ı Türkiye - Prestij - Hasar Optimizasyonu',
+  marketPrices: 'Nizam-ı Türkiye - Market Fiyatları',
 };
 
 export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
@@ -143,6 +147,8 @@ export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
     tab = 'levelCalculator';
   } else if (tabSlug === 'prestij-hasar-optimizasyonu' || tabSlug === 'prestige-damage-optimizer') {
     tab = 'prestigeOptimizer';
+  } else if (tabSlug === 'market-fiyatlari' || tabSlug === 'market-prices') {
+    tab = 'marketPrices';
   } else if (
     tabSlug === 'ordu-istatistikleri' ||
     tabSlug === 'ordu' ||
@@ -246,7 +252,7 @@ export default function App() {
   const handleTabChange = useCallback((newTab: ActiveTab) => {
     setActiveTab(newTab);
     const slug = TAB_TO_SLUG[newTab];
-    const hasMuPath = newTab !== 'countryStats' && newTab !== 'levelCalculator' && newTab !== 'prestigeOptimizer';
+    const hasMuPath = newTab !== 'countryStats' && newTab !== 'levelCalculator' && newTab !== 'prestigeOptimizer' && newTab !== 'marketPrices';
     const newPath = hasMuPath ? `/${slug}/${muId}${window.location.search}` : `/${slug}${window.location.search}`;
     const expectedPathname = hasMuPath ? `/${slug}/${muId}` : `/${slug}`;
     if (window.location.pathname !== expectedPathname) {
@@ -282,7 +288,7 @@ export default function App() {
     // If loaded on root "/" or on slug without MU ID, gracefully update URL to include the MU ID
     const currentPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
     const currentSlug = TAB_TO_SLUG[route.tab];
-    const targetExpectedPath = route.tab === 'countryStats' || route.tab === 'levelCalculator' || route.tab === 'prestigeOptimizer' ? `/${currentSlug}` : `/${currentSlug}/${muId}`;
+    const targetExpectedPath = route.tab === 'countryStats' || route.tab === 'levelCalculator' || route.tab === 'prestigeOptimizer' || route.tab === 'marketPrices' ? `/${currentSlug}` : `/${currentSlug}/${muId}`;
     if (currentPath === '' || currentPath === currentSlug) {
       window.history.replaceState({ tab: route.tab, muId }, '', `${targetExpectedPath}${window.location.search}`);
     }
@@ -455,6 +461,8 @@ export default function App() {
           <LevelCalculatorSection />
         ) : activeTab === 'prestigeOptimizer' ? (
           <PrestigeDamageOptimizerSection />
+        ) : activeTab === 'marketPrices' ? (
+          <MarketPricesSection />
         ) : activeTab === 'mgmtArmies' ? (
           <ManagementArmyTrackingSection onSelectArmy={handleMuIdChange} onNavigateTab={handleTabChange} />
         ) : activeTab === 'mgmtDonations' ? (

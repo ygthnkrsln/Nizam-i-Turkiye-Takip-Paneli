@@ -1155,6 +1155,23 @@ export interface UserLevelingProfile {
   };
 }
 
+export type MarketPrices = Record<string, number>;
+
+export async function fetchMarketPrices(): Promise<MarketPrices> {
+  const response = await fetchWithTokens("https://api2.warera.io/trpc/itemTrading.getPrices");
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || `Market fiyatları alınamadı (${response.status})`);
+  }
+  const data = getTrpcData(payload);
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("WarEra API geçerli market fiyatı verisi döndürmedi.");
+  }
+  return Object.fromEntries(
+    Object.entries(data).filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1])),
+  );
+}
+
 export interface TrackedPlayerDirectoryEntry {
   userId: string;
   username: string;
