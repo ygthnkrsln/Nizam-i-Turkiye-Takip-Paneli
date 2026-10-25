@@ -134,13 +134,12 @@ export const MarketPricesSection: React.FC = () => {
               const CategoryIcon = style.icon;
               return <section key={category} className="space-y-3" aria-label={category}>
                 <h2 className={`flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] ${style.color}`}><CategoryIcon className="h-4 w-4" />{category}<span className="font-mono text-[10px] opacity-50">{entries.length}</span></h2>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{entries.map(([key, price]) => {
+                <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-7">{entries.map(([key, price]) => {
                   const item = ITEMS[key];
                   const tone = item?.tone || style.tone;
-                  return <article key={key} className={`rounded-xl border ${style.border} p-4 transition duration-150 hover:brightness-110`} style={{ backgroundColor: `${tone}12`, borderColor: `${tone}45` }} title={`${key}: ${price}`}>
-                    <div className="flex items-start justify-between gap-2"><div className="min-w-0"><h3 className="truncate text-sm font-semibold text-white">{item?.name || readableItemName(key)}</h3><p className="mt-1 text-[10px] text-[#BBE1FA]/45">{key}</p></div><span className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg border bg-[#11191E]/80" style={{ color: tone, borderColor: `${tone}55`, backgroundColor: `${tone}18` }}><CategoryIcon className="h-4 w-4" /><img src={`/assets/${key}.png`} alt="" className="absolute inset-0 h-full w-full object-contain" onError={(event) => { event.currentTarget.style.display = "none"; }} /></span></div>
-                    <div className="mt-4 font-mono text-2xl font-bold tracking-tight" style={{ color: tone }}>{priceFormat.format(price)}<span className="ml-1.5 text-xs font-medium text-[#BBE1FA]/65">G</span></div>
-                    <div className="mt-1 text-[10px] text-[#BBE1FA]/40">Birim başına fiyat</div>
+                  return <article key={key} className={`flex min-h-[68px] items-center gap-2.5 rounded-lg border ${style.border} p-2.5 transition duration-150 hover:brightness-110`} style={{ backgroundColor: `${tone}12`, borderColor: `${tone}45` }} title={`${item?.name || readableItemName(key)} · ${priceFormat.format(price)} G · ${key}`}>
+                    <span className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md border bg-[#11191E]/80" style={{ color: tone, borderColor: `${tone}55`, backgroundColor: `${tone}18` }}><CategoryIcon className="h-4 w-4" /><img src={`/assets/${key}.png`} alt="" className="absolute inset-0 h-full w-full object-contain" onError={(event) => { event.currentTarget.style.display = "none"; }} /></span>
+                    <div className="min-w-0 flex-1"><h3 className="truncate text-xs font-semibold text-white">{item?.name || readableItemName(key)}</h3><div className="mt-1 font-mono text-base font-bold leading-tight" style={{ color: tone }}>{priceFormat.format(price)}<span className="ml-1 text-[10px] font-medium text-[#BBE1FA]/60">G</span></div></div>
                   </article>;
                 })}</div>
               </section>;
