@@ -17,6 +17,7 @@ import {
 import { COUNTRY_STATS_ARMIES } from "./src/config/countryStatsArmies.js";
 import { getTrpcData } from "./src/utils/wareraTransactions.js";
 import economyDonationsHandler from "./src/server/handlers/economy-donations.js";
+import { recordCountryTrackerSnapshot } from "./src/server/handlers/management-intelligence.js";
 
 dotenv.config();
 
@@ -2154,11 +2155,18 @@ app.get("/api/combat-telemetry", async (req, res) => {
 app.all("/api/cron/record-daily-damage", async (req, res) => {
   try {
     const snapshot = await snapshotAllArmies();
+    let countrySnapshot: any = null;
+    try {
+      countrySnapshot = await recordCountryTrackerSnapshot();
+    } catch (error) {
+      console.warn("Country tracker snapshot failed; daily damage snapshot is still available:", error);
+    }
     return res.json({
       success: true,
       message: "02:55 Günlük Hasar Snapshot başarıyla tamamlandı (8 Ordu).",
       date: snapshot.date,
       armiesCount: Object.keys(snapshot.armies).length,
+      countrySnapshot,
       snapshot,
     });
   } catch (err: any) {
@@ -2325,7 +2333,9 @@ async function startServer() {
           console.log(
             `[02:55 TSİ CRON] Taking scheduled daily damage snapshot for ${todayStr}...`,
           );
-          snapshotAllArmies().catch(console.error);
+          snapshotAllArmies()
+            .then(() => recordCountryTrackerSnapshot())
+            .catch(console.error);
         }
       }
     } catch (e) {

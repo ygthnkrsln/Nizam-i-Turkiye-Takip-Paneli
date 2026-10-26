@@ -3,6 +3,7 @@ import {
   readSnapshotsWithSupabase,
   snapshotAllArmies,
 } from "../../src/server/services/daily-damage.js";
+import { recordCountryTrackerSnapshot } from "../../src/server/handlers/management-intelligence.js";
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -31,6 +32,12 @@ export default async function handler(req: any, res: any) {
 
   try {
     const snapshot = await snapshotAllArmies();
+    let countrySnapshot: any = null;
+    try {
+      countrySnapshot = await recordCountryTrackerSnapshot();
+    } catch (error) {
+      console.warn("Country tracker snapshot failed; daily damage snapshot is still available:", error);
+    }
     return res.status(200).json({
       success: true,
       message: "02:55 Günlük Hasar Snapshot başarıyla tamamlandı (8 Ordu).",
@@ -38,6 +45,7 @@ export default async function handler(req: any, res: any) {
       armiesCount: Object.keys(snapshot.armies).length,
       supabaseSaved: snapshot.supabaseSaved,
       supabaseConnected: snapshot.supabaseConnected,
+      countrySnapshot,
       snapshot,
     });
   } catch (err: any) {

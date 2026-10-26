@@ -18,6 +18,28 @@ import {
 import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
 
 export const PRESET_8_ARMIES = TRACKED_ARMIES;
+const GAME_DAY_RESET_MS = 3 * 60 * 60 * 1000;
+
+function getGameWeekDates(anchorDate: string) {
+  const anchor = new Date(`${anchorDate}T03:00:00.000Z`);
+  const mondayOffset = (anchor.getUTCDay() + 6) % 7;
+  anchor.setUTCDate(anchor.getUTCDate() - mondayOffset);
+  return Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(anchor);
+    day.setUTCDate(anchor.getUTCDate() + index);
+    return day.toISOString().slice(0, 10);
+  });
+}
+
+function getDonationHistoryDates(anchorDate: string) {
+  const currentWeek = getGameWeekDates(anchorDate);
+  const previousMonday = new Date(`${currentWeek[0]}T03:00:00.000Z`);
+  previousMonday.setUTCDate(previousMonday.getUTCDate() - 7);
+  return [
+    ...getGameWeekDates(previousMonday.toISOString().slice(0, 10)),
+    ...currentWeek,
+  ];
+}
 
 interface CacheItem {
   timestamp: number;
@@ -163,6 +185,7 @@ async function processSingleArmy(
   army: { id: string; name: string; avatarUrl: string },
   snapshots: Record<string, any>,
   effectiveDate: string,
+  donationHistoryDates: string[],
   includeDonations: boolean,
 ) {
   try {
@@ -222,87 +245,84 @@ async function processSingleArmy(
       throw new Error(`Ordu ${army.name}: Tüm üye profilleri alınamadı`);
     }
 
-    // Donation transaction lookups are only needed by the donation panel.
-    // Keeping them out of army tracking avoids coupling its live health data
-    // to the much heavier transaction API workload.
-    const eligibleSet = new Set(
-      rawUsers
-        .filter((u) => {
-          const lvl = Number(u.leveling?.level || u.level || 1);
-          const { isEconomy } = calculatePlayerSkillMode(u);
-          return lvl >= 30 && isEconomy;
-        })
-        .map((u) => u._id || u.id),
-    );
-
-    // Fetch donations specifically for eligible economy members (who have donation targets)
-    // plus army leadership (leader, commanders, managers)
-    const targetCheckUserIds = new Set<string>();
-    eligibleSet.forEach((id) => targetCheckUserIds.add(id));
-    if (leaderId) targetCheckUserIds.add(leaderId);
-    commanders.forEach((id) => targetCheckUserIds.add(id));
-    managers.forEach((id) => targetCheckUserIds.add(id));
-
-    const userDonationsMap: Record<string, number> = {};
-    const donationUserIds = Array.from(targetCheckUserIds);
+    // Read every member's recent donation pages. This lets voluntary payments
+    // count toward the weekly pool and avoids missing payments after the first page.
+    const userDonationsMap: Record<
+      string,
+      Record<string, { country: number; mu: number; total: number }>
+    > = {};
+    const donationUserIds = Array.from(new Set(memberIds));
     const donationBatchSize = 8;
     const donationBatches: string[][] = [];
     for (let i = 0; i < donationUserIds.length; i += donationBatchSize) {
       donationBatches.push(donationUserIds.slice(i, i + donationBatchSize));
     }
-    if (includeDonations) await mapWithConcurrency(donationBatches, 2, async (batch) => {
-      const endpoints = batch
-        .map(() => "transaction.getPaginatedTransactions")
-        .join(",");
-      const batchInput: Record<
-        string,
-        { userId: string; transactionType: "donation" }
-      > = {};
-      batch.forEach((userId, index) => {
-        batchInput[String(index)] = { userId, transactionType: "donation" };
-      });
+    if (includeDonations) {
+      const rangeStart = new Date(`${donationHistoryDates[0]}T03:00:00.000Z`).getTime();
+      const rangeEnd = rangeStart + 14 * 24 * 60 * 60 * 1000;
+      await mapWithConcurrency(donationBatches, 2, async (batch) => {
+        const cursors = new Map<string, string | null>();
+        batch.forEach((id) => cursors.set(id, null));
+        for (let page = 0; page < 12 && cursors.size > 0; page++) {
+          const pageUserIds = Array.from(cursors.keys());
+          const endpoints = pageUserIds
+            .map(() => "transaction.getPaginatedTransactions")
+            .join(",");
+          const batchInput: Record<string, { userId: string; transactionType: "donation"; limit: number; cursor?: string }> = {};
+          pageUserIds.forEach((userId, index) => {
+            const cursor = cursors.get(userId);
+            batchInput[String(index)] = {
+              userId,
+              transactionType: "donation",
+              limit: 100,
+              ...(cursor ? { cursor } : {}),
+            };
+          });
 
-      const txUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(
-        JSON.stringify(batchInput),
-      )}`;
-      const txRes = await fetchWarEra(txUrl);
-      if (!txRes.ok) throw upstreamError(txRes, "Bağış işlemleri alınamadı");
-
-      const txJson = await txRes.json();
-      const txResults = Array.isArray(txJson) ? txJson : [txJson];
-      if (txResults.length !== batch.length) {
-        throw new Error(`Ordu ${army.name}: Bağış yanıtı eksik`);
-      }
-      txResults.forEach((item: any, index: number) => {
-          const userId = batch[index];
-          const txData = item?.result?.data?.json || item?.result?.data;
-          const txList = txData?.items;
-          if (!userId || !Array.isArray(txList)) {
+          const txUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
+          const txRes = await fetchWarEra(txUrl);
+          if (!txRes.ok) throw upstreamError(txRes, "Bağış işlemleri alınamadı");
+          const txJson = await txRes.json();
+          const txResults = Array.isArray(txJson) ? txJson : [txJson];
+          if (txResults.length !== pageUserIds.length) {
             throw new Error(`Ordu ${army.name}: Bağış yanıtı eksik`);
           }
 
-          const totalOnDate = txList.reduce(
-            (total: number, transaction: any) => {
-              if (!transaction?.createdAt) return total;
-              const transactionDate = new Intl.DateTimeFormat("en-CA", {
-                timeZone: "Europe/Istanbul",
-              }).format(new Date(transaction.createdAt));
-              return transactionDate === effectiveDate
-                ? total +
-                    Number(
-                      transaction.money ??
-                        transaction.amount ??
-                        transaction.value ??
-                        0,
-                    )
-                : total;
-            },
-            0,
-          );
+          txResults.forEach((item: any, index: number) => {
+            const userId = pageUserIds[index];
+            const txData = item?.result?.data?.json || item?.result?.data;
+            const txList = txData?.items;
+            if (!userId || !Array.isArray(txList)) {
+              throw new Error(`Ordu ${army.name}: Bağış yanıtı eksik`);
+            }
 
-          if (totalOnDate > 0) userDonationsMap[userId] = totalOnDate;
-        });
-    });
+            const dates = donationHistoryDates;
+            for (const transaction of txList) {
+              if (!transaction?.createdAt || (transaction.buyerId && transaction.buyerId !== userId)) continue;
+              const createdAt = new Date(transaction.createdAt).getTime();
+              if (!Number.isFinite(createdAt) || createdAt < rangeStart || createdAt >= rangeEnd) continue;
+              const day = new Date(createdAt - GAME_DAY_RESET_MS).toISOString().slice(0, 10);
+              if (!dates.includes(day)) continue;
+              const amount = Number(transaction.money ?? transaction.amount ?? transaction.value ?? 0);
+              if (!Number.isFinite(amount) || amount <= 0) continue;
+              const byDay = userDonationsMap[userId] || (userDonationsMap[userId] = {});
+              const totals = byDay[day] || (byDay[day] = { country: 0, mu: 0, total: 0 });
+              if (transaction.sellerMuId) totals.mu += amount;
+              else totals.country += amount;
+              totals.total += amount;
+            }
+
+            const nextCursor = txData?.nextCursor ? String(txData.nextCursor) : null;
+            const oldest = txList.reduce((min: number, transaction: any) => {
+              const at = new Date(transaction?.createdAt || 0).getTime();
+              return Number.isFinite(at) ? Math.min(min, at) : min;
+            }, Number.POSITIVE_INFINITY);
+            if (!nextCursor || !txList.length || oldest < rangeStart) cursors.delete(userId);
+            else cursors.set(userId, nextCursor);
+          });
+        }
+      });
+    }
 
     // Aggregates for Health, Hunger, Damage, and Donations
     let totalHealthCurrent = 0;
@@ -372,7 +392,8 @@ async function processSingleArmy(
       }
 
       // Real donations made on effectiveDate
-      const collectedDonation = userDonationsMap[uid] || 0;
+      const donationsByDate = userDonationsMap[uid] || {};
+      const collectedDonation = donationsByDate[effectiveDate]?.total || 0;
       collectedDonationSum += collectedDonation;
 
       const remainingDonation = Math.max(0, targetDonation - collectedDonation);
@@ -432,6 +453,7 @@ async function processSingleArmy(
         multiplier,
         targetDonation,
         collectedDonation,
+        donationsByDate,
         remainingDonation,
         status,
       };
@@ -495,6 +517,16 @@ async function processSingleArmy(
 }
 
 export default async function handler(req: any, res: any) {
+  if (["war-room", "citizens", "country-tracker", "daily-dashboard", "tax-simulator"].includes(String(req.query?.view || ""))) {
+    const { default: intelligenceHandler } = await import("./management-intelligence.js");
+    return intelligenceHandler(req, res);
+  }
+
+  if (req.query?.view === "treasury") {
+    const { default: treasuryHandler } = await import("./management-treasury.js");
+    return treasuryHandler(req, res);
+  }
+
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader(
@@ -510,11 +542,11 @@ export default async function handler(req: any, res: any) {
   const forceRefresh = req.query?.refresh === "true";
   const includeDonations = req.query?.donations !== "false";
 
-  // Determine target date in Turkey timezone YYYY-MM-DD
+  // WarEra's day/week boundary is 03:00 UTC (06:00 in Türkiye).
   const now = new Date();
-  const todayDateStr = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Istanbul",
-  }).format(now);
+  const todayDateStr = new Date(now.getTime() - GAME_DAY_RESET_MS)
+    .toISOString()
+    .slice(0, 10);
   const isValidDate = (value: string) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
     const date = new Date(`${value}T00:00:00.000Z`);
@@ -527,7 +559,8 @@ export default async function handler(req: any, res: any) {
   const cacheTtlMs =
     effectiveDate === todayDateStr ? 30 * 1000 : CACHE_TTL_MS;
 
-  const cacheKey = `mgmt_overview_v9_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
+  const donationHistoryDates = getDonationHistoryDates(effectiveDate);
+  const cacheKey = `mgmt_overview_v10_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < cacheTtlMs) {
     return res.status(200).json(cached.data);
@@ -554,7 +587,7 @@ export default async function handler(req: any, res: any) {
     const armyOverviews = await mapWithConcurrency(
       PRESET_8_ARMIES,
       4,
-      (army) => processSingleArmy(army, snapshots, effectiveDate, includeDonations),
+      (army) => processSingleArmy(army, snapshots, effectiveDate, donationHistoryDates, includeDonations),
     );
 
     // Alliance Aggregates

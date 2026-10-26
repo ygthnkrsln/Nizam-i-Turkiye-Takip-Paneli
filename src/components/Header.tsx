@@ -9,10 +9,16 @@ import {
   Crosshair,
   Flame,
   HeartHandshake,
+  Landmark,
   Menu,
   ShoppingCart,
   Sparkles,
   Shield,
+  ShieldAlert,
+  Users,
+  Map,
+  Percent,
+  Gauge,
   X,
 } from 'lucide-react';
 import { ActiveTab } from '../App';
@@ -37,6 +43,8 @@ const groups: {
       { id: 'donations', title: 'Bağış Takip Paneli', icon: HeartHandshake },
       { id: 'marketPrices', title: 'Market Fiyatları', icon: ShoppingCart },
       { id: 'countryStats', title: 'Ülke İstatistikleri', icon: BarChart3 },
+      { id: 'mgmtCountryTracker', title: 'Ülke Takibi & Karşılaştırma', icon: Map },
+      { id: 'mgmtTax', title: 'Vergi Simülatörü', icon: Percent },
     ],
   },
   {
@@ -47,14 +55,18 @@ const groups: {
       { id: 'armyStats', title: 'Ordu İstatistikleri', icon: Building2 },
       { id: 'combatDetails', title: 'Detaylı Bilgi', icon: Crosshair },
       { id: 'combatDamage', title: 'Hasar', icon: Flame },
+      { id: 'mgmtWarRoom', title: 'Ülke Savaş Merkezi', icon: ShieldAlert },
     ],
   },
   {
     label: 'Yönetim',
     theme: 'amber',
     tabs: [
+      { id: 'mgmtDashboard', title: 'Günlük Yönetim Özeti', icon: Gauge },
+      { id: 'mgmtCitizens', title: 'Vatandaşlar & Hükümet', icon: Users },
       { id: 'mgmtArmies', title: 'Ordu Takibi', icon: Shield },
       { id: 'mgmtDonations', title: 'Bağış Takibi', icon: Coins },
+      { id: 'mgmtTreasury', title: 'Kasa & Lojistik', icon: Landmark },
     ],
   },
   {

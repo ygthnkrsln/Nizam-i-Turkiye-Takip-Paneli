@@ -16,6 +16,12 @@ const MilitaryDetailsSection = React.lazy(() => import('./components/MilitaryDet
 const DailyDamageTelemetrySection = React.lazy(() => import('./components/DailyDamageTelemetrySection').then((module) => ({ default: module.DailyDamageTelemetrySection })));
 const ManagementArmyTrackingSection = React.lazy(() => import('./components/ManagementArmyTrackingSection').then((module) => ({ default: module.ManagementArmyTrackingSection })));
 const ManagementDonationTrackingSection = React.lazy(() => import('./components/ManagementDonationTrackingSection').then((module) => ({ default: module.ManagementDonationTrackingSection })));
+const ManagementTreasurySection = React.lazy(() => import('./components/ManagementTreasurySection').then((module) => ({ default: module.ManagementTreasurySection })));
+const ManagementDailyDashboardSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementDailyDashboardSection })));
+const ManagementWarRoomSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementWarRoomSection })));
+const ManagementCitizensSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementCitizensSection })));
+const ManagementCountryTrackerSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementCountryTrackerSection })));
+const ManagementTaxSimulationSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementTaxSimulationSection })));
 const LevelCalculatorSection = React.lazy(() => import('./components/LevelCalculatorSection').then((module) => ({ default: module.LevelCalculatorSection })));
 const PrestigeDamageOptimizerSection = React.lazy(() => import('./components/PrestigeDamageOptimizerSection').then((module) => ({ default: module.PrestigeDamageOptimizerSection })));
 const MarketPricesSection = React.lazy(() => import('./components/MarketPricesSection').then((module) => ({ default: module.MarketPricesSection })));
@@ -42,6 +48,11 @@ export type ActiveTab =
   | 'mgmtOrders'
   | 'mgmtTreasury'
   | 'mgmtDiplomacy'
+  | 'mgmtDashboard'
+  | 'mgmtWarRoom'
+  | 'mgmtCitizens'
+  | 'mgmtCountryTracker'
+  | 'mgmtTax'
   | 'levelCalculator'
   | 'prestigeOptimizer'
   | 'marketPrices';
@@ -60,6 +71,11 @@ export const TAB_TO_SLUG: Record<ActiveTab, string> = {
   mgmtOrders: 'gorev-ve-emirler',
   mgmtTreasury: 'kasa-lojistik',
   mgmtDiplomacy: 'ittifak-diplomasi',
+  mgmtDashboard: 'yonetim-ozeti',
+  mgmtWarRoom: 'savas-merkezi',
+  mgmtCitizens: 'vatandaslar-ve-hukumet',
+  mgmtCountryTracker: 'ulke-takibi',
+  mgmtTax: 'vergi-simulatoru',
   levelCalculator: 'seviye-hesaplayici',
   prestigeOptimizer: 'prestij-hasar-optimizasyonu',
   marketPrices: 'market-fiyatlari',
@@ -78,6 +94,11 @@ const TAB_TITLES: Record<ActiveTab, string> = {
   mgmtOrders: 'Nizam-ı Türkiye - Görev & Emirler (Yönetim Modu)',
   mgmtTreasury: 'Nizam-ı Türkiye - Kasa & Lojistik (Yönetim Modu)',
   mgmtDiplomacy: 'Nizam-ı Türkiye - İttifak & Diplomasi (Yönetim Modu)',
+  mgmtDashboard: 'Nizam-ı Türkiye - Günlük Yönetim Özeti',
+  mgmtWarRoom: 'Nizam-ı Türkiye - Ülke Savaş Merkezi',
+  mgmtCitizens: 'Nizam-ı Türkiye - Vatandaşlar & Hükümet',
+  mgmtCountryTracker: 'Nizam-ı Türkiye - Ülke Takibi & Karşılaştırma',
+  mgmtTax: 'Nizam-ı Türkiye - Vergi Simülatörü & Gelir Tahmini',
   levelCalculator: 'Nizam-ı Türkiye - Seviye Hesaplayıcı',
   prestigeOptimizer: 'Nizam-ı Türkiye - Prestij - Hasar Optimizasyonu',
   marketPrices: 'Nizam-ı Türkiye - Market Fiyatları',
@@ -130,9 +151,19 @@ export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
   } else if (tabSlug === 'gorev-ve-emirler' || tabSlug === 'emirler' || tabSlug === 'orders' || tabSlug === 'gorev') {
     tab = 'mgmtOrders';
   } else if (tabSlug === 'kasa-lojistik' || tabSlug === 'kasa' || tabSlug === 'treasury' || tabSlug === 'lojistik') {
-    tab = 'mgmtDonations';
+    tab = 'mgmtTreasury';
   } else if (tabSlug === 'ittifak-diplomasi' || tabSlug === 'diplomasi' || tabSlug === 'diplomacy' || tabSlug === 'ittifak') {
     tab = 'mgmtDiplomacy';
+  } else if (tabSlug === 'yonetim-ozeti' || tabSlug === 'gunluk-yonetim-ozeti' || tabSlug === 'daily-management') {
+    tab = 'mgmtDashboard';
+  } else if (tabSlug === 'savas-merkezi' || tabSlug === 'ulke-savas-merkezi' || tabSlug === 'war-room') {
+    tab = 'mgmtWarRoom';
+  } else if (tabSlug === 'vatandaslar-ve-hukumet' || tabSlug === 'vatandaslar' || tabSlug === 'citizens') {
+    tab = 'mgmtCitizens';
+  } else if (tabSlug === 'ulke-takibi' || tabSlug === 'ulke-karsilastirma' || tabSlug === 'country-tracker') {
+    tab = 'mgmtCountryTracker';
+  } else if (tabSlug === 'vergi-simulatoru' || tabSlug === 'gelir-tahmini' || tabSlug === 'tax-simulator') {
+    tab = 'mgmtTax';
   } else if (tabSlug === 'ordu-bilgisi' || tabSlug === 'ordubilgisi' || tabSlug === 'army-info') {
     tab = 'combatArmyInfo';
   } else if (tabSlug === 'detayli-bilgi' || tabSlug === 'detaylibilgi' || tabSlug === 'detailed-info' || tabSlug === 'detay') {
@@ -252,7 +283,7 @@ export default function App() {
   const handleTabChange = useCallback((newTab: ActiveTab) => {
     setActiveTab(newTab);
     const slug = TAB_TO_SLUG[newTab];
-    const hasMuPath = newTab !== 'countryStats' && newTab !== 'levelCalculator' && newTab !== 'prestigeOptimizer' && newTab !== 'marketPrices';
+    const hasMuPath = !(['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtDashboard', 'mgmtWarRoom', 'mgmtCitizens', 'mgmtCountryTracker', 'mgmtTax'] as ActiveTab[]).includes(newTab);
     const newPath = hasMuPath ? `/${slug}/${muId}${window.location.search}` : `/${slug}${window.location.search}`;
     const expectedPathname = hasMuPath ? `/${slug}/${muId}` : `/${slug}`;
     if (window.location.pathname !== expectedPathname) {
@@ -288,7 +319,8 @@ export default function App() {
     // If loaded on root "/" or on slug without MU ID, gracefully update URL to include the MU ID
     const currentPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
     const currentSlug = TAB_TO_SLUG[route.tab];
-    const targetExpectedPath = route.tab === 'countryStats' || route.tab === 'levelCalculator' || route.tab === 'prestigeOptimizer' || route.tab === 'marketPrices' ? `/${currentSlug}` : `/${currentSlug}/${muId}`;
+    const noMuTabs: ActiveTab[] = ['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtDashboard', 'mgmtWarRoom', 'mgmtCitizens', 'mgmtCountryTracker', 'mgmtTax'];
+    const targetExpectedPath = noMuTabs.includes(route.tab) ? `/${currentSlug}` : `/${currentSlug}/${muId}`;
     if (currentPath === '' || currentPath === currentSlug) {
       window.history.replaceState({ tab: route.tab, muId }, '', `${targetExpectedPath}${window.location.search}`);
     }
@@ -315,8 +347,9 @@ export default function App() {
 
     // Update browser URL path with the new MU ID
     const slug = TAB_TO_SLUG[activeTab];
-    const newPath = activeTab === 'countryStats' ? `/${slug}${window.location.search}` : `/${slug}/${newId}${window.location.search}`;
-    const expectedPathname = activeTab === 'countryStats' ? `/${slug}` : `/${slug}/${newId}`;
+    const noMuTabs: ActiveTab[] = ['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtDashboard', 'mgmtWarRoom', 'mgmtCitizens', 'mgmtCountryTracker', 'mgmtTax'];
+    const newPath = noMuTabs.includes(activeTab) ? `/${slug}${window.location.search}` : `/${slug}/${newId}${window.location.search}`;
+    const expectedPathname = noMuTabs.includes(activeTab) ? `/${slug}` : `/${slug}/${newId}`;
     if (window.location.pathname !== expectedPathname) {
       window.history.pushState({ tab: activeTab, muId: newId }, '', newPath);
     }
@@ -467,13 +500,25 @@ export default function App() {
           <ManagementArmyTrackingSection onSelectArmy={handleMuIdChange} onNavigateTab={handleTabChange} />
         ) : activeTab === 'mgmtDonations' ? (
           <ManagementDonationTrackingSection currentMuId={muId} onSelectArmy={handleMuIdChange} />
+        ) : activeTab === 'mgmtTreasury' ? (
+          <ManagementTreasurySection />
+        ) : activeTab === 'mgmtDashboard' ? (
+          <ManagementDailyDashboardSection />
+        ) : activeTab === 'mgmtWarRoom' ? (
+          <ManagementWarRoomSection />
+        ) : activeTab === 'mgmtCitizens' ? (
+          <ManagementCitizensSection />
+        ) : activeTab === 'mgmtCountryTracker' ? (
+          <ManagementCountryTrackerSection />
+        ) : activeTab === 'mgmtTax' ? (
+          <ManagementTaxSimulationSection />
         ) : activeTab === 'combatArmyInfo' ? (
           <MilitaryOverviewSection muId={muId} onMuIdChange={handleMuIdChange} onNavigateTab={handleTabChange} />
         ) : activeTab === 'combatDetails' ? (
           <MilitaryDetailsSection muId={muId} onMuIdChange={handleMuIdChange} onNavigateTab={handleTabChange} />
         ) : activeTab === 'combatDamage' ? (
           <DailyDamageTelemetrySection muId={muId} onMuIdChange={handleMuIdChange} onNavigateTab={handleTabChange} />
-        ) : activeTab === 'mgmtUnit' || activeTab === 'mgmtOrders' || activeTab === 'mgmtTreasury' || activeTab === 'mgmtDiplomacy' ? (
+        ) : activeTab === 'mgmtUnit' || activeTab === 'mgmtOrders' || activeTab === 'mgmtDiplomacy' ? (
           <WorkInProgressPanel activeTab={activeTab} onSwitchToEconomy={() => handleTabChange('donations')} />
         ) : (
           <>

@@ -2117,6 +2117,7 @@ export interface ManagementMemberItem {
   multiplier: number;
   targetDonation: number;
   collectedDonation: number;
+  donationsByDate?: Record<string, { country: number; mu: number; total: number }>;
   remainingDonation: number;
   status: "completed" | "partial" | "pending" | "exempt";
 }
@@ -2159,6 +2160,83 @@ export interface ManagementOverviewResponse {
     };
   };
   armies: ManagementArmyItem[];
+}
+
+export interface ManagementTreasuryTransaction {
+  id: string;
+  createdAt: string;
+  type: string;
+  category: string;
+  direction: string;
+  amount: number;
+  flow: number;
+  player: string;
+  counterparty: string;
+}
+
+export interface ManagementTreasuryResponse {
+  success: boolean;
+  fetchedAt: string;
+  country: string;
+  transactions: ManagementTreasuryTransaction[];
+  days: Array<{
+    day: string;
+    donationsIn: number;
+    donationsOut: number;
+    transfersIn: number;
+    transfersOut: number;
+    marketSales: number;
+    netFlow: number;
+  }>;
+  totals: {
+    donations7d: number;
+    donations30d: number;
+    donationOut7d: number;
+    transfersIn7d: number;
+    transfersOut7d: number;
+    sales24h: number;
+    sales7d: number;
+    netFlow7d: number;
+    donors: number;
+  };
+  topDonors: Array<{ player: string; amount: number }>;
+  note: string;
+}
+
+export async function fetchManagementTreasury(forceRefresh = false): Promise<ManagementTreasuryResponse> {
+  const query = new URLSearchParams({ view: "treasury" });
+  if (forceRefresh) query.set("refresh", "true");
+  const response = await fetch(`/api/management-overview?${query.toString()}`);
+  if (!response.ok) {
+    let message = `Hazine hareketleri alınamadı (${response.status})`;
+    try { message = (await response.json())?.error || message; } catch {}
+    throw new Error(message);
+  }
+  return response.json();
+}
+
+export type ManagementIntelligenceView =
+  | "war-room"
+  | "citizens"
+  | "country-tracker"
+  | "daily-dashboard"
+  | "tax-simulator";
+
+export async function fetchManagementIntelligence<T = Record<string, any>>(
+  view: ManagementIntelligenceView,
+  forceRefresh = false,
+): Promise<T> {
+  const query = new URLSearchParams({ view });
+  if (forceRefresh) query.set("refresh", "true");
+  const response = await fetch(`/api/management-overview?${query.toString()}`);
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch {}
+  if (!response.ok || payload?.success === false) {
+    throw new Error(payload?.error || `Yönetim verileri alınamadı (${response.status})`);
+  }
+  return payload as T;
 }
 
 const managementOverviewClientCache = new Map<
