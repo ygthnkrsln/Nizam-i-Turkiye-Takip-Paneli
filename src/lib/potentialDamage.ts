@@ -38,11 +38,11 @@ export function calculatePotentialDamage(
   prestigeLevel: unknown = 0,
 ): number {
   const playerLevel = Number(level);
-  if (!isFighter || !Number.isFinite(playerLevel) || playerLevel < 30) return 0;
+  if (!isFighter || !Number.isFinite(playerLevel) || playerLevel < 1) return 0;
 
   const rawPrestige = Number(prestigeLevel);
   const safePrestige = Number.isFinite(rawPrestige) ? Math.max(0, rawPrestige) : 0;
-  const levelDamage = calculatePrestigeAdjustedDamage(playerLevel, safePrestige);
+  const optimizerDamage = calculatePrestigeAdjustedDamage(playerLevel, safePrestige);
   const healthRatio = clampRatio(healthCurrent, healthMax);
   const maxFood = Number(hungerMax);
   const foodCapacity = Number.isFinite(maxFood) && maxFood > 0 ? maxFood : 0;
@@ -51,11 +51,11 @@ export function calculatePotentialDamage(
     ? Math.min(foodCapacity, Math.max(0, currentFood))
     : 0;
   // Each available meal adds 20% of a health bar; full health plus all food
-  // is the 100% baseline (so a fully ready level-50 fighter estimates 2M).
+  // is the 100% baseline used to scale the prestige optimizer's damage curve.
   const availableHealthEquivalent = healthRatio + foodCount * 0.2;
   const fullReadinessHealthEquivalent = 1 + foodCapacity * 0.2;
   const readiness = fullReadinessHealthEquivalent > 0
     ? Math.min(1, availableHealthEquivalent / fullReadinessHealthEquivalent)
     : healthRatio;
-  return Math.round(levelDamage * readiness);
+  return Math.round(optimizerDamage * readiness);
 }

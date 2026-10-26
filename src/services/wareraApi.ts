@@ -1866,7 +1866,7 @@ export async function fetchCountryStats(
   }
 }
 
-const MILITARY_OVERVIEW_STORAGE_KEY_PREFIX = "warera_mil_overview_v4_";
+const MILITARY_OVERVIEW_STORAGE_KEY_PREFIX = "warera_mil_overview_v5_";
 
 export function getCachedMilitaryOverview(
   muId: string = DEFAULT_MU_ID,
@@ -1970,7 +1970,7 @@ export async function fetchMilitaryDetails(
   return json.data;
 }
 
-const COMBAT_TELEMETRY_STORAGE_KEY_PREFIX = "warera_combat_telemetry_";
+const COMBAT_TELEMETRY_STORAGE_KEY_PREFIX = "warera_combat_telemetry_v2_";
 
 export function getCachedCombatTelemetry(
   muId: string = DEFAULT_MU_ID,
@@ -2280,7 +2280,7 @@ export async function fetchManagementOverview(
     timeZone: "Europe/Istanbul",
   }).format(new Date());
   const effectiveDate = date || today;
-  const cacheKey = `${includeDonations ? "full_v13" : "armies_v13"}:${effectiveDate}`;
+  const cacheKey = `${includeDonations ? "full_v14" : "armies_v14"}:${effectiveDate}`;
   const cacheTtlMs =
     effectiveDate === today
       ? MANAGEMENT_TODAY_CACHE_TTL_MS
