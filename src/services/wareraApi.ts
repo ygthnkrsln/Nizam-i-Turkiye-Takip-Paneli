@@ -1866,7 +1866,7 @@ export async function fetchCountryStats(
   }
 }
 
-const MILITARY_OVERVIEW_STORAGE_KEY_PREFIX = "warera_mil_overview_v3_";
+const MILITARY_OVERVIEW_STORAGE_KEY_PREFIX = "warera_mil_overview_v4_";
 
 export function getCachedMilitaryOverview(
   muId: string = DEFAULT_MU_ID,
@@ -2280,7 +2280,7 @@ export async function fetchManagementOverview(
     timeZone: "Europe/Istanbul",
   }).format(new Date());
   const effectiveDate = date || today;
-  const cacheKey = `${includeDonations ? "full_v12" : "armies_v12"}:${effectiveDate}`;
+  const cacheKey = `${includeDonations ? "full_v13" : "armies_v13"}:${effectiveDate}`;
   const cacheTtlMs =
     effectiveDate === today
       ? MANAGEMENT_TODAY_CACHE_TTL_MS

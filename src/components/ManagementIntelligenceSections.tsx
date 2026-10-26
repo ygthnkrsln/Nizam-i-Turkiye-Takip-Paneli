@@ -183,7 +183,33 @@ const COUNTRY_METRICS = [
   { key: "taxRate", label: "Gelir vergisi", percent: true, digits: 1 },
 ];
 
+const COUNTRY_SELECTION_KEY = "nizam_country_tracker_selected_v2";
+const LEGACY_COUNTRY_SELECTION_KEY = "nizam_country_tracker_selected_v1";
+const DEFAULT_COUNTRY_TRACKER_IDS = [
+  "6813b6d446e731854c7ac7eb", // Türkiye
+  "6813b6d546e731854c7ac8d1", // Azerbaycan
+  "6873d0ea1758b40e712b5ef5", // Kamerun
+];
 const TRACKER_COLORS = ["#54a9e8", "#36c98f", "#f3b94f", "#dd6a76"];
+
+function loadCountryTrackerSelection(): string[] {
+  if (typeof window === "undefined") return DEFAULT_COUNTRY_TRACKER_IDS;
+  try {
+    const saved = localStorage.getItem(COUNTRY_SELECTION_KEY);
+    if (saved !== null) {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed)
+        ? parsed.filter((id) => typeof id === "string").slice(0, 4)
+        : DEFAULT_COUNTRY_TRACKER_IDS;
+    }
+    const legacy = JSON.parse(localStorage.getItem(LEGACY_COUNTRY_SELECTION_KEY) || "[]");
+    if (Array.isArray(legacy)) {
+      const legacyIds = legacy.filter((id) => typeof id === "string").slice(0, 4);
+      if (legacyIds.length) return legacyIds;
+    }
+  } catch {}
+  return DEFAULT_COUNTRY_TRACKER_IDS;
+}
 
 function countryMetric(snapshot: AnyRecord | undefined, metric: string): number | null {
   const value = Number(snapshot?.[metric]);
@@ -208,20 +234,14 @@ function indexedChart(snapshots: AnyRecord[], selectedIds: string[], metric: str
 }
 
 export function ManagementCountryTrackerSection() {
-  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const saved = JSON.parse(localStorage.getItem("nizam_country_tracker_selected_v1") || "[]");
-      return Array.isArray(saved) ? saved.filter((id) => typeof id === "string").slice(0, 4) : [];
-    } catch { return []; }
-  });
+  const [selectedIds, setSelectedIds] = useState<string[]>(loadCountryTrackerSelection);
   const countryQuery = selectedIds.length ? { countries: [...selectedIds].sort().join(",") } : {};
   const { data, error, loading, refreshing, reload } = useManagementView<AnyRecord>("country-tracker", countryQuery);
   const [snapshots, setSnapshots] = useState<AnyRecord[]>([]);
   const [metric, setMetric] = useState("activeCitizenWealth");
   const [search, setSearch] = useState("");
   useEffect(() => {
-    try { localStorage.setItem("nizam_country_tracker_selected_v1", JSON.stringify(selectedIds)); } catch {}
+    try { localStorage.setItem(COUNTRY_SELECTION_KEY, JSON.stringify(selectedIds)); } catch {}
   }, [selectedIds]);
   useEffect(() => {
     if (!data?.countries) return;
@@ -237,12 +257,10 @@ export function ManagementCountryTrackerSection() {
     try { localStorage.setItem("nizam_country_tracker_v1", JSON.stringify(merged)); } catch {}
     const validIds = selectedIds.filter((id) => data.countries.some((row: AnyRecord) => row.id === id));
     if (validIds.length !== selectedIds.length) {
-      setSelectedIds(validIds);
-      return;
-    }
-    if (!selectedIds.length) {
-      const candidates = [...data.countries].sort((a: AnyRecord, b: AnyRecord) => (b.weeklyDamage || 0) - (a.weeklyDamage || 0));
-      setSelectedIds([data.homeCountryId, ...candidates.filter((row: AnyRecord) => row.id !== data.homeCountryId).slice(0, 2).map((row: AnyRecord) => row.id)]);
+      const fallbackIds = selectedIds.length && !validIds.length
+        ? DEFAULT_COUNTRY_TRACKER_IDS.filter((id) => data.countries.some((row: AnyRecord) => row.id === id))
+        : validIds;
+      setSelectedIds(fallbackIds);
     }
   }, [data, selectedIds]);
   const countries = data?.countries || [];
@@ -269,7 +287,7 @@ export function ManagementCountryTrackerSection() {
           <MetricCard label="Karşılaştırma" value={`${selectedIds.length} / 4`} detail="Grafikte en fazla dört ülke" tone="info" icon={<Users className="h-4 w-4" />} />
         </div>
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_2fr]">
-          <Panel title="Ülke seçimi" subtitle="Türkiye varsayılan olarak seçilidir. En fazla dört ülke seçebilirsin." right={<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ülke ara" className="w-32 rounded-md border border-[#3282B8]/20 bg-[#141C21] px-2 py-1.5 text-xs text-white outline-none focus:border-[#3282B8]/60" />}>
+          <Panel title="Ülke seçimi" subtitle="Türkiye, Azerbaycan ve Kamerun varsayılan olarak seçilidir. En fazla dört ülke seçebilirsin." right={<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ülke ara" className="w-32 rounded-md border border-[#3282B8]/20 bg-[#141C21] px-2 py-1.5 text-xs text-white outline-none focus:border-[#3282B8]/60" />}>
             <div className="max-h-[250px] space-y-1 overflow-auto pr-1">{filteredCountries.map((country: AnyRecord) => <label key={country.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-[#141C21]"><input type="checkbox" checked={selectedIds.includes(country.id)} disabled={!selectedIds.includes(country.id) && selectedIds.length >= 4} onChange={() => toggleCountry(country.id)} className="accent-sky-400"/><span className="min-w-0 flex-1 truncate text-[#BBE1FA]/80">{country.name}</span><span className="text-[9px] text-[#BBE1FA]/35">{country.code}</span></label>)}</div>
           </Panel>
           <Panel title="Günlük değişim" subtitle="Grafik, ilk görülen günün değerini 100 kabul ederek göreli değişimi gösterir." right={<select value={metric} onChange={(event) => setMetric(event.target.value)} className="rounded-md border border-[#3282B8]/20 bg-[#141C21] px-2 py-1.5 text-xs text-white">{COUNTRY_METRICS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select>}>

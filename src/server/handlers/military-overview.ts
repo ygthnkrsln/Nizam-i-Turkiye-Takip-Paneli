@@ -51,7 +51,7 @@ export default async function handler(req: any, res: any) {
   const targetMuId = (req.query?.muId as string) || DEFAULT_MU_ID;
   const forceRefresh = req.query?.refresh === "true";
 
-  const cacheKey = `mil_overview_v3_${targetMuId}`;
+  const cacheKey = `mil_overview_v4_${targetMuId}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return res.status(200).json(cached.data);
@@ -172,6 +172,7 @@ export default async function handler(req: any, res: any) {
       user.skills?.hunger?.currentBarValue || 0,
       user.skills?.hunger?.value || 10,
       isCombatBuild(user),
+      user.leveling?.prestigeLevel || 0,
     );
     const totalPotentialDamage = allUsers.reduce(
       (sum, user) => sum + potentialDamageForUser(user),

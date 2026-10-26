@@ -163,10 +163,9 @@ const STATE_LABEL: Record<string, string> = {
 interface Props {
   currentMuId: string;
   onSelectArmy: (muId: string) => void;
-  refreshToken: number;
 }
 
-export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArmy, refreshToken }) => {
+export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArmy }) => {
   const [data, setData] = useState<ManagementOverviewResponse | null>(null);
   const [weekStart, setWeekStart] = useState(currentGameWeekStart);
   const [isLoading, setIsLoading] = useState(true);
@@ -225,10 +224,6 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
     loadData(false);
     return () => activeRequest.current?.abort();
   }, [weekStart]);
-
-  useEffect(() => {
-    if (refreshToken > 0) void loadData(true);
-  }, [refreshToken]);
 
   useEffect(() => {
     window.localStorage.setItem(RULES_KEY, JSON.stringify(rules));

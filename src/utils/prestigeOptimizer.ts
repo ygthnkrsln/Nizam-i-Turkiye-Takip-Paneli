@@ -145,6 +145,16 @@ function damageRate(level: number, rates: LevelDamageRate[]): number {
   return Math.max(0, sorted.filter((row) => row.level <= level).at(-1)?.dailyDamage || 0);
 }
 
+export function calculatePrestigeAdjustedDamage(
+  level: number,
+  prestige: number,
+  rates: LevelDamageRate[] = DEFAULT_LEVEL_DAMAGE,
+  bonusPercent = DEFAULT_OPTIMIZER_SETTINGS.prestigeDamageBonusPercent,
+): number {
+  const baseDamage = damageRate(level, rates);
+  return Math.round(baseDamage * (1 + Math.max(0, prestige) * bonusPercent / 100));
+}
+
 function nextUtcDate(start: Date, dayIndex: number): Date {
   return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + dayIndex));
 }
@@ -255,8 +265,11 @@ export function simulatePrestigeOptimization(input: PrestigeOptimizerInput): Pre
       if (level >= 50 && !firstMaxLevelDate) firstMaxLevelDate = new Date(date);
       const damageLevel = input.settings.damageTiming === "start_of_day" ? startLevel : level;
       const damagePrestige = input.settings.damageTiming === "start_of_day" ? startPrestige : prestige;
-      const dailyDamage = Math.round(
-        damageRate(damageLevel, input.damageRates) * (1 + damagePrestige * input.settings.prestigeDamageBonusPercent / 100),
+      const dailyDamage = calculatePrestigeAdjustedDamage(
+        damageLevel,
+        damagePrestige,
+        input.damageRates,
+        input.settings.prestigeDamageBonusPercent,
       );
       cumulativeDamage += dailyDamage;
       days.push({

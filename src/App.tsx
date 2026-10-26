@@ -8,7 +8,6 @@ import { Header } from './components/Header';
 const MetricsCards = React.lazy(() => import('./components/MetricsCards').then((module) => ({ default: module.MetricsCards })));
 const ArmyStatsTable = React.lazy(() => import('./components/ArmyStatsTable').then((module) => ({ default: module.ArmyStatsTable })));
 const CountryStatsPanel = React.lazy(() => import('./components/CountryStatsPanel').then((module) => ({ default: module.CountryStatsPanel })));
-const ApiKeySection = React.lazy(() => import('./components/ApiKeySection').then((module) => ({ default: module.ApiKeySection })));
 const WorkInProgressPanel = React.lazy(() => import('./components/WorkInProgressPanel').then((module) => ({ default: module.WorkInProgressPanel })));
 const MilitaryOverviewSection = React.lazy(() => import('./components/MilitaryOverviewSection').then((module) => ({ default: module.MilitaryOverviewSection })));
 const MilitaryDetailsSection = React.lazy(() => import('./components/MilitaryDetailsSection').then((module) => ({ default: module.MilitaryDetailsSection })));
@@ -183,7 +182,6 @@ export default function App() {
   const initialTargetMu = initialRoute.muId || getCookie('warera_last_mu') || DEFAULT_MU_ID;
 
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => initialRoute.tab);
-  const [donationKeyRefreshToken, setDonationKeyRefreshToken] = useState(0);
   const [armyInfoView, setArmyInfoView] = useState<'overview' | 'stats'>(() =>
     typeof window !== 'undefined' && window.location.pathname.toLowerCase().startsWith('/ordu-istatistikleri') ? 'stats' : 'overview',
   );
@@ -470,10 +468,7 @@ export default function App() {
         ) : activeTab === 'mgmtArmies' ? (
           <ManagementArmyTrackingSection onSelectArmy={handleMuIdChange} onNavigateTab={handleTabChange} />
         ) : activeTab === 'mgmtDonations' ? (
-          <div className="space-y-4">
-            <ApiKeySection onKeyChange={() => setDonationKeyRefreshToken((value) => value + 1)} />
-            <ManagementDonationTrackingSection currentMuId={muId} onSelectArmy={handleMuIdChange} refreshToken={donationKeyRefreshToken} />
-          </div>
+          <ManagementDonationTrackingSection currentMuId={muId} onSelectArmy={handleMuIdChange} />
         ) : activeTab === 'mgmtCitizens' ? (
           <ManagementCitizensSection />
         ) : activeTab === 'mgmtCountryTracker' ? (
@@ -558,6 +553,18 @@ export default function App() {
                 className="font-bold text-white hover:text-[#BBE1FA] transition-colors"
                 >
                 h4N
+              </a>
+            </span>
+            <span className="ml-2 text-[#3282B8]/50">·</span>
+            <span className="ml-2 text-[#BBE1FA]/60">
+              Improved by{' '}
+              <a
+                href="https://app.warera.io/user/699987d4eb646c78ea8351f1"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-white hover:text-[#BBE1FA] transition-colors"
+              >
+                Lannister
               </a>
             </span>
           </div>

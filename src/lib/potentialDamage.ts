@@ -1,3 +1,5 @@
+import { calculatePrestigeAdjustedDamage } from "../utils/prestigeOptimizer.js";
+
 const ECONOMY_SKILLS = [
   "entrepreneurship",
   "energy",
@@ -25,7 +27,7 @@ export function isCombatBuild(user: any): boolean {
   return economySkillPoints <= totalSkillPoints / 2;
 }
 
-/** Estimated damage at full readiness: level 30 ≈ 1M, level 50 ≈ 2M. */
+/** Uses the prestige optimizer's level damage curve and prestige bonus, scaled to current readiness. */
 export function calculatePotentialDamage(
   level: unknown,
   healthCurrent: unknown,
@@ -33,11 +35,14 @@ export function calculatePotentialDamage(
   hungerCurrent: unknown,
   hungerMax: unknown,
   isFighter: boolean,
+  prestigeLevel: unknown = 0,
 ): number {
   const playerLevel = Number(level);
   if (!isFighter || !Number.isFinite(playerLevel) || playerLevel < 30) return 0;
 
-  const levelDamage = Math.max(0, (playerLevel - 10) * 50_000);
+  const rawPrestige = Number(prestigeLevel);
+  const safePrestige = Number.isFinite(rawPrestige) ? Math.max(0, rawPrestige) : 0;
+  const levelDamage = calculatePrestigeAdjustedDamage(playerLevel, safePrestige);
   const healthRatio = clampRatio(healthCurrent, healthMax);
   const maxFood = Number(hungerMax);
   const foodCapacity = Number.isFinite(maxFood) && maxFood > 0 ? maxFood : 0;
