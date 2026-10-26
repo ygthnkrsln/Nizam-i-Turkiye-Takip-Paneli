@@ -56,6 +56,9 @@ type DonationRow = ManagementMemberItem & {
   surplus: number;
   statusLabel: string;
 };
+type DonationDisplayItem = NonNullable<ManagementMemberItem["latestDonations"]>[number] & {
+  dailySummary?: boolean;
+};
 const DEFAULT_RULES: DonationRules = {
   minLevel: 30,
   multiplier: 1.5,
@@ -107,6 +110,39 @@ function dateLabel(date: string, options: Intl.DateTimeFormatOptions = { day: "2
   return new Date(`${date}T12:00:00.000Z`).toLocaleDateString("tr-TR", options);
 }
 
+function relativeDonationTime(timestamp: string) {
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return "—";
+  const minutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60_000));
+  if (minutes < 1) return "şimdi";
+  if (minutes < 60) return `${minutes} dk önce`;
+  if (minutes < 1_440) return `${Math.floor(minutes / 60)} sa önce`;
+  return date.toLocaleDateString("tr-TR", { day: "2-digit", month: "short" });
+}
+
+function recentDonationsForRow(row: DonationRow): DonationDisplayItem[] {
+  const detailed = row.latestDonations || [];
+  if (detailed.length) {
+    return [...detailed]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 7);
+  }
+
+  return Object.entries(row.donationsByDate || {}).flatMap(([date, amounts]) => {
+    const timestamp = `${date}T12:00:00.000Z`;
+    const summaries: DonationDisplayItem[] = [];
+    if (amounts.country > 0) summaries.push({
+      id: `${row.userId}-${date}-country-summary`, amount: amounts.country, currency: "Gold", timestamp,
+      target: "country", targetName: "Ülke · günlük toplam", dailySummary: true,
+    });
+    if (amounts.mu > 0) summaries.push({
+      id: `${row.userId}-${date}-mu-summary`, amount: amounts.mu, currency: "Gold", timestamp,
+      target: "mu", targetName: `${row.armyName} · günlük toplam`, dailySummary: true,
+    });
+    return summaries;
+  }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 7);
+}
+
 function amountFor(cell: { country: number; mu: number; total: number }, view: PaymentView) {
   return view === "country" ? cell.country : view === "mu" ? cell.mu : cell.total;
 }
@@ -127,9 +163,10 @@ const STATE_LABEL: Record<string, string> = {
 interface Props {
   currentMuId: string;
   onSelectArmy: (muId: string) => void;
+  refreshToken: number;
 }
 
-export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArmy }) => {
+export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArmy, refreshToken }) => {
   const [data, setData] = useState<ManagementOverviewResponse | null>(null);
   const [weekStart, setWeekStart] = useState(currentGameWeekStart);
   const [isLoading, setIsLoading] = useState(true);
@@ -188,6 +225,10 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
     loadData(false);
     return () => activeRequest.current?.abort();
   }, [weekStart]);
+
+  useEffect(() => {
+    if (refreshToken > 0) void loadData(true);
+  }, [refreshToken]);
 
   useEffect(() => {
     window.localStorage.setItem(RULES_KEY, JSON.stringify(rules));
@@ -307,6 +348,17 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
     if (memberFilter === "excluded" && !row.excluded) return false;
     return true;
   }).sort((a, b) => b.unpaid - a.unpaid || b.level - a.level), [rows, armyFilter, search, memberFilter, rules.minLevel]);
+  const recentDonationRows = useMemo(() => rows
+    .filter((row) => {
+      if (armyFilter !== "all" && row.muId !== armyFilter) return false;
+      if (search.trim() && !row.username.toLowerCase().includes(search.toLowerCase()) && !row.userId.toLowerCase().includes(search.toLowerCase())) return false;
+      return recentDonationsForRow(row).length > 0;
+    })
+    .sort((a, b) => {
+      const latestA = Math.max(...recentDonationsForRow(a).map((donation) => new Date(donation.timestamp).getTime()));
+      const latestB = Math.max(...recentDonationsForRow(b).map((donation) => new Date(donation.timestamp).getTime()));
+      return latestB - latestA;
+    }), [rows, armyFilter, search]);
 
   const saveRules = () => {
     const asNum = (value: string, fallback: number) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -459,6 +511,27 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
           {filteredRows.length === 0 && <div className="p-8 text-center text-xs text-[#BBE1FA]/45">Bu filtrede üye bulunamadı.</div>}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-emerald-500/10 bg-[#141C21]/50 px-4 py-3 text-[10px] text-[#BBE1FA]/40"><span><Users className="mr-1 inline h-3.5 w-3.5" />{filteredRows.length} üye gösteriliyor · bağışlar ülke ve askeri birlik alıcılarına göre ayrılır.</span><span>Oyuncu sınıfı ve hariç tutma tercihleri bu tarayıcıda saklanır.</span></div>
+        </section>
+
+        <section className="overflow-hidden rounded-xl border border-emerald-500/20 bg-[#182329]/80 shadow-lg">
+          <div className="border-b border-emerald-500/15 bg-[#141C21] p-4">
+            <h2 className="text-sm font-bold text-emerald-200">Son bağış işlemleri</h2>
+            <p className="mt-1 text-[10px] text-[#BBE1FA]/45">Haftalık kota verisiyle aynı kaynaktan son 7 bağış; ayrıntı henüz yoksa ülke ve birlik günlük toplamları gösterilir. Arama ve birlik filtresi yukarıdakiyle ortaktır.</p>
+          </div>
+          <div className="max-h-[620px] overflow-auto">
+            <table className="w-full min-w-[900px] text-left text-xs">
+              <thead className="sticky top-0 z-10 bg-[#141C21] text-[10px] uppercase text-[#BBE1FA]/45"><tr><th className="px-4 py-3">Üye / birlik</th><th className="px-4 py-3">Son bağışlar · en yeni → eski</th><th className="px-4 py-3 text-right">Servet</th></tr></thead>
+              <tbody className="divide-y divide-emerald-500/10">
+                {recentDonationRows.map((row) => <tr key={`${row.muId}-${row.userId}`} className="hover:bg-emerald-950/15">
+                  <td className="px-4 py-3"><div className="font-bold text-white">{row.username}</div><div className="mt-0.5 text-[10px] text-[#BBE1FA]/45">{row.armyName} · Sv. {row.level}</div></td>
+                  <td className="px-4 py-2"><div className="flex flex-wrap gap-1.5">{recentDonationsForRow(row).map((donation, index) => <div key={donation.id || index} title={`${donation.targetName || (donation.target === "mu" ? "Askeri Birlik" : "Ülke")} · ${new Date(donation.timestamp).toLocaleString("tr-TR")}`} className={`min-w-[92px] rounded-md border px-2 py-1 ${index === 0 ? "border-emerald-500/40 bg-emerald-950/35" : "border-emerald-500/15 bg-[#141C21]/70"}`}><div className="font-bold text-emerald-200">+{Math.round(donation.amount).toLocaleString("tr-TR")} G</div><div className="mt-0.5 truncate text-[9px] text-[#BBE1FA]/55">{donation.targetName || (donation.target === "mu" ? "Askeri Birlik" : "Ülke")}</div><div className="mt-0.5 text-[9px] text-[#BBE1FA]/35">{donation.dailySummary ? new Date(donation.timestamp).toLocaleDateString("tr-TR", { day: "2-digit", month: "short" }) : relativeDonationTime(donation.timestamp)}</div></div>)}</div></td>
+                  <td className="px-4 py-3 text-right font-semibold text-violet-200">{Math.round(row.wealth).toLocaleString("tr-TR")} Gold</td>
+                </tr>)}
+                {!recentDonationRows.length && <tr><td colSpan={3} className="px-4 py-8 text-center text-[#BBE1FA]/45">Bu filtrede gösterilecek bağış işlemi bulunamadı.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t border-emerald-500/10 px-4 py-2 text-[10px] text-[#BBE1FA]/40">{recentDonationRows.length} üye · kişi başına en fazla 7 son işlem</div>
         </section>
       </>}
     </div>

@@ -20,6 +20,12 @@ import { calculatePotentialDamage, isCombatBuild } from "../../lib/potentialDama
 
 export const PRESET_8_ARMIES = TRACKED_ARMIES;
 const GAME_DAY_RESET_MS = 3 * 60 * 60 * 1000;
+const DONATION_COUNTRIES: Record<string, { name: string; code: string }> = {
+  "683ddd2c24b5a2e114af15b5": { name: "Birleşik Arap Emirlikleri", code: "AE" },
+  "6813b6d446e731854c7ac7eb": { name: "Türkiye", code: "TR" },
+  "6813b6d546e731854c7ac8d1": { name: "Azerbaycan", code: "AZ" },
+  "6873d0ea1758b40e712b5ef5": { name: "Kamerun", code: "CM" },
+};
 
 function getGameWeekDates(anchorDate: string) {
   const anchor = new Date(`${anchorDate}T03:00:00.000Z`);
@@ -255,6 +261,7 @@ async function processSingleArmy(
       string,
       Record<string, { country: number; mu: number; total: number }>
     > = {};
+    const recentDonationsMap: Record<string, any[]> = {};
     const donationUserIds = Array.from(new Set(memberIds));
     const donationBatchSize = 8;
     const donationBatches: string[][] = [];
@@ -304,14 +311,35 @@ async function processSingleArmy(
             for (const transaction of txList) {
               if (!transaction?.createdAt || (transaction.buyerId && transaction.buyerId !== userId)) continue;
               const createdAt = new Date(transaction.createdAt).getTime();
-              if (!Number.isFinite(createdAt) || createdAt < rangeStart || createdAt >= rangeEnd) continue;
-              const day = new Date(createdAt - GAME_DAY_RESET_MS).toISOString().slice(0, 10);
-              if (!dates.includes(day)) continue;
+              if (!Number.isFinite(createdAt)) continue;
               const amount = Number(transaction.money ?? transaction.amount ?? transaction.value ?? 0);
               if (!Number.isFinite(amount) || amount <= 0) continue;
+
+              const sellerMuId = String(transaction.sellerMuId || "");
+              const sellerCountryId = String(transaction.sellerCountryId || "");
+              const targetArmy = TRACKED_ARMIES.find((trackedArmy) => trackedArmy.id === sellerMuId);
+              const targetCountry = DONATION_COUNTRIES[sellerCountryId];
+              const recentDonations = recentDonationsMap[userId] || (recentDonationsMap[userId] = []);
+              const transactionId = String(transaction._id || `${userId}-${createdAt}-${sellerMuId || sellerCountryId}`);
+              if (!recentDonations.some((item) => item.id === transactionId)) {
+                recentDonations.push({
+                  id: transactionId,
+                  amount,
+                  currency: "Gold",
+                  timestamp: transaction.createdAt,
+                  target: sellerMuId ? "mu" : "country",
+                  targetName: sellerMuId ? targetArmy?.name || "Askeri Birlik" : targetCountry?.name || "Ülke",
+                  targetAvatarUrl: sellerMuId ? targetArmy?.avatarUrl : undefined,
+                  countryCode: sellerMuId ? undefined : targetCountry?.code,
+                });
+              }
+
+              if (createdAt < rangeStart || createdAt >= rangeEnd) continue;
+              const day = new Date(createdAt - GAME_DAY_RESET_MS).toISOString().slice(0, 10);
+              if (!dates.includes(day)) continue;
               const byDay = userDonationsMap[userId] || (userDonationsMap[userId] = {});
               const totals = byDay[day] || (byDay[day] = { country: 0, mu: 0, total: 0 });
-              if (transaction.sellerMuId) totals.mu += amount;
+              if (sellerMuId) totals.mu += amount;
               else totals.country += amount;
               totals.total += amount;
             }
@@ -449,6 +477,9 @@ async function processSingleArmy(
         isEconomy,
         ecoSkillPoints,
         totalSkillPoints,
+        latestDonations: (recentDonationsMap[uid] || [])
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          .slice(0, 7),
         exemptReason,
         health: {
           current: hCurrent,
@@ -581,7 +612,7 @@ export default async function handler(req: any, res: any) {
     effectiveDate === todayDateStr ? 30 * 1000 : CACHE_TTL_MS;
 
   const donationHistoryDates = getDonationHistoryDates(effectiveDate);
-  const cacheKey = `mgmt_overview_v11_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v12_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < cacheTtlMs) {
     return res.status(200).json(cached.data);

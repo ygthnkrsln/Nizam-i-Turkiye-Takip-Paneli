@@ -6,7 +6,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Header } from './components/Header';
 const MetricsCards = React.lazy(() => import('./components/MetricsCards').then((module) => ({ default: module.MetricsCards })));
-const PlayerTable = React.lazy(() => import('./components/PlayerTable').then((module) => ({ default: module.PlayerTable })));
 const ArmyStatsTable = React.lazy(() => import('./components/ArmyStatsTable').then((module) => ({ default: module.ArmyStatsTable })));
 const CountryStatsPanel = React.lazy(() => import('./components/CountryStatsPanel').then((module) => ({ default: module.CountryStatsPanel })));
 const ApiKeySection = React.lazy(() => import('./components/ApiKeySection').then((module) => ({ default: module.ApiKeySection })));
@@ -184,7 +183,7 @@ export default function App() {
   const initialTargetMu = initialRoute.muId || getCookie('warera_last_mu') || DEFAULT_MU_ID;
 
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => initialRoute.tab);
-  const [donationView, setDonationView] = useState<'weekly' | 'panel'>('weekly');
+  const [donationKeyRefreshToken, setDonationKeyRefreshToken] = useState(0);
   const [armyInfoView, setArmyInfoView] = useState<'overview' | 'stats'>(() =>
     typeof window !== 'undefined' && window.location.pathname.toLowerCase().startsWith('/ordu-istatistikleri') ? 'stats' : 'overview',
   );
@@ -375,7 +374,7 @@ export default function App() {
     [muId, players.length]
   );
 
-  const shouldFetchArmyData = activeTab !== 'mgmtDonations' || donationView === 'panel';
+  const shouldFetchArmyData = activeTab !== 'mgmtDonations';
 
   // Load military-unit data only when a view needs it. The weekly donation tracker uses its consolidated management endpoint.
   useEffect(() => {
@@ -472,36 +471,8 @@ export default function App() {
           <ManagementArmyTrackingSection onSelectArmy={handleMuIdChange} onNavigateTab={handleTabChange} />
         ) : activeTab === 'mgmtDonations' ? (
           <div className="space-y-4">
-            <div className="inline-flex flex-wrap gap-2 rounded-xl border border-[#3282B8]/20 bg-[#182329] p-1.5">
-              <button type="button" onClick={() => setDonationView('weekly')} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${donationView === 'weekly' ? 'bg-emerald-900/50 text-emerald-100 ring-1 ring-emerald-500/30' : 'text-[#BBE1FA]/60 hover:bg-[#141C21] hover:text-white'}`}>Bağış Takibi · Haftalık Kota</button>
-              <button type="button" onClick={() => setDonationView('panel')} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${donationView === 'panel' ? 'bg-emerald-900/50 text-emerald-100 ring-1 ring-emerald-500/30' : 'text-[#BBE1FA]/60 hover:bg-[#141C21] hover:text-white'}`}>Bağış Takip Paneli · Son İşlemler</button>
-            </div>
-            {donationView === 'weekly' ? (
-              <ManagementDonationTrackingSection currentMuId={muId} onSelectArmy={handleMuIdChange} />
-            ) : (
-              <>
-                <MetricsCards
-                  totalMembers={players.length}
-                  activePlayers={armyMetrics.activePlayers}
-                  totalActiveFactories={armyMetrics.totalActiveFactories}
-                  totalAllFactories={armyMetrics.totalAllFactories}
-                  totalActiveEnginePower={armyMetrics.totalActiveEnginePower}
-                  totalWealth={armyMetrics.totalWealth}
-                  muData={muData}
-                  currentMuId={muId}
-                  onMuIdChange={handleMuIdChange}
-                />
-                <ApiKeySection onKeyChange={() => fetchData(true)} />
-                <PlayerTable
-                  players={players}
-                  isLoading={isLoading}
-                  isRefreshing={isRefreshing}
-                  onRefresh={() => fetchData(true)}
-                  muName={muData?.name || 'Turkic Tribe'}
-                  muAvatarUrl={muData?.avatarUrl}
-                />
-              </>
-            )}
+            <ApiKeySection onKeyChange={() => setDonationKeyRefreshToken((value) => value + 1)} />
+            <ManagementDonationTrackingSection currentMuId={muId} onSelectArmy={handleMuIdChange} refreshToken={donationKeyRefreshToken} />
           </div>
         ) : activeTab === 'mgmtCitizens' ? (
           <ManagementCitizensSection />

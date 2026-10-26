@@ -141,8 +141,8 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
 
   return (
     <div className="w-full space-y-5">
-      {/* 4 Kartlık Tek Satır: Askeri Birlik (Üye & Seviye Bilgisiyle), Haftalık Hasar, Toplam Hasar, Toplam Servet */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+      {/* Ordu gücü ve ekonomik özet */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-stretch">
         {/* 1. Askeri Birlik (Ordu) Seçimi Kartı + Üye Sayısı & Seviye Ortalaması Bilgileri */}
         <div
           id="card-mu-selector"
@@ -337,7 +337,20 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
           </div>
         </div>
 
-        {/* 4. TOPLAM SERVET Kartı */}
+        {/* 4. POTANSİYEL HASAR Kartı */}
+        <div className="bg-gradient-to-b from-[#211d30] to-[#191b28] border border-violet-500/30 hover:border-violet-500/50 rounded-xl p-5 transition-all shadow-lg flex flex-col justify-between h-full group">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-violet-300">POTANSİYEL HASAR</span>
+              <div className="w-8 h-8 rounded-lg bg-violet-950/60 border border-violet-500/30 flex items-center justify-center text-violet-300 group-hover:scale-105 transition-transform"><Flame className="w-4 h-4" /></div>
+            </div>
+            <div className="flex items-baseline gap-1.5"><span className="text-2xl sm:text-3xl font-black text-white font-mono">{data ? formatDamage(data.stats.totalPotentialDamage) : '-'}</span></div>
+            <p className="text-[11px] text-[#BBE1FA]/60 mt-1">Savaş buildi · anlık can ve yemeğe göre</p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-violet-500/20 flex items-center justify-between text-[11px] font-mono"><span className="text-[#BBE1FA]/60">Savaşçılar:</span><span className="font-bold text-violet-300">{data?.members.filter((member) => member.isFighter).length || 0}</span></div>
+        </div>
+
+        {/* 5. TOPLAM SERVET Kartı */}
         <div className="bg-gradient-to-b from-[#1C2830] to-[#162127] border border-rose-500/25 hover:border-rose-500/50 rounded-xl p-5 transition-all shadow-lg flex flex-col justify-between h-full group">
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -745,6 +758,7 @@ export const MilitaryOverviewSection: React.FC<MilitaryOverviewSectionProps> = (
                       <span className="text-[10px] text-[#BBE1FA]/50 block">
                         Haftalık: {formatDamage(member.weeklyDamage)} hasar
                       </span>
+                      {member.isFighter && <span className="text-[10px] text-violet-300/80 block">Potansiyel: {formatDamage(member.potentialDamage)} hasar</span>}
                     </div>
                   </div>
 

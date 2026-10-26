@@ -38,6 +38,19 @@ export function calculatePotentialDamage(
   if (!isFighter || !Number.isFinite(playerLevel) || playerLevel < 30) return 0;
 
   const levelDamage = Math.max(0, (playerLevel - 10) * 50_000);
-  const readiness = clampRatio(healthCurrent, healthMax) * clampRatio(hungerCurrent, hungerMax);
+  const healthRatio = clampRatio(healthCurrent, healthMax);
+  const maxFood = Number(hungerMax);
+  const foodCapacity = Number.isFinite(maxFood) && maxFood > 0 ? maxFood : 0;
+  const currentFood = Number(hungerCurrent);
+  const foodCount = Number.isFinite(currentFood)
+    ? Math.min(foodCapacity, Math.max(0, currentFood))
+    : 0;
+  // Each available meal adds 20% of a health bar; full health plus all food
+  // is the 100% baseline (so a fully ready level-50 fighter estimates 2M).
+  const availableHealthEquivalent = healthRatio + foodCount * 0.2;
+  const fullReadinessHealthEquivalent = 1 + foodCapacity * 0.2;
+  const readiness = fullReadinessHealthEquivalent > 0
+    ? Math.min(1, availableHealthEquivalent / fullReadinessHealthEquivalent)
+    : healthRatio;
   return Math.round(levelDamage * readiness);
 }

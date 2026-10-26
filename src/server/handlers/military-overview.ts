@@ -3,6 +3,7 @@
 
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
 import { getMilitaryUnitWeeklyDamage } from "../../lib/dailyDamage.js";
+import { calculatePotentialDamage, isCombatBuild } from "../../lib/potentialDamage.js";
 
 const DEFAULT_MU_ID = "69c229c4449287ea1a26a5b3";
 
@@ -50,7 +51,7 @@ export default async function handler(req: any, res: any) {
   const targetMuId = (req.query?.muId as string) || DEFAULT_MU_ID;
   const forceRefresh = req.query?.refresh === "true";
 
-  const cacheKey = `mil_overview_v2_${targetMuId}`;
+  const cacheKey = `mil_overview_v3_${targetMuId}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return res.status(200).json(cached.data);
@@ -164,6 +165,18 @@ export default async function handler(req: any, res: any) {
     const memberCount = members.length;
     const totalWeeklyDamage = getMilitaryUnitWeeklyDamage(muData);
     const totalAllTimeDamage = Number(muData.rankings?.muDamages?.value ?? 0);
+    const potentialDamageForUser = (user: any) => calculatePotentialDamage(
+      user.leveling?.level || user.level || 1,
+      user.skills?.health?.currentBarValue || 0,
+      user.skills?.health?.value || 100,
+      user.skills?.hunger?.currentBarValue || 0,
+      user.skills?.hunger?.value || 10,
+      isCombatBuild(user),
+    );
+    const totalPotentialDamage = allUsers.reduce(
+      (sum, user) => sum + potentialDamageForUser(user),
+      0,
+    );
     const totalWealth = allUsers.reduce(
       (sum, u) => sum + (u.rankings?.userWealth?.value || 0),
       0,
@@ -297,10 +310,12 @@ export default async function handler(req: any, res: any) {
 
     // 8. Member Items
     const memberItems = allUsers.map((u) => ({
-      userId: u._id,
+      userId: u._id || u.id,
       username: u.username,
       avatarUrl: u.avatarUrl || "",
       level: u.leveling?.level || 1,
+      isFighter: isCombatBuild(u),
+      potentialDamage: potentialDamageForUser(u),
       totalXp: u.leveling?.totalXp || 0,
       prestigeLevel: u.leveling?.prestigeLevel || 0,
       weeklyDamage: u.rankings?.weeklyUserDamages?.value || 0,
@@ -327,6 +342,7 @@ export default async function handler(req: any, res: any) {
           commanderCount,
           totalWeeklyDamage,
           totalAllTimeDamage,
+          totalPotentialDamage,
           averageLevel: avgLevel,
           totalWealth,
           averageWealth: avgWealth,

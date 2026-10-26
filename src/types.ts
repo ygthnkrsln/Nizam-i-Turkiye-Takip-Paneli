@@ -200,6 +200,8 @@ export interface MilitaryMemberItem {
   username: string;
   avatarUrl: string;
   level: number;
+  isFighter: boolean;
+  potentialDamage: number;
   totalXp: number;
   prestigeLevel: number;
   weeklyDamage: number;
@@ -226,6 +228,7 @@ export interface MilitaryOverviewData {
     commanderCount: number;
     totalWeeklyDamage: number;
     totalAllTimeDamage: number;
+    totalPotentialDamage: number;
     averageLevel: number;
     totalWealth: number;
     averageWealth: number;

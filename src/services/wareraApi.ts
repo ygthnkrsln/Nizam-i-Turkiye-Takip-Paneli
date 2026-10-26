@@ -1866,7 +1866,7 @@ export async function fetchCountryStats(
   }
 }
 
-const MILITARY_OVERVIEW_STORAGE_KEY_PREFIX = "warera_mil_overview_v2_";
+const MILITARY_OVERVIEW_STORAGE_KEY_PREFIX = "warera_mil_overview_v3_";
 
 export function getCachedMilitaryOverview(
   muId: string = DEFAULT_MU_ID,
@@ -2110,6 +2110,7 @@ export interface ManagementMemberItem {
   isEconomy?: boolean;
   ecoSkillPoints?: number;
   totalSkillPoints?: number;
+  latestDonations?: DonationItem[];
   exemptReason?: "combat_mode" | "low_level" | null;
   health: { current: number; max: number; percentage: number };
   hunger: { current: number; max: number; percentage: number };
@@ -2279,7 +2280,7 @@ export async function fetchManagementOverview(
     timeZone: "Europe/Istanbul",
   }).format(new Date());
   const effectiveDate = date || today;
-  const cacheKey = `${includeDonations ? "full" : "armies"}:${effectiveDate}`;
+  const cacheKey = `${includeDonations ? "full_v12" : "armies_v12"}:${effectiveDate}`;
   const cacheTtlMs =
     effectiveDate === today
       ? MANAGEMENT_TODAY_CACHE_TTL_MS
