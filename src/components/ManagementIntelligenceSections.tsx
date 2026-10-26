@@ -172,6 +172,7 @@ export function ManagementCitizensSection() {
 }
 
 const COUNTRY_METRICS = [
+  { key: "activeCitizenWealth", label: "Aktif vatandaş serveti", money: true },
   { key: "wealth", label: "Ülke serveti", money: true },
   { key: "treasury", label: "Hazine bakiyesi", money: true },
   { key: "population", label: "Nüfus" },
@@ -207,11 +208,21 @@ function indexedChart(snapshots: AnyRecord[], selectedIds: string[], metric: str
 }
 
 export function ManagementCountryTrackerSection() {
-  const { data, error, loading, refreshing, reload } = useManagementView<AnyRecord>("country-tracker");
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const saved = JSON.parse(localStorage.getItem("nizam_country_tracker_selected_v1") || "[]");
+      return Array.isArray(saved) ? saved.filter((id) => typeof id === "string").slice(0, 4) : [];
+    } catch { return []; }
+  });
+  const countryQuery = selectedIds.length ? { countries: [...selectedIds].sort().join(",") } : {};
+  const { data, error, loading, refreshing, reload } = useManagementView<AnyRecord>("country-tracker", countryQuery);
   const [snapshots, setSnapshots] = useState<AnyRecord[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [metric, setMetric] = useState("wealth");
+  const [metric, setMetric] = useState("activeCitizenWealth");
   const [search, setSearch] = useState("");
+  useEffect(() => {
+    try { localStorage.setItem("nizam_country_tracker_selected_v1", JSON.stringify(selectedIds)); } catch {}
+  }, [selectedIds]);
   useEffect(() => {
     if (!data?.countries) return;
     const current = { date: turkeyDate(), timestamp: Date.now(), countries: data.countries };
@@ -224,11 +235,16 @@ export function ManagementCountryTrackerSection() {
     const merged = Array.from(byDate.values()).sort((a, b) => String(a.date).localeCompare(String(b.date))).slice(-30);
     setSnapshots(merged);
     try { localStorage.setItem("nizam_country_tracker_v1", JSON.stringify(merged)); } catch {}
+    const validIds = selectedIds.filter((id) => data.countries.some((row: AnyRecord) => row.id === id));
+    if (validIds.length !== selectedIds.length) {
+      setSelectedIds(validIds);
+      return;
+    }
     if (!selectedIds.length) {
       const candidates = [...data.countries].sort((a: AnyRecord, b: AnyRecord) => (b.weeklyDamage || 0) - (a.weeklyDamage || 0));
       setSelectedIds([data.homeCountryId, ...candidates.filter((row: AnyRecord) => row.id !== data.homeCountryId).slice(0, 2).map((row: AnyRecord) => row.id)]);
     }
-  }, [data, selectedIds.length]);
+  }, [data, selectedIds]);
   const countries = data?.countries || [];
   const filteredCountries = useMemo(() => {
     const q = search.trim().toLocaleLowerCase("tr-TR");
@@ -239,10 +255,12 @@ export function ManagementCountryTrackerSection() {
   const metricInfo = COUNTRY_METRICS.find((item) => item.key === metric) || COUNTRY_METRICS[0];
   const toggleCountry = (id: string) => setSelectedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : current.length >= 4 ? current : [...current, id]);
   const selectedCountries = selectedIds.map((id) => countries.find((row: AnyRecord) => row.id === id)).filter(Boolean) as AnyRecord[];
+  const selectedActiveCitizenCount = selectedCountries.reduce((sum, country) => sum + Number(country.activeCitizenCount || 0), 0);
+  const selectedActiveCitizenWealth = selectedCountries.reduce((sum, country) => sum + Number(country.activeCitizenWealth || 0), 0);
   const baseline = snapshots[0];
   return (
     <div className="space-y-4">
-      <PageHeading title="Ülke Takibi & Karşılaştırma" subtitle="Ülke serveti, nüfus, gelişmişlik, vergi ve ülke hasarını günlük snapshot’lar üzerinden karşılaştır." onRefresh={reload} refreshing={refreshing} />
+      <PageHeading title="Ülke Takibi & Karşılaştırma" subtitle="Seçili ülkelerin aktif vatandaş sayısı ve toplam serveti ile ülke göstergelerini günlük snapshot’lar üzerinden karşılaştır." onRefresh={reload} refreshing={refreshing} />
       <StatusMessage error={error} loading={loading && !data} />
       {data && <>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -275,6 +293,22 @@ export function ManagementCountryTrackerSection() {
             const delta = current !== null && first !== null ? current - first : null;
             return <tr key={country.id} className="border-t border-[#3282B8]/10"><td className="py-2.5 font-semibold text-white">{country.name}</td><td className="py-2.5 text-[#BBE1FA]/80">{current === null ? "—" : metricInfo.percent ? `%${formatNumber(current, 1)}` : metricInfo.money ? formatMoney(current) : formatNumber(current, metricInfo.digits || 0)}</td><td className="py-2.5 text-[#BBE1FA]/50">{first === null ? "—" : metricInfo.percent ? `%${formatNumber(first, 1)}` : metricInfo.money ? formatMoney(first) : formatNumber(first, metricInfo.digits || 0)}</td><td className={`py-2.5 font-semibold ${delta === null ? "text-[#BBE1FA]/40" : delta >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{delta === null ? "—" : `${delta >= 0 ? "+" : ""}${metricInfo.percent ? `%${formatNumber(delta, 1)}` : metricInfo.money ? formatMoney(delta) : formatNumber(delta, metricInfo.digits || 0)}`}</td><td className="py-2.5 text-[#BBE1FA]/65">{country.taxRate === null ? "—" : `%${formatNumber(country.taxRate, 1)}`}</td></tr>;
           })}{!selectedCountries.length && <tr><td colSpan={5} className="py-4 text-center text-[#BBE1FA]/45">Karşılaştırmak için ülke seç.</td></tr>}</tbody></table></div>
+        </Panel>
+        <Panel title="Seçili ülkelerin aktif vatandaş serveti" subtitle="Son 24 saatte giriş yapmış tüm vatandaşların bireysel servet sıralama değerleri toplanır.">
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <MetricCard label="Seçili aktif vatandaş serveti" value={formatMoney(selectedActiveCitizenWealth)} detail="Seçili ülkelerin toplamı" tone="info" />
+            <MetricCard label="Aktif vatandaş profili" value={formatNumber(selectedActiveCitizenCount)} detail="Son 24 saat içinde giriş yapmış" tone="good" />
+          </div>
+          <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="text-[10px] uppercase text-[#BBE1FA]/45"><tr><th className="pb-2">Ülke</th><th className="pb-2">Aktif vatandaş</th><th className="pb-2">Güncel servet toplamı</th><th className="pb-2">İlk snapshot</th><th className="pb-2">Değişim</th><th className="pb-2">Profil kapsamı</th></tr></thead><tbody>{selectedCountries.map((country) => {
+            const first = baseline?.countries?.find((row: AnyRecord) => row.id === country.id);
+            const wealth = countryMetric(country, "activeCitizenWealth");
+            const firstWealth = countryMetric(first, "activeCitizenWealth");
+            const delta = wealth !== null && firstWealth !== null ? wealth - firstWealth : null;
+            const profiled = Number(country.activeCitizenProfiledCount || 0);
+            const roster = Number(country.activeCitizenRosterCount || 0);
+            const complete = country.activeCitizenWealthComplete === true;
+            return <tr key={country.id} className="border-t border-[#3282B8]/10"><td className="py-2.5 font-semibold text-white">{country.name}</td><td className="py-2.5 text-[#BBE1FA]/75">{country.activeCitizenCount === undefined ? "—" : formatNumber(country.activeCitizenCount)}</td><td className="py-2.5 font-semibold text-emerald-200">{wealth === null ? "—" : formatMoney(wealth)}</td><td className="py-2.5 text-[#BBE1FA]/55">{firstWealth === null ? "—" : formatMoney(firstWealth)}</td><td className={`py-2.5 font-semibold ${delta === null ? "text-[#BBE1FA]/40" : delta >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{delta === null ? "—" : `${delta >= 0 ? "+" : ""}${formatMoney(delta)}`}</td><td className="py-2.5"><Pill tone={complete ? "good" : "warn"}>{complete ? `${formatNumber(profiled)} / ${formatNumber(roster)} tam` : `${formatNumber(profiled)} / ${formatNumber(roster)} kısmi`}</Pill></td></tr>;
+          })}{!selectedCountries.length && <tr><td colSpan={6} className="py-4 text-center text-[#BBE1FA]/45">Aktif vatandaş servetini izlemek için ülke seç.</td></tr>}</tbody></table></div>
         </Panel>
         <div className="rounded-lg border border-[#3282B8]/15 bg-[#141C21] p-3 text-[10px] leading-relaxed text-[#BBE1FA]/50">Kaynak: {data.source}. İlk kullanımda geçmiş yalnızca bugünden itibaren oluşur. Günlük tarihî kayıtlar mevcut hasar cron’unda tutulur; tarayıcı geçmişi de bu cihazda yedeklenir. {data.note}</div>
       </>}

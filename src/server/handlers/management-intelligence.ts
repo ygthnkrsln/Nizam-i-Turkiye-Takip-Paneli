@@ -7,6 +7,9 @@ import {
 const TURKEY_ID = "6813b6d446e731854c7ac7eb";
 const COUNTRY_HISTORY_KEY = "nizam_country_tracker_history_v1";
 const COUNTRY_HISTORY_DAYS = 30;
+const ACTIVE_CITIZEN_PROFILE_LIMIT = 5_000;
+const ACTIVE_CITIZEN_WINDOW_MS = 24 * 60 * 60 * 1000;
+const COUNTRY_WEALTH_TRACKING_LIMIT = 4;
 const USER_PROFILE_LIMIT = 2_000;
 const VIEW_TTL_MS = 5 * 60 * 1000;
 const QUERY_TTL_MS = 2 * 60 * 1000;
@@ -16,6 +19,8 @@ type CacheEntry = { timestamp: number; data: any };
 const viewCache = new Map<string, CacheEntry>();
 const queryCache = new Map<string, CacheEntry>();
 let countryHistoryFallback: any[] = [];
+let countryWealthTrackedIdsFallback: string[] = [];
+let countryWealthTrackedIdsKnown = false;
 
 function unpack(payload: any): any {
   if (payload?.error) {
@@ -123,6 +128,68 @@ async function queryBatchUsers(ids: string[]): Promise<any[]> {
   return batches.flat();
 }
 
+async function fetchActiveCitizenWealth(countries: any[], force = false): Promise<Record<string, AnyRecord>> {
+  if (!countries.length) return {};
+  const rosters = await mapWithConcurrency(countries, 2, async (country) => {
+    const ids: string[] = [];
+    let cursor: string | null = null;
+    let complete = false;
+    const maxPages = Math.ceil(ACTIVE_CITIZEN_PROFILE_LIMIT / 100);
+    for (let page = 0; page < maxPages; page++) {
+      const input: Record<string, any> = { countryId: countryId(country), limit: 100 };
+      if (cursor) input.cursor = cursor;
+      const result = await query("user.getUsersByCountry", input, force, 3 * 60_000);
+      const items = listOf(result);
+      for (const row of items) {
+        const id = String(row?._id || row?.id || (typeof row === "string" ? row : ""));
+        if (id) ids.push(id);
+      }
+      cursor = result?.nextCursor ? String(result.nextCursor) : null;
+      if (!cursor || !items.length) { complete = true; break; }
+    }
+    return { id: countryId(country), ids: Array.from(new Set(ids)), complete };
+  });
+  const allIds = Array.from(new Set(rosters.flatMap((roster) => roster.ids)));
+  const profiles = await queryBatchUsers(allIds);
+  const profilesById = new Map<string, any>();
+  profiles.forEach((profile, index) => {
+    const id = String(profile?._id || profile?.id || allIds[index] || "");
+    if (id && profile && typeof profile === "object") profilesById.set(id, profile);
+  });
+  const now = Date.now();
+  const result: Record<string, AnyRecord> = {};
+  for (const roster of rosters) {
+    const profiledCount = roster.ids.filter((id) => profilesById.has(id)).length;
+    let activeCount = 0;
+    let activeWealthProfiledCount = 0;
+    let wealth = 0;
+    for (const id of roster.ids) {
+      const profile = profilesById.get(id);
+      if (!profile) continue;
+      const lastConnectionAt = profile?.dates?.lastConnectionAt;
+      const lastConnection = lastConnectionAt ? new Date(lastConnectionAt).getTime() : NaN;
+      const hoursSinceConnection = Number.isFinite(lastConnection) ? Math.max(0, (now - lastConnection) / 3_600_000) : null;
+      if (hoursSinceConnection === null || hoursSinceConnection * 3_600_000 > ACTIVE_CITIZEN_WINDOW_MS) continue;
+      activeCount++;
+      const playerWealth = finite(profile?.rankings?.userWealth?.value ?? profile?.wealth);
+      if (playerWealth !== null) {
+        wealth += playerWealth;
+        activeWealthProfiledCount++;
+      }
+    }
+    result[roster.id] = {
+      activeCitizenWealth: wealth,
+      activeCitizenCount: activeCount,
+      activeCitizenRosterCount: roster.ids.length,
+      activeCitizenProfiledCount: profiledCount,
+      activeCitizenWealthProfiledCount: activeWealthProfiledCount,
+      activeCitizenWealthComplete: roster.complete && profiledCount === roster.ids.length && activeWealthProfiledCount === activeCount,
+      activeCitizenWealthTrackedAt: new Date(now).toISOString(),
+    };
+  }
+  return result;
+}
+
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
@@ -180,23 +247,56 @@ function metricCountry(raw: any) {
 async function readCountryHistory(): Promise<any[]> {
   try {
     const stored = await readManagementOverviewCache(COUNTRY_HISTORY_KEY);
+    const savedTrackedIds = stored?.payload?.trackedWealthCountryIds;
+    if (Array.isArray(savedTrackedIds)) {
+      countryWealthTrackedIdsFallback = savedTrackedIds.map(String).slice(0, COUNTRY_WEALTH_TRACKING_LIMIT);
+      countryWealthTrackedIdsKnown = true;
+    }
     const snapshots = stored?.payload?.snapshots;
     if (Array.isArray(snapshots)) {
       countryHistoryFallback = snapshots;
+      if (!countryWealthTrackedIdsKnown) {
+        const latest = [...snapshots].sort((a, b) => String(b?.date || "").localeCompare(String(a?.date || "")))[0];
+        countryWealthTrackedIdsFallback = (latest?.countries || [])
+          .filter((country: AnyRecord) => country.activeCitizenWealth !== undefined)
+          .map((country: AnyRecord) => String(country.id))
+          .filter(Boolean)
+          .slice(0, COUNTRY_WEALTH_TRACKING_LIMIT);
+      }
       return snapshots;
     }
   } catch {}
   return countryHistoryFallback;
 }
 
-async function persistCountrySnapshot(countries: any[], at = new Date()): Promise<{ snapshots: any[]; saved: boolean }> {
+async function readTrackedCountryWealthIds(): Promise<string[]> {
+  await readCountryHistory();
+  return [...countryWealthTrackedIdsFallback];
+}
+
+async function persistCountrySnapshot(
+  countries: any[],
+  at = new Date(),
+  wealthMetrics?: Record<string, AnyRecord>,
+  trackedIds?: string[],
+): Promise<{ snapshots: any[]; saved: boolean }> {
   const date = turkeyDate(at);
+  if (trackedIds !== undefined) {
+    countryWealthTrackedIdsFallback = Array.from(new Set(trackedIds)).slice(0, COUNTRY_WEALTH_TRACKING_LIMIT);
+    countryWealthTrackedIdsKnown = true;
+  }
+  const previous = await readCountryHistory();
+  const todaySnapshot = previous.find((snapshot) => String(snapshot?.date) === date);
   const entry = {
     date,
     timestamp: at.getTime(),
-    countries: countries.map(metricCountry),
+    countries: countries.map((country) => {
+      const mapped = metricCountry(country);
+      const prior = todaySnapshot?.countries?.find((row: AnyRecord) => row.id === mapped.id);
+      const wealth = wealthMetrics?.[mapped.id] || prior;
+      return wealth ? { ...mapped, ...wealth } : mapped;
+    }),
   };
-  const previous = await readCountryHistory();
   const byDate = new Map<string, any>(previous.map((snapshot): [string, any] => [String(snapshot?.date), snapshot]));
   byDate.set(date, entry);
   const snapshots = Array.from(byDate.values())
@@ -206,7 +306,11 @@ async function persistCountrySnapshot(countries: any[], at = new Date()): Promis
   countryHistoryFallback = snapshots;
   let saved = false;
   try {
-    saved = await saveManagementOverviewCache(COUNTRY_HISTORY_KEY, { snapshots, updatedAt: at.toISOString() });
+    saved = await saveManagementOverviewCache(COUNTRY_HISTORY_KEY, {
+      snapshots,
+      trackedWealthCountryIds: countryWealthTrackedIdsFallback,
+      updatedAt: at.toISOString(),
+    });
   } catch {}
   return { snapshots, saved };
 }
@@ -214,14 +318,35 @@ async function persistCountrySnapshot(countries: any[], at = new Date()): Promis
 /** Called by the existing daily damage cron so country history does not require a new Vercel function. */
 export async function recordCountryTrackerSnapshot() {
   const { raw } = await getCountries(true);
-  const result = await persistCountrySnapshot(raw);
+  const trackedIds = await readTrackedCountryWealthIds();
+  const trackedCountries = raw.filter((country) => trackedIds.includes(countryId(country)));
+  let wealthMetrics: Record<string, AnyRecord> | undefined;
+  if (trackedCountries.length) {
+    try {
+      wealthMetrics = await fetchActiveCitizenWealth(trackedCountries, true);
+    } catch (error) {
+      console.warn("Active citizen wealth snapshot failed:", error);
+    }
+  }
+  const result = await persistCountrySnapshot(raw, new Date(), wealthMetrics, trackedIds);
   return { date: turkeyDate(), countryCount: raw.length, supabaseSaved: result.saved };
 }
 
-async function countryTrackerData(force = false) {
+async function countryTrackerData(force = false, requestedCountryIds?: string[]) {
   const { raw, home } = await getCountries(force);
-  const saved = await persistCountrySnapshot(raw);
-  const countries = raw.map(metricCountry).sort((a, b) => (b.wealth || 0) - (a.wealth || 0));
+  const requestedIds = requestedCountryIds === undefined
+    ? await readTrackedCountryWealthIds()
+    : Array.from(new Set(requestedCountryIds)).slice(0, COUNTRY_WEALTH_TRACKING_LIMIT);
+  const validCountryIds = new Set(raw.map(countryId));
+  const validRequestedIds = requestedIds.filter((id) => validCountryIds.has(id));
+  const trackedCountries = raw.filter((country) => validRequestedIds.includes(countryId(country)));
+  let wealthMetrics: Record<string, AnyRecord> | undefined;
+  if (trackedCountries.length) wealthMetrics = await fetchActiveCitizenWealth(trackedCountries, force);
+  const saved = await persistCountrySnapshot(raw, new Date(), wealthMetrics, requestedCountryIds === undefined ? undefined : validRequestedIds);
+  const todaySnapshot = saved.snapshots.find((snapshot) => snapshot.date === turkeyDate());
+  const savedCountries = new Map<string, AnyRecord>((todaySnapshot?.countries || []).map((country: AnyRecord): [string, AnyRecord] => [country.id, country]));
+  const countries = raw.map((country) => ({ ...metricCountry(country), ...(savedCountries.get(countryId(country)) || {}) }))
+    .sort((a, b) => (b.wealth || 0) - (a.wealth || 0));
   return {
     success: true,
     country: metricCountry(home),
@@ -231,8 +356,9 @@ async function countryTrackerData(force = false) {
     fetchedAt: new Date().toISOString(),
     historyDays: saved.snapshots.length,
     historySavedToSupabase: saved.saved,
+    trackedWealthCountryIds: validRequestedIds,
     source: "api3.warera.io/trpc · country.getAllCountries · country rankings",
-    note: "Ülke servet sıralama değeri ve ülke hazinesi ayrı API alanlarıdır. Geçmiş günlük mevcut cron üzerinden tutulur.",
+    note: "Ülke servet sıralama değeri ve hazine bakiyesi ayrıdır. Aktif vatandaş serveti, son 24 saatte giriş yapan vatandaş profillerinden hesaplanır ve seçili ülkeler için günlük snapshot olarak tutulur.",
   };
 }
 
@@ -718,10 +844,10 @@ async function dailyDashboard(force = false) {
   };
 }
 
-async function loadView(view: string, force: boolean, countryFilter = "all") {
+async function loadView(view: string, force: boolean, countryFilter = "all", selectedCountryIds?: string[]) {
   switch (view) {
     case "citizens": return citizensData(force, countryFilter);
-    case "country-tracker": return countryTrackerData(force);
+    case "country-tracker": return countryTrackerData(force, selectedCountryIds);
     default: throw Object.assign(new Error("Geçersiz yönetim görünümü."), { statusCode: 400 });
   }
 }
@@ -737,8 +863,17 @@ export default async function handler(req: any, res: any) {
   if (!allowed.has(view)) return res.status(400).json({ success: false, error: "Geçersiz yönetim görünümü." });
   const force = req.query?.refresh === "true";
   const countryFilter = String(req.query?.country || "all");
-  const key = `nizam_management_${view}_${view === "citizens" ? countryFilter : "all"}_v2`;
-  const ttl = view === "citizens" ? 10 * 60_000 : VIEW_TTL_MS;
+  const countrySelectionProvided = req.query?.countries !== undefined;
+  const selectedCountryIds = countrySelectionProvided
+    ? String(req.query?.countries || "").split(",").map((id) => id.trim()).filter(Boolean)
+    : undefined;
+  const selectionKey = view === "citizens"
+    ? countryFilter
+    : view === "country-tracker"
+      ? countrySelectionProvided ? (selectedCountryIds?.length ? [...selectedCountryIds].sort().join("-") : "none") : "default"
+      : "all";
+  const key = `nizam_management_${view}_${selectionKey}_v3`;
+  const ttl = view === "citizens" ? 10 * 60_000 : view === "country-tracker" ? 30_000 : VIEW_TTL_MS;
   try {
     const cached = viewCache.get(key);
     if (!force && cached && Date.now() - cached.timestamp < ttl) return res.status(200).json(cached.data);
@@ -749,7 +884,7 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json(persisted.payload);
       }
     }
-    const payload = await loadView(view, force, countryFilter);
+    const payload = await loadView(view, force, countryFilter, selectedCountryIds);
     viewCache.set(key, { timestamp: Date.now(), data: payload });
     await saveManagementOverviewCache(key, payload);
     return res.status(200).json(payload);
