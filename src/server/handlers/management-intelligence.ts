@@ -375,7 +375,7 @@ async function warRoomData(force = false) {
       risk,
       tone: attacked ? "bad" : hostile.length ? "warn" : "info",
     };
-  }).sort((a, b) => ({ bad: 0, warn: 1, info: 2 }[a.tone as "bad" | "warn" | "info"] - ({ bad: 0, warn: 1, info: 2 }[b.tone as "bad" | "warn" | "info"]) || (b.population || 0) - (a.population || 0));
+  }).sort((a, b) => ({ bad: 0, warn: 1, info: 2 }[a.tone as "bad" | "warn" | "info"] - ({ bad: 0, warn: 1, info: 2 }[b.tone as "bad" | "warn" | "info"]) || (b.population || 0) - (a.population || 0)));
   return {
     success: true,
     country: metricCountry(home),
