@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  ArrowUpDown,
   CheckCircle2,
   Clock3,
   Flag,
@@ -119,18 +120,87 @@ function Pill({ children, tone = "info" }: { children: React.ReactNode; tone?: T
 }
 
 const CITIZEN_FILTERS = ["Tümü", "Aktif", "Uykuda", "İnaktif", "Asker", "Ekonomist", "Karma", "Acemi", "Yeni", "Oy verebilen"];
+type CitizenSortKey = "country" | "name" | "status" | "level" | "build" | "lastConnection" | "weeklyDamage" | "canVote" | "roles";
+type SortDirection = "asc" | "desc";
+
+function CitizenSortHeader({
+  label,
+  active,
+  direction,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  direction: SortDirection;
+  onClick: () => void;
+}) {
+  return (
+    <th className="pb-2">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`${label} sütununa göre sırala${active ? direction === "asc" ? ", artan" : ", azalan" : ""}`}
+        aria-sort={active ? direction === "asc" ? "ascending" : "descending" : "none"}
+        className={`inline-flex items-center gap-1 text-left transition hover:text-sky-200 ${active ? "text-sky-200" : "text-[#BBE1FA]/55"}`}
+      >
+        {label}
+        <span className="inline-flex w-3 justify-center">
+          {active ? direction === "asc" ? "↑" : "↓" : <ArrowUpDown className="h-3 w-3 opacity-60" />}
+        </span>
+      </button>
+    </th>
+  );
+}
 
 export function ManagementCitizensSection() {
   const [countryFilter, setCountryFilter] = useState("all");
   const { data, error, loading, refreshing, reload } = useManagementView<AnyRecord>("citizens", { country: countryFilter });
   const [filter, setFilter] = useState("Tümü");
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<CitizenSortKey>("level");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const rows = useMemo(() => (data?.rows || []).filter((row: AnyRecord) => {
     const query = search.trim().toLocaleLowerCase("tr-TR");
     const matchesQuery = !query || row.name.toLocaleLowerCase("tr-TR").includes(query);
     const matchesFilter = filter === "Tümü" || (filter === "Yeni" ? row.isNew : filter === "Oy verebilen" ? row.canVote : row.status === filter || row.build === filter);
     return matchesQuery && matchesFilter;
   }), [data, filter, search]);
+  const sortedRows = useMemo(() => [...rows].sort((left: AnyRecord, right: AnyRecord) => {
+    let result = 0;
+    if (sortKey === "country") {
+      result = String(left.countryName || "").localeCompare(String(right.countryName || ""), "tr-TR");
+    } else if (sortKey === "name") {
+      result = String(left.name || "").localeCompare(String(right.name || ""), "tr-TR");
+    } else if (sortKey === "status") {
+      const order: Record<string, number> = { Aktif: 0, Uykuda: 1, İnaktif: 2, Bilinmiyor: 3 };
+      result = (order[String(left.status)] ?? 4) - (order[String(right.status)] ?? 4);
+      if (result === 0) result = String(left.status || "").localeCompare(String(right.status || ""), "tr-TR");
+    } else if (sortKey === "level") {
+      result = (Number(left.level) || 0) - (Number(right.level) || 0);
+    } else if (sortKey === "lastConnection") {
+      const leftHours = left.hoursSinceConnection;
+      const rightHours = right.hoursSinceConnection;
+      if (leftHours === null && rightHours !== null) return 1;
+      if (rightHours === null && leftHours !== null) return -1;
+      result = (Number(leftHours) || 0) - (Number(rightHours) || 0);
+    } else if (sortKey === "weeklyDamage") {
+      result = (Number(left.weeklyDamage) || 0) - (Number(right.weeklyDamage) || 0);
+    } else if (sortKey === "canVote") {
+      result = Number(Boolean(left.canVote)) - Number(Boolean(right.canVote));
+    } else if (sortKey === "roles") {
+      result = String(left.roles?.join(", ") || "").localeCompare(String(right.roles?.join(", ") || ""), "tr-TR");
+    } else {
+      result = String(left.build || "").localeCompare(String(right.build || ""), "tr-TR");
+    }
+    return sortDirection === "asc" ? result : -result;
+  }), [rows, sortKey, sortDirection]);
+  const toggleSort = (key: CitizenSortKey) => {
+    if (sortKey === key) setSortDirection((direction) => direction === "asc" ? "desc" : "asc");
+    else {
+      setSortKey(key);
+      setSortDirection(key === "level" ? "desc" : "asc");
+    }
+  };
   return (
     <div className="space-y-4">
       <PageHeading title="Vatandaşlar & Hükümet" subtitle="Türkiye, Azerbaycan ve Kamerun vatandaşlarını birlikte görüntüleyin veya ülke seçerek ayrı filtreleyin." onRefresh={reload} refreshing={refreshing} />
@@ -161,9 +231,19 @@ export function ManagementCitizensSection() {
             {!!government.government.countdowns?.length && <div className="mt-3 space-y-1 border-t border-[#3282B8]/10 pt-3">{government.government.countdowns.filter((item: AnyRecord) => item.key.includes("Election")).map((item: AnyRecord) => <div key={item.key} className="flex items-center justify-between gap-2 text-[10px] text-[#BBE1FA]/65"><span className="flex items-center gap-1"><Clock3 className="h-3 w-3 text-amber-300" />{item.name}</span><b className="text-white">{formatNumber(item.hoursLeft, 0)} sa</b></div>)}</div>}
           </Panel>)}
         </div>
-        <Panel title="Vatandaş listesi" subtitle={`${formatNumber(data.counts.profiled)} profil · ${formatNumber(data.counts.total)} vatandaş kaydı`} right={<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="İsim ara" className="w-36 rounded-md border border-[#3282B8]/20 bg-[#141C21] px-2.5 py-1.5 text-xs text-white outline-none focus:border-[#3282B8]/60 sm:w-48" />}>
+        <Panel title="Vatandaş listesi" subtitle={`${formatNumber(data.counts.profiled)} profil · ${formatNumber(data.counts.total)} vatandaş kaydı · sıralamak için sütun başlığına tıklayın`} right={<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="İsim ara" className="w-36 rounded-md border border-[#3282B8]/20 bg-[#141C21] px-2.5 py-1.5 text-xs text-white outline-none focus:border-[#3282B8]/60 sm:w-48" />}>
           <div className="mb-3 flex flex-wrap gap-1.5">{CITIZEN_FILTERS.map((item) => <button key={item} type="button" onClick={() => setFilter(item)} className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold transition ${filter === item ? "border-sky-400/50 bg-sky-950/40 text-sky-100" : "border-[#3282B8]/15 bg-[#141C21] text-[#BBE1FA]/55 hover:text-white"}`}>{item}</button>)}</div>
-          <div className="max-h-[560px] overflow-auto"><table className="w-full min-w-[900px] text-left text-xs"><thead className="sticky top-0 bg-[#182329] text-[10px] uppercase text-[#BBE1FA]/45"><tr><th className="pb-2">Ülke</th><th className="pb-2">Vatandaş</th><th className="pb-2">Durum</th><th className="pb-2">Seviye</th><th className="pb-2">Profil</th><th className="pb-2">Son giriş</th><th className="pb-2">Haftalık hasar</th><th className="pb-2">Seçmen</th><th className="pb-2">Görev</th></tr></thead><tbody>{rows.slice(0, 500).map((row: AnyRecord) => <tr key={`${row.countryKey}-${row.id}`} className="border-t border-[#3282B8]/10"><td className="py-2.5 text-[#BBE1FA]/60">{row.countryName}</td><td className="py-2.5 font-semibold text-white">{row.url ? <a href={row.url} target="_blank" rel="noreferrer" className="hover:text-sky-300">{row.name} ↗</a> : row.name}{row.isNew && <span className="ml-2 rounded bg-sky-950/50 px-1.5 py-0.5 text-[9px] text-sky-200">yeni</span>}</td><td className="py-2.5"><Pill tone={row.tone}>{row.status}</Pill></td><td className="py-2.5 text-[#BBE1FA]/75">{formatNumber(row.level)}</td><td className="py-2.5 text-[#BBE1FA]/75">{row.build}</td><td className="py-2.5 text-[#BBE1FA]/55">{row.hoursSinceConnection === null ? "—" : `${formatNumber(row.hoursSinceConnection, 0)} sa önce`}</td><td className="py-2.5 text-[#BBE1FA]/75">{formatNumber(row.weeklyDamage)}</td><td className="py-2.5">{row.canVote ? <span className="text-emerald-300">✓</span> : <span className="text-[#BBE1FA]/30">—</span>}</td><td className="py-2.5 text-[#BBE1FA]/55">{row.roles?.join(", ") || "—"}</td></tr>)}{!rows.length && <tr><td colSpan={9} className="py-5 text-center text-[#BBE1FA]/45">Bu filtrede vatandaş bulunamadı.</td></tr>}</tbody></table></div>
+          <div className="max-h-[560px] overflow-auto"><table className="w-full min-w-[900px] text-left text-xs"><thead className="sticky top-0 bg-[#182329] text-[10px] uppercase text-[#BBE1FA]/45"><tr>
+            <CitizenSortHeader label="Ülke" active={sortKey === "country"} direction={sortDirection} onClick={() => toggleSort("country")} />
+            <CitizenSortHeader label="Vatandaş" active={sortKey === "name"} direction={sortDirection} onClick={() => toggleSort("name")} />
+            <CitizenSortHeader label="Durum" active={sortKey === "status"} direction={sortDirection} onClick={() => toggleSort("status")} />
+            <CitizenSortHeader label="Seviye" active={sortKey === "level"} direction={sortDirection} onClick={() => toggleSort("level")} />
+            <CitizenSortHeader label="Profil" active={sortKey === "build"} direction={sortDirection} onClick={() => toggleSort("build")} />
+            <CitizenSortHeader label="Son giriş" active={sortKey === "lastConnection"} direction={sortDirection} onClick={() => toggleSort("lastConnection")} />
+            <CitizenSortHeader label="Haftalık hasar" active={sortKey === "weeklyDamage"} direction={sortDirection} onClick={() => toggleSort("weeklyDamage")} />
+            <CitizenSortHeader label="Seçmen" active={sortKey === "canVote"} direction={sortDirection} onClick={() => toggleSort("canVote")} />
+            <CitizenSortHeader label="Görev" active={sortKey === "roles"} direction={sortDirection} onClick={() => toggleSort("roles")} />
+          </tr></thead><tbody>{sortedRows.slice(0, 500).map((row: AnyRecord) => <tr key={`${row.countryKey}-${row.id}`} className="border-t border-[#3282B8]/10"><td className="py-2.5 text-[#BBE1FA]/60">{row.countryName}</td><td className="py-2.5 font-semibold text-white">{row.url ? <a href={row.url} target="_blank" rel="noreferrer" className="hover:text-sky-300">{row.name} ↗</a> : row.name}{row.isNew && <span className="ml-2 rounded bg-sky-950/50 px-1.5 py-0.5 text-[9px] text-sky-200">yeni</span>}</td><td className="py-2.5"><Pill tone={row.tone}>{row.status}</Pill></td><td className="py-2.5 text-[#BBE1FA]/75">{formatNumber(row.level)}</td><td className="py-2.5 text-[#BBE1FA]/75">{row.build}</td><td className="py-2.5 text-[#BBE1FA]/55">{row.hoursSinceConnection === null ? "—" : `${formatNumber(row.hoursSinceConnection, 0)} sa önce`}</td><td className="py-2.5 text-[#BBE1FA]/75">{formatNumber(row.weeklyDamage)}</td><td className="py-2.5">{row.canVote ? <span className="text-emerald-300">✓</span> : <span className="text-[#BBE1FA]/30">—</span>}</td><td className="py-2.5 text-[#BBE1FA]/55">{row.roles?.join(", ") || "—"}</td></tr>)}{!sortedRows.length && <tr><td colSpan={9} className="py-5 text-center text-[#BBE1FA]/45">Bu filtrede vatandaş bulunamadı.</td></tr>}</tbody></table></div>
         </Panel>
         <div className="text-[10px] text-[#BBE1FA]/40">Veri: {data.source} · Son güncelleme: {formatDate(data.fetchedAt)} · {data.note}</div>
       </>}
