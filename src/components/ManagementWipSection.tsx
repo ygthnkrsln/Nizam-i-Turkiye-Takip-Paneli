@@ -13,7 +13,7 @@ import {
   TrendingUp,
   Swords
 } from 'lucide-react';
-import { NizamTurkiyeLogo } from './NizamTurkiyeLogo';
+import { TurkEraLogo } from './TurkEraLogo';
 
 export type ManagementTab = 'mgmtUnit' | 'mgmtOrders' | 'mgmtTreasury' | 'mgmtDiplomacy';
 
@@ -28,7 +28,7 @@ export const ManagementWipSection: React.FC<ManagementWipSectionProps> = ({
   activeTab,
   onTabChange,
   onSwitchMode,
-  muName = 'Nizam-ı Türkiye',
+  muName = 'TürkEra',
 }) => {
   const getTabConfig = () => {
     switch (activeTab) {
@@ -75,7 +75,7 @@ export const ManagementWipSection: React.FC<ManagementWipSectionProps> = ({
           icon: <Handshake className="w-6 h-6 text-amber-400" />,
           color: 'amber',
           previewCards: [
-            { title: 'Müttefik Ordu Sayısı', value: '6 Kardeş Birlik', desc: 'Nizam-ı Türkiye Konfederasyonu' },
+            { title: 'Müttefik Ordu Sayısı', value: '6 Kardeş Birlik', desc: 'TürkEra Konfederasyonu' },
             { title: 'Saldırmazlık Paktı (NAP)', value: '4 Aktif Pakt', desc: 'Diplomatik güvence altında' },
             { title: 'Ortak Operasyon Masası', value: 'Aktif / Canlı', desc: 'Strateji kanalı bağlı' },
           ],
@@ -94,12 +94,12 @@ export const ManagementWipSection: React.FC<ManagementWipSectionProps> = ({
       <div className="flex flex-col md:flex-row items-center justify-between gap-4 pb-4 border-b border-amber-500/20 relative z-10">
         <div className="flex items-center gap-3.5">
           <div className="p-2 rounded-xl bg-amber-950/60 border border-amber-500/40 shadow-md">
-            <NizamTurkiyeLogo className="w-12 h-12" />
+            <TurkEraLogo className="w-12 h-12" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs uppercase tracking-widest text-amber-400/80 font-bold">
-                NİZAM-I TÜRKİYE KOMUTA VE YÖNETİM MODÜLÜ
+                TÜRKERA KOMUTA VE YÖNETİM MODÜLÜ
               </span>
               <span className="px-2 py-0.5 rounded-full bg-amber-950/80 border border-amber-500/50 text-amber-300 text-[10px] font-bold">
                 YÖNETİM MODU
@@ -163,10 +163,10 @@ export const ManagementWipSection: React.FC<ManagementWipSectionProps> = ({
             <span>Geliştirme Aşamasında (WIP)</span>
           </div>
           <h2 className="text-lg sm:text-xl font-bold text-amber-100">
-            Nizam-ı Türkiye Yönetim Modülü Yakında Hizmetinizde
+            TürkEra Yönetim Modülü Yakında Hizmetinizde
           </h2>
           <p className="text-xs text-amber-200/60 leading-relaxed">
-            Bu ekran Nizam-ı Türkiye ordu liderleri ve komutanları için özel olarak planlanan
+            Bu ekran TürkEra ordu liderleri ve komutanları için özel olarak planlanan
             kapsamlı yönetim, emir dağıtımı, kasa bütçelemesi ve ittifak protokolleri paneline ayrılmıştır.
             Altyapı çalışmaları sürmektedir.
           </p>
@@ -207,7 +207,7 @@ export const ManagementWipSection: React.FC<ManagementWipSectionProps> = ({
           <div className="p-3.5 rounded-xl bg-[#1A1610] border border-amber-500/20 flex items-start gap-3">
             <Users className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <div className="text-xs font-bold text-amber-200">Nizam-ı Türkiye Konfederasyonu</div>
+              <div className="text-xs font-bold text-amber-200">TürkEra Konfederasyonu</div>
               <div className="text-[11px] text-amber-100/50 mt-0.5">
                 Turkic Tribe, ASHINA, Deliler, BEASTs ve müttefik ordular arası tam entegrasyon.
               </div>

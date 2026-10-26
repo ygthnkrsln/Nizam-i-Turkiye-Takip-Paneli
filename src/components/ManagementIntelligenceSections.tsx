@@ -71,7 +71,7 @@ function PageHeading({ title, subtitle, onRefresh, refreshing }: { title: string
   return (
     <div className="mb-5 flex flex-col gap-3 border-b border-[#3282B8]/20 pb-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#3282B8]">NİZAM-I TÜRKİYE · YÖNETİM MODU</div>
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#3282B8]">TÜRKERA · YÖNETİM MODU</div>
         <h1 className="text-xl font-black text-white sm:text-2xl">{title}</h1>
         <p className="mt-1 max-w-3xl text-xs leading-relaxed text-[#BBE1FA]/65">{subtitle}</p>
       </div>

@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { ActiveTab } from '../App';
-import { NizamTurkiyeLogo } from './NizamTurkiyeLogo';
+import { TurkEraLogo } from './TurkEraLogo';
 
 interface HeaderProps {
   activeTab: ActiveTab;
@@ -122,12 +122,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, open, on
           type="button"
           onClick={() => onTabChange('mgmtDonations')}
           className={`flex min-w-0 items-center gap-2.5 text-left ${open ? '' : 'mr-auto'}`}
-          title="Nizam-ı Türkiye ana sayfa"
+          title="TürkEra ana sayfa"
         >
-          <NizamTurkiyeLogo className="h-10 w-10 shrink-0 drop-shadow-[0_2px_10px_rgba(223,178,83,0.35)]" />
+          <TurkEraLogo className="h-10 w-10 shrink-0 drop-shadow-[0_2px_10px_rgba(223,178,83,0.35)]" />
           {open && (
             <span className="flex min-w-0 flex-col">
-              <span className="truncate text-[13px] font-black tracking-wide bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-400 bg-clip-text text-transparent font-serif uppercase">NİZAM-I TÜRKİYE</span>
+              <span className="truncate text-[13px] font-black tracking-wide bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-400 bg-clip-text text-transparent font-serif uppercase">TÜRKERA</span>
               <span className="text-[11px] font-bold text-[#BBE1FA] font-mono">Takip Paneli</span>
             </span>
           )}

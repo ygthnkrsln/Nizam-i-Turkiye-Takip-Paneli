@@ -282,7 +282,7 @@ export function generateDonationTrackingPdf(input: DonationReportInput) {
   doc.setProperties({
     title: `WarEra Haftalik Bagis Raporu ${period}`,
     subject: "Haftalik bagis kotasi, birlik durumu ve uye bazinda gunluk bagislar",
-    author: "Nizam-i Turkiye Takip Paneli",
+    author: "TurkEra Takip Paneli",
   });
   doc.save(`WarEra_Haftalik_Bagis_Raporu_${input.weekStart}.pdf`);
 }

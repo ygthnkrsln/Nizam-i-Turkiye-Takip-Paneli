@@ -64,20 +64,20 @@ export const TAB_TO_SLUG: Record<ActiveTab, string> = {
 };
 
 const TAB_TITLES: Record<ActiveTab, string> = {
-  countryStats: 'Nizam-ı Türkiye - Ülke İstatistikleri',
-  combatArmyInfo: 'Nizam-ı Türkiye - Ordu Bilgisi',
-  combatDetails: 'Nizam-ı Türkiye - Detaylı Bilgi (Savaş Modu)',
-  combatDamage: 'Nizam-ı Türkiye - Hasar Telemetrisi (Savaş Modu)',
-  mgmtArmies: 'Nizam-ı Türkiye - Ordu Takibi (Yönetim Modu)',
-  mgmtDonations: 'Nizam-ı Türkiye - Bağış Takibi',
-  mgmtUnit: 'Nizam-ı Türkiye - Birlik Yönetimi (Yönetim Modu)',
-  mgmtOrders: 'Nizam-ı Türkiye - Görev & Emirler (Yönetim Modu)',
-  mgmtDiplomacy: 'Nizam-ı Türkiye - İttifak & Diplomasi (Yönetim Modu)',
-  mgmtCitizens: 'Nizam-ı Türkiye - Vatandaşlar & Hükümet',
-  mgmtCountryTracker: 'Nizam-ı Türkiye - Ülke Takibi & Karşılaştırma',
-  levelCalculator: 'Nizam-ı Türkiye - Seviye Hesaplayıcı',
-  prestigeOptimizer: 'Nizam-ı Türkiye - Prestij - Hasar Optimizasyonu',
-  marketPrices: 'Nizam-ı Türkiye - Market Fiyatları',
+  countryStats: 'TürkEra - Ülke İstatistikleri',
+  combatArmyInfo: 'TürkEra - Ordu Bilgisi',
+  combatDetails: 'TürkEra - Detaylı Bilgi (Savaş Modu)',
+  combatDamage: 'TürkEra - Hasar Telemetrisi (Savaş Modu)',
+  mgmtArmies: 'TürkEra - Ordu Takibi (Yönetim Modu)',
+  mgmtDonations: 'TürkEra - Bağış Takibi',
+  mgmtUnit: 'TürkEra - Birlik Yönetimi (Yönetim Modu)',
+  mgmtOrders: 'TürkEra - Görev & Emirler (Yönetim Modu)',
+  mgmtDiplomacy: 'TürkEra - İttifak & Diplomasi (Yönetim Modu)',
+  mgmtCitizens: 'TürkEra - Vatandaşlar & Hükümet',
+  mgmtCountryTracker: 'TürkEra - Ülke Takibi & Karşılaştırma',
+  levelCalculator: 'TürkEra - Seviye Hesaplayıcı',
+  prestigeOptimizer: 'TürkEra - Prestij - Hasar Optimizasyonu',
+  marketPrices: 'TürkEra - Market Fiyatları',
 };
 
 export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {

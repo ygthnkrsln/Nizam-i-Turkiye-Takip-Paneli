@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 
-interface NizamTurkiyeLogoProps {
+interface TurkEraLogoProps {
   className?: string;
   size?: number;
   showText?: boolean;
 }
 
-export const NizamTurkiyeLogo: React.FC<NizamTurkiyeLogoProps> = ({
+export const TurkEraLogo: React.FC<TurkEraLogoProps> = ({
   className = 'w-10 h-10',
   size,
 }) => {
@@ -16,8 +16,8 @@ export const NizamTurkiyeLogo: React.FC<NizamTurkiyeLogoProps> = ({
   if (!hasError) {
     return (
       <img
-        src="/assets/logo.png"
-        alt="Nizam-ı Türkiye Logosu"
+        src="/assets/logo-turkera.png"
+        alt="TürkEra Logosu"
         className={`object-contain shrink-0 select-none drop-shadow-[0_2px_12px_rgba(223,178,83,0.4)] ${className}`}
         style={size ? { width: size, height: size } : undefined}
         onError={() => setHasError(true)}
@@ -92,7 +92,7 @@ export const NizamTurkiyeLogo: React.FC<NizamTurkiyeLogoProps> = ({
         fontSize="28"
         letterSpacing="4"
       >
-        NİZAM-I TÜRKİYE
+        TÜRKERA
       </text>
     </svg>
   );
