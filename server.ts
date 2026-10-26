@@ -14,6 +14,7 @@ import {
   getCurrentWeeklyDamage,
   getMilitaryUnitWeeklyDamage,
 } from "./src/lib/dailyDamage.ts";
+import { calculatePotentialDamage, isCombatBuild } from "./src/lib/potentialDamage.ts";
 import { COUNTRY_STATS_ARMIES } from "./src/config/countryStatsArmies.js";
 import { getTrpcData } from "./src/utils/wareraTransactions.js";
 import economyDonationsHandler from "./src/server/handlers/economy-donations.js";
@@ -2021,12 +2022,23 @@ app.get("/api/combat-telemetry", async (req, res) => {
         currentWeekly,
         baselineWeekly,
       );
+      const isFighter = isCombatBuild(u);
+      const potentialDamage = calculatePotentialDamage(
+        u.leveling?.level || 1,
+        healthCurrent,
+        healthMax,
+        hungerCurrent,
+        hungerMax,
+        isFighter,
+      );
 
       return {
         userId,
         username: u.username || "Bilinmeyen Asker",
         avatarUrl: u.avatarUrl || "",
         level: u.leveling?.level || 1,
+        isFighter,
+        potentialDamage,
         militaryRank: u.militaryRank || 1,
         role,
         isLeader,

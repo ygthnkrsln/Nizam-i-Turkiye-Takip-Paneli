@@ -46,8 +46,8 @@ function turkeyDate(at = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(at);
 }
 
-function inputUrl(procedure: string, input?: Record<string, any>) {
-  const url = new URL(`https://api2.warera.io/trpc/${procedure}`);
+function inputUrl(procedure: string, input?: Record<string, any>, apiHost = "api2.warera.io") {
+  const url = new URL(`https://${apiHost}/trpc/${procedure}`);
   if (input && Object.keys(input).length) url.searchParams.set("input", JSON.stringify(input));
   return url.toString();
 }
@@ -80,11 +80,19 @@ async function fetchWarEra(url: string, retries = 3): Promise<Response> {
   throw lastError instanceof Error ? lastError : new Error("WarEra API isteği tamamlanamadı.");
 }
 
-async function query(procedure: string, input?: Record<string, any>, force = false, ttl = QUERY_TTL_MS): Promise<any> {
+async function query(procedure: string, input?: Record<string, any>, force = false, ttl = QUERY_TTL_MS, publicApi3 = false): Promise<any> {
   const key = `${procedure}:${JSON.stringify(input || {})}`;
   const cached = queryCache.get(key);
   if (!force && cached && Date.now() - cached.timestamp < ttl) return cached.data;
-  const response = await fetchWarEra(inputUrl(procedure, input));
+  let response: Response;
+  if (publicApi3) {
+    response = await fetch(inputUrl(procedure, input, "api3.warera.io"), { headers: { Accept: "application/json" } });
+    if (response.status === 429 || response.status >= 500) {
+      response = await fetchWarEra(inputUrl(procedure, input));
+    }
+  } else {
+    response = await fetchWarEra(inputUrl(procedure, input));
+  }
   if (!response.ok) throw Object.assign(new Error(`${procedure} verisi alınamadı (${response.status}).`), { statusCode: response.status });
   const data = unpack(await response.json());
   queryCache.set(key, { timestamp: Date.now(), data });
@@ -139,7 +147,8 @@ function findHomeCountry(countries: any[]): any | null {
 }
 
 async function getCountries(force = false): Promise<{ raw: any[]; home: any }> {
-  const raw = listOf(await query("country.getAllCountries", undefined, force, 60_000));
+  // The official API3 docs expose country.getAllCountries as a public GET endpoint.
+  const raw = listOf(await query("country.getAllCountries", undefined, force, 60_000, true));
   const home = findHomeCountry(raw);
   if (!home) throw new Error("Türkiye ülke verisi WarEra API yanıtında bulunamadı.");
   return { raw, home };
@@ -157,6 +166,7 @@ function metricCountry(raw: any) {
     name: String(raw?.name || "Bilinmeyen ülke"),
     code: String(raw?.code || ""),
     wealth: finite(rankings?.countryWealth?.value ?? raw?.wealth),
+    treasury: finite(raw?.money),
     population: finite(raw?.currentPopulation ?? raw?.population),
     activePopulation: finite(rankings?.countryActivePopulation?.value),
     development: finite(raw?.currentDevelopment ?? raw?.development),
@@ -221,8 +231,8 @@ async function countryTrackerData(force = false) {
     fetchedAt: new Date().toISOString(),
     historyDays: saved.snapshots.length,
     historySavedToSupabase: saved.saved,
-    source: "country.getAllCountries · country rankings",
-    note: "Kişi başı servet ve vergi geliri API tarafından verilmediği için bu ekranda hesaplanmıyor. Ülke geçmişi günlük mevcut cron üzerinden tutulur.",
+    source: "api3.warera.io/trpc · country.getAllCountries · country rankings",
+    note: "Ülke servet sıralama değeri ve ülke hazinesi ayrı API alanlarıdır. Geçmiş günlük mevcut cron üzerinden tutulur.",
   };
 }
 
@@ -349,7 +359,7 @@ async function warRoomData(force = false) {
     const foreignNeighbors = (Array.isArray(region?.neighbors) ? region.neighbors : [])
       .map((id: any) => regionRows.find((candidate) => String(candidate?._id || candidate?.id || "") === String(id)))
       .filter((candidate: any) => candidate && String(candidate?.country || "") !== homeId);
-    const neighborIds = Array.from(new Set(foreignNeighbors.map((candidate: any) => String(candidate?.country || "")).filter(Boolean)));
+    const neighborIds: string[] = Array.from(new Set<string>(foreignNeighbors.map((candidate: any) => String(candidate?.country || "")).filter(Boolean)));
     const hostile = neighborIds.filter((id) => {
       const neighbor = countryMap.get(id);
       return id === String(home?.enemy || "") || (Array.isArray(home?.warsWith) && home.warsWith.includes(id)) || neighbor?.enemy === homeId;
@@ -476,52 +486,15 @@ function countdownRows(dates: any, now: number) {
   }).sort((a, b) => a.hoursLeft - b.hoursLeft);
 }
 
-async function citizensData(force = false) {
-  const [{ raw: countries, home }, config, dates, government] = await Promise.all([
-    getCountries(force),
-    getGameConfig(force).catch(() => ({})),
-    query("gameConfig.getDates", undefined, force, 5 * 60_000).catch(() => ({})),
-    query("government.getByCountryId", { countryId: TURKEY_ID }, force, 3 * 60_000).catch(() => ({})),
-  ]);
-  const homeId = countryId(home);
-  const ids: string[] = [];
-  const joinedAt = new Map<string, string | null>();
-  let cursor: string | null = null;
-  let complete = false;
-  const maxPages = Math.ceil(USER_PROFILE_LIMIT / 100);
-  for (let page = 0; page < maxPages; page++) {
-    const input: Record<string, any> = { countryId: homeId, limit: 100 };
-    if (cursor) input.cursor = cursor;
-    const response = await query("user.getUsersByCountry", input, force, 3 * 60_000);
-    const items = listOf(response);
-    for (const row of items) {
-      const id = String(row?._id || row?.id || (typeof row === "string" ? row : ""));
-      if (!id) continue;
-      ids.push(id);
-      joinedAt.set(id, typeof row === "object" ? row.createdAt || null : null);
-    }
-    cursor = response?.nextCursor ? String(response.nextCursor) : null;
-    if (!cursor || !items.length) { complete = true; break; }
-  }
-  const rolesById = idsInRoles(government);
-  const extraGovernmentIds = Array.from(rolesById.keys()).filter((id) => !joinedAt.has(id));
-  const [profiles, extraGovernmentProfiles] = await Promise.all([
-    queryBatchUsers(ids),
-    queryBatchUsers(extraGovernmentIds),
-  ]);
-  const election = config?.election || {};
-  const voteMin = Number(election.voteMinLevel || 20);
-  const candidateMin = Number(election.candidateMinLevel || 15);
-  const minVoteDays = Number(election.voteMinDaysSinceCitizenshipChange || 0);
-  const now = Date.now();
-  const rows = profiles.flatMap((profile, index) => {
-    if (!profile || typeof profile !== "object") return [];
-    const id = String(profile?._id || profile?.id || ids[index] || "");
-    const copy = { ...profile, _id: id };
-    return [profileRow(copy, joinedAt.get(id) || null, rolesById.get(id) || [], voteMin, minVoteDays, now)];
-  }).sort((a, b) => (b.level - a.level) || String(a.name).localeCompare(b.name, "tr"));
-  const counts = {
-    total: ids.length,
+const CITIZEN_COUNTRY_FILTERS = [
+  { key: "tr", label: "Türkiye", matches: (code: string, name: string) => code === "tr" || code === "tur" || name.includes("turkiye") || name.includes("turkey") },
+  { key: "az", label: "Azerbaycan", matches: (code: string, name: string) => code === "az" || name.includes("azerbaycan") || name.includes("azerbaijan") },
+  { key: "cm", label: "Kamerun", matches: (code: string, name: string) => code === "cm" || code === "cmr" || name.includes("kamerun") || name.includes("cameroon") },
+];
+
+function citizenCounts(rows: AnyRecord[], total = rows.length) {
+  return {
+    total,
     profiled: rows.length,
     active: rows.filter((row) => row.status === "Aktif").length,
     sleeping: rows.filter((row) => row.status === "Uykuda").length,
@@ -534,73 +507,168 @@ async function citizensData(force = false) {
     novices: rows.filter((row) => row.build === "Acemi").length,
     voters: rows.filter((row) => row.canVote).length,
   };
-  const governmentRows = rows;
-  const peopleById = new Map<string, AnyRecord>();
-  for (const row of governmentRows) peopleById.set(row.id, row);
-  extraGovernmentProfiles.forEach((profile, index) => {
-    if (!profile || typeof profile !== "object") return;
-    const id = String(profile?._id || profile?.id || extraGovernmentIds[index] || "");
-    if (id) peopleById.set(id, { id, name: profile?.username || id.slice(0, 8), level: finite(profile?.leveling?.level), status: "Görevli", tone: "info" });
+}
+
+async function citizensData(force = false, countryFilter = "all") {
+  const [{ raw: countries }, config, dates] = await Promise.all([
+    getCountries(force),
+    getGameConfig(force).catch(() => ({})),
+    query("gameConfig.getDates", undefined, force, 5 * 60_000).catch(() => ({})),
+  ]);
+  const normalizedCountries = countries.map((country) => ({
+    country,
+    code: String(country?.code || "").toLowerCase(),
+    name: String(country?.name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ı/g, "i").toLowerCase(),
+  }));
+  const availableCountries = CITIZEN_COUNTRY_FILTERS.flatMap((filter) => {
+    const match = normalizedCountries.find((item) => filter.matches(item.code, item.name))
+      || (filter.key === "tr" ? normalizedCountries.find((item) => countryId(item.country) === TURKEY_ID) : undefined);
+    return match ? [{ ...metricCountry(match.country), raw: match.country, key: filter.key, label: filter.label }] : [];
   });
-  const person = (id: any, role: string) => {
-    if (!id || typeof id !== "string") return null;
-    const row = peopleById.get(id);
-    return { id, name: row?.name || id.slice(0, 8), role, url: `https://app.warera.io/user/${id}`, level: row?.level ?? null, status: row?.status || "Bilinmiyor", tone: row?.tone || "info" };
-  };
-  const offices = [
-    person(government?.president, "Devlet Başkanı"),
-    person(government?.vicePresident, "Başkan Yardımcısı"),
-    ...Object.entries(government || {}).filter(([key, value]) => key.startsWith("minOf") && typeof value === "string").map(([key, value]) => person(value, MINISTRY_NAMES[key] || key)),
-  ].filter(Boolean);
-  const congress = (government?.congressMembers || []).map((id: any) => person(id, "Kongre üyesi")).filter(Boolean);
-  const countdowns = countdownRows(dates, now);
+  const requestedFilter = CITIZEN_COUNTRY_FILTERS.some((filter) => filter.key === countryFilter) ? countryFilter : "all";
+  const selectedCountries = requestedFilter === "all"
+    ? availableCountries
+    : availableCountries.filter((country) => country.key === requestedFilter);
+  if (!selectedCountries.length) throw new Error("Türkiye, Azerbaycan ve Kamerun ülke bilgileri WarEra API yanıtında bulunamadı.");
+
+  const election = config?.election || {};
+  const voteMin = Number(election.voteMinLevel || 20);
+  const candidateMin = Number(election.candidateMinLevel || 15);
+  const minVoteDays = Number(election.voteMinDaysSinceCitizenshipChange || 0);
+  const now = Date.now();
+  const countryData = await mapWithConcurrency(selectedCountries, 3, async (country) => {
+    const government = await query("government.getByCountryId", { countryId: country.id }, force, 3 * 60_000).catch(() => ({}));
+    const ids: string[] = [];
+    const joinedAt = new Map<string, string | null>();
+    let cursor: string | null = null;
+    let complete = false;
+    const maxPages = Math.ceil(USER_PROFILE_LIMIT / 100);
+    for (let page = 0; page < maxPages; page++) {
+      const input: Record<string, any> = { countryId: country.id, limit: 100 };
+      if (cursor) input.cursor = cursor;
+      const response = await query("user.getUsersByCountry", input, force, 3 * 60_000);
+      const items = listOf(response);
+      for (const row of items) {
+        const id = String(row?._id || row?.id || (typeof row === "string" ? row : ""));
+        if (!id) continue;
+        ids.push(id);
+        joinedAt.set(id, typeof row === "object" ? row.createdAt || null : null);
+      }
+      cursor = response?.nextCursor ? String(response.nextCursor) : null;
+      if (!cursor || !items.length) { complete = true; break; }
+    }
+    return { country, government, ids, joinedAt, complete };
+  });
+
+  const allIds = Array.from(new Set(countryData.flatMap((item) => item.ids)));
+  const rolesByCountry = countryData.map((item) => idsInRoles(item.government));
+  const extraGovernmentIds = Array.from(new Set(countryData.flatMap((item, index) =>
+    Array.from(rolesByCountry[index].keys()).filter((id) => !item.ids.includes(id)),
+  )));
+  const [profiles, extraGovernmentProfiles] = await Promise.all([
+    queryBatchUsers(allIds),
+    queryBatchUsers(extraGovernmentIds),
+  ]);
+  const profilesById = new Map<string, any>();
+  profiles.forEach((profile, index) => {
+    const id = String(profile?._id || profile?.id || allIds[index] || "");
+    if (id && profile && typeof profile === "object") profilesById.set(id, profile);
+  });
+  const extraProfilesById = new Map<string, any>();
+  extraGovernmentProfiles.forEach((profile, index) => {
+    const id = String(profile?._id || profile?.id || extraGovernmentIds[index] || "");
+    if (id && profile && typeof profile === "object") extraProfilesById.set(id, profile);
+  });
+
+  const governments = countryData.map((item, index) => {
+    const rolesById = rolesByCountry[index];
+    const localRows = item.ids.flatMap((id) => {
+      const profile = profilesById.get(id);
+      if (!profile) return [];
+      const row = profileRow({ ...profile, _id: id }, item.joinedAt.get(id) || null, rolesById.get(id) || [], voteMin, minVoteDays, now);
+      return [{ ...row, countryKey: item.country.key, countryName: item.country.label }];
+    });
+    const peopleById = new Map<string, AnyRecord>(localRows.map((row): [string, AnyRecord] => [row.id, row]));
+    for (const id of rolesById.keys()) {
+      const profile = extraProfilesById.get(id);
+      if (profile) peopleById.set(id, { id, name: profile?.username || id.slice(0, 8), level: finite(profile?.leveling?.level), status: "Görevli", tone: "info" });
+    }
+    const person = (id: any, role: string) => {
+      if (!id || typeof id !== "string") return null;
+      const row = peopleById.get(id);
+      return { id, name: row?.name || id.slice(0, 8), role, url: "https://app.warera.io/user/" + id, level: row?.level ?? null, status: row?.status || "Bilinmiyor", tone: row?.tone || "info" };
+    };
+    const government = item.government;
+    const offices = [
+      person(government?.president, "Devlet Başkanı"),
+      person(government?.vicePresident, "Başkan Yardımcısı"),
+      ...Object.entries(government || {}).filter(([key, value]) => key.startsWith("minOf") && typeof value === "string").map(([key, value]) => person(value, MINISTRY_NAMES[key] || key)),
+    ].filter(Boolean);
+    const congress = (government?.congressMembers || []).map((id: any) => person(id, "Kongre üyesi")).filter(Boolean);
+    const partyId = typeof item.country.raw?.rulingParty === "string" ? item.country.raw.rulingParty : item.country.raw?.rulingParty?._id;
+    const partyName = typeof item.country.raw?.rulingParty === "object" ? item.country.raw.rulingParty?.name : item.country.raw?.rulingPartyName;
+    const counts = citizenCounts(localRows, item.ids.length);
+    return {
+      country: item.country,
+      rows: localRows,
+      counts,
+      complete: item.complete,
+      government: {
+        president: offices.find((office: any) => office.role === "Devlet Başkanı") || null,
+        offices,
+        congress,
+        party: { id: partyId || null, name: partyName || (partyId ? "Parti " + String(partyId).slice(0, 8) : "Parti bilgisi yok") },
+        voters: { eligible: counts.voters, minLevel: voteMin, candidateMinLevel: candidateMin, minDaysSinceCitizenshipChange: minVoteDays },
+        countdowns: countdownRows(dates, now),
+      },
+    };
+  });
+  const rows = governments.flatMap((item) => item.rows).sort((a, b) => (b.level - a.level) || String(a.name).localeCompare(b.name, "tr"));
+  const countKeys = ["total", "profiled", "active", "sleeping", "inactive", "unknownStatus", "new", "soldiers", "economists", "mixed", "novices", "voters"] as const;
+  const counts = Object.fromEntries(countKeys.map((key) => [key, governments.reduce((sum, item) => sum + item.counts[key], 0)]));
+  const complete = governments.every((item) => item.complete);
+  const activeCountry = requestedFilter === "all"
+    ? governments.find((item) => item.country.key === "tr") || governments[0]
+    : governments.find((item) => item.country.key === requestedFilter);
   const actions: Array<{ tone: string; text: string }> = [];
-  if (!complete) actions.push({ tone: "warn", text: `Vatandaş listesi ilk ${ids.length} kişiyle sınırlı; kalan profiller sonraki sayfalarda.` });
-  if (counts.inactive > 0) actions.push({ tone: counts.inactive > counts.active ? "bad" : "warn", text: `${counts.inactive} vatandaş 3 günden uzun süredir giriş yapmamış görünüyor.` });
-  for (const countdown of countdowns.filter((item) => item.key.includes("Election") && item.hoursLeft <= 48)) actions.push({ tone: "warn", text: `${countdown.name} ${countdown.hoursLeft.toFixed(0)} saat sonra; ${counts.voters} uygun seçmen görünüyor.` });
-  for (const office of offices as any[]) if (office.status === "İnaktif") actions.push({ tone: "bad", text: `${office.role} ${office.name} inaktif görünüyor.` });
-  const partyId = typeof home?.rulingParty === "string" ? home.rulingParty : home?.rulingParty?._id;
-  const partyName = typeof home?.rulingParty === "object" ? home.rulingParty?.name : home?.rulingPartyName;
+  if (!complete) actions.push({ tone: "warn", text: "Bir veya daha fazla vatandaş listesi API sayfalama sınırına ulaştı; bazı profiller eksik olabilir." });
+  if (counts.inactive > 0) actions.push({ tone: counts.inactive > counts.active ? "bad" : "warn", text: counts.inactive + " vatandaş 3 günden uzun süredir giriş yapmamış görünüyor." });
+  for (const item of governments) {
+    for (const countdown of item.government.countdowns.filter((row: AnyRecord) => row.key.includes("Election") && row.hoursLeft <= 48)) {
+      actions.push({ tone: "warn", text: item.country.label + ": " + countdown.name + " " + countdown.hoursLeft.toFixed(0) + " saat sonra; " + item.counts.voters + " uygun seçmen görünüyor." });
+    }
+    for (const office of item.government.offices) if (office.status === "İnaktif") actions.push({ tone: "bad", text: item.country.label + ": " + office.role + " " + office.name + " inaktif görünüyor." });
+  }
+  const missingProfiles = allIds.length - profilesById.size;
+  const profileCount = profilesById.size;
+  const publicCountries = availableCountries.map(({ raw, ...country }) => country);
+  const publicGovernments = governments.map(({ country, rows: countryRows, complete: countryComplete, ...data }) => ({
+    country: publicCountries.find((item) => item.key === country.key),
+    rows: countryRows,
+    complete: countryComplete,
+    ...data,
+  }));
   return {
     success: true,
-    country: metricCountry(home),
-    total: ids.length,
+    country: requestedFilter === "all"
+      ? { key: "all", code: "all", name: "Türkiye · Azerbaycan · Kamerun" }
+      : publicCountries.find((item) => item.key === requestedFilter),
+    selectedCountry: requestedFilter,
+    total: counts.total,
     complete,
     profileLimit: USER_PROFILE_LIMIT,
     counts,
     rows,
-    government: {
-      president: offices.find((office: any) => office.role === "Devlet Başkanı") || null,
-      offices,
-      congress,
-      party: { id: partyId || null, name: partyName || (partyId ? `Parti ${String(partyId).slice(0, 8)}` : "Parti bilgisi yok") },
-      voters: { eligible: counts.voters, minLevel: voteMin, candidateMinLevel: candidateMin, minDaysSinceCitizenshipChange: minVoteDays },
-      countdowns,
-    },
+    governments: publicGovernments,
+    government: publicGovernments.find((item) => item.country.key === (activeCountry?.country.key || "tr"))?.government,
     actions,
     fetchedAt: new Date().toISOString(),
     source: "user.getUsersByCountry · user.getUserLite · government.getByCountryId · gameConfig",
-    note: `Asker/ekonomist sınıfı, askeri ve ekonomi beceri seviyeleri karşılaştırılarak hesaplanır. Profil alınabilen kişi: ${rows.length}/${ids.length}.`,
-    warnings: profiles.filter((profile) => !profile).length ? [`${profiles.filter((profile) => !profile).length} vatandaş profil verisi alınamadı.`] : [],
-    countries,
+    note: "Asker/ekonomist sınıfı askeri ve ekonomi beceri seviyeleri karşılaştırılarak hesaplanır. Profil alınabilen kişi: " + profileCount + "/" + counts.total + ".",
+    warnings: missingProfiles ? [missingProfiles + " vatandaş profil verisi alınamadı."] : [],
+    countries: publicCountries,
   };
 }
-
-async function taxMetadata(force = false) {
-  const [{ home }, config] = await Promise.all([getCountries(force), getGameConfig(force).catch(() => ({}))]);
-  const taxes = home?.taxes || {};
-  const maxTax = finite(config?.country?.maxTaxAmount ?? config?.tax?.maxIncomeTax) ?? 45;
-  return {
-    success: true,
-    country: metricCountry(home),
-    currentTaxPct: finite(taxes?.income) ?? 0,
-    maxTaxPct: Math.max(0, Math.min(100, maxTax)),
-    fetchedAt: new Date().toISOString(),
-    source: "country.getAllCountries.taxes.income · gameConfig.country.maxTaxAmount",
-    note: "WarEra API günlük gelir vergisi toplamını Nizam ekranlarında sunmuyor. Günlük brüt ücret matrahı kullanıcı tarafından girilir; davranışsal elde tutma oranı varsayımdır.",
-  };
-}
-
 async function dailyDashboard(force = false) {
   const [warResult, citizenResult, countryResult, configResult] = await Promise.allSettled([
     warRoomData(force),
@@ -625,7 +693,6 @@ async function dailyDashboard(force = false) {
   for (const election of countdowns.filter((item) => item.key.includes("Election") && item.hoursLeft <= 48)) actions.push({ domain: "Hükümet", tone: "warn", text: `${election.name} ${election.hoursLeft.toFixed(0)} saat sonra.`, tab: "mgmtCitizens" });
   const currentTax = finite(home?.taxes?.income);
   const maxTax = finite(config?.country?.maxTaxAmount ?? config?.tax?.maxIncomeTax) ?? 45;
-  if (currentTax !== null && currentTax > maxTax) actions.push({ domain: "Ekonomi", tone: "bad", text: `API verisindeki vergi oranı oyun sınırı olan %${maxTax} değerini aşıyor; vergi verisini kontrol et.`, tab: "mgmtTax" });
   if (!people) actions.push({ domain: "Vatandaşlar", tone: "warn", text: "Vatandaş özeti alınamadı.", tab: "mgmtCitizens" });
   if (!war) actions.push({ domain: "Savaş", tone: "warn", text: "Savaş durumu alınamadı.", tab: "mgmtWarRoom" });
   actions.sort((a, b) => ({ bad: 0, warn: 1, good: 2 }[a.tone as "bad" | "warn" | "good"] - ({ bad: 0, warn: 1, good: 2 }[b.tone as "bad" | "warn" | "good"])));
@@ -636,7 +703,7 @@ async function dailyDashboard(force = false) {
       { key: "war", label: "Savaş", value: war?.counts?.active ?? null, detail: war ? `${war.counts.allied} müttefik muharebesi` : "Veri alınamadı", tone: war?.activeBattles?.some((battle: any) => battle.tone === "bad") ? "bad" : "good", tab: "mgmtWarRoom" },
       { key: "people", label: "Vatandaş", value: people?.counts?.active ?? null, detail: people ? `${people.counts.total} toplam · ${people.counts.new} yeni · ${people.counts.inactive} inaktif` : "Veri alınamadı", tone: people && people.counts.active / Math.max(1, people.counts.total) >= 0.6 ? "good" : "warn", tab: "mgmtCitizens" },
       { key: "government", label: "Seçmen", value: people?.government?.voters?.eligible ?? null, detail: people?.government?.countdowns?.find((item: any) => item.key.includes("Election"))?.name || "Yaklaşan seçim bilgisi yok", tone: "info", tab: "mgmtCitizens" },
-      { key: "tax", label: "Gelir vergisi", value: currentTax, detail: currentTax === null ? "Veri alınamadı" : `Oyun sınırı %${maxTax}`, tone: "info", tab: "mgmtTax" },
+      { key: "tax", label: "Gelir vergisi", value: currentTax, detail: currentTax === null ? "Veri alınamadı" : `Oyun sınırı %${maxTax}`, tone: "info" },
       { key: "tracking", label: "Ülke takibi", value: currentCountry?.weeklyDamage, detail: "Haftalık ülke hasarı", tone: "info", tab: "mgmtCountryTracker" },
     ],
     actions: actions.slice(0, 12),
@@ -651,13 +718,10 @@ async function dailyDashboard(force = false) {
   };
 }
 
-async function loadView(view: string, force: boolean) {
+async function loadView(view: string, force: boolean, countryFilter = "all") {
   switch (view) {
-    case "war-room": return warRoomData(force);
-    case "citizens": return citizensData(force);
+    case "citizens": return citizensData(force, countryFilter);
     case "country-tracker": return countryTrackerData(force);
-    case "daily-dashboard": return dailyDashboard(force);
-    case "tax-simulator": return taxMetadata(force);
     default: throw Object.assign(new Error("Geçersiz yönetim görünümü."), { statusCode: 400 });
   }
 }
@@ -669,10 +733,11 @@ export default async function handler(req: any, res: any) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET") return res.status(405).json({ success: false, error: "Method not allowed" });
   const view = String(req.query?.view || "");
-  const allowed = new Set(["war-room", "citizens", "country-tracker", "daily-dashboard", "tax-simulator"]);
+  const allowed = new Set(["citizens", "country-tracker"]);
   if (!allowed.has(view)) return res.status(400).json({ success: false, error: "Geçersiz yönetim görünümü." });
   const force = req.query?.refresh === "true";
-  const key = `nizam_management_${view}_v1`;
+  const countryFilter = String(req.query?.country || "all");
+  const key = `nizam_management_${view}_${view === "citizens" ? countryFilter : "all"}_v2`;
   const ttl = view === "citizens" ? 10 * 60_000 : VIEW_TTL_MS;
   try {
     const cached = viewCache.get(key);
@@ -684,7 +749,7 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json(persisted.payload);
       }
     }
-    const payload = await loadView(view, force);
+    const payload = await loadView(view, force, countryFilter);
     viewCache.set(key, { timestamp: Date.now(), data: payload });
     await saveManagementOverviewCache(key, payload);
     return res.status(200).json(payload);

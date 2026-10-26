@@ -2105,6 +2105,8 @@ export interface ManagementMemberItem {
   level: number;
   wealth: number;
   playerMode: "economy" | "combat";
+  isFighter: boolean;
+  potentialDamage: number;
   isEconomy?: boolean;
   ecoSkillPoints?: number;
   totalSkillPoints?: number;
@@ -2130,6 +2132,7 @@ export interface ManagementArmyItem {
   health: { current: number; max: number; percentage: number };
   hunger: { current: number; max: number; percentage: number };
   todayDamage: number;
+  potentialDamage: number;
   weeklyDamage: number;
   donations: {
     targetDonation: number;
@@ -2152,6 +2155,7 @@ export interface ManagementOverviewResponse {
     totalHealth: { current: number; max: number; percentage: number };
     totalHunger: { current: number; max: number; percentage: number };
     totalTodayDamage: number;
+    totalPotentialDamage: number;
     donations: {
       totalTarget: number;
       totalCollected: number;
@@ -2216,17 +2220,16 @@ export async function fetchManagementTreasury(forceRefresh = false): Promise<Man
 }
 
 export type ManagementIntelligenceView =
-  | "war-room"
   | "citizens"
-  | "country-tracker"
-  | "daily-dashboard"
-  | "tax-simulator";
+  | "country-tracker";
 
 export async function fetchManagementIntelligence<T = Record<string, any>>(
   view: ManagementIntelligenceView,
   forceRefresh = false,
+  queryParams: Record<string, string> = {},
 ): Promise<T> {
   const query = new URLSearchParams({ view });
+  Object.entries(queryParams).forEach(([key, value]) => query.set(key, value));
   if (forceRefresh) query.set("refresh", "true");
   const response = await fetch(`/api/management-overview?${query.toString()}`);
   let payload: any = null;
@@ -2292,7 +2295,12 @@ export async function fetchManagementOverview(
     return cached.data;
   }
 
-  let res = await fetch(`/api/management-overview${queryStr}`, { signal });
+  const userApiKey = getUserApiKey();
+  const requestOptions: RequestInit = {
+    signal,
+    ...(userApiKey ? { headers: { "X-User-API-Key": userApiKey } } : {}),
+  };
+  let res = await fetch(`/api/management-overview${queryStr}`, requestOptions);
   for (let retry = 0; res.status === 429 && retry < 2; retry++) {
     const retryAfter = Math.max(
       1,
@@ -2313,7 +2321,7 @@ export async function fetchManagementOverview(
       }, retryAfter * 1000);
       signal?.addEventListener("abort", onAbort, { once: true });
     });
-    res = await fetch(`/api/management-overview${queryStr}`, { signal });
+    res = await fetch(`/api/management-overview${queryStr}`, requestOptions);
   }
   if (!res.ok) {
     if (res.status === 429) {

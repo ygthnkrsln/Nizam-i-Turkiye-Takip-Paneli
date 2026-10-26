@@ -16,12 +16,8 @@ const MilitaryDetailsSection = React.lazy(() => import('./components/MilitaryDet
 const DailyDamageTelemetrySection = React.lazy(() => import('./components/DailyDamageTelemetrySection').then((module) => ({ default: module.DailyDamageTelemetrySection })));
 const ManagementArmyTrackingSection = React.lazy(() => import('./components/ManagementArmyTrackingSection').then((module) => ({ default: module.ManagementArmyTrackingSection })));
 const ManagementDonationTrackingSection = React.lazy(() => import('./components/ManagementDonationTrackingSection').then((module) => ({ default: module.ManagementDonationTrackingSection })));
-const ManagementTreasurySection = React.lazy(() => import('./components/ManagementTreasurySection').then((module) => ({ default: module.ManagementTreasurySection })));
-const ManagementDailyDashboardSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementDailyDashboardSection })));
-const ManagementWarRoomSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementWarRoomSection })));
 const ManagementCitizensSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementCitizensSection })));
 const ManagementCountryTrackerSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementCountryTrackerSection })));
-const ManagementTaxSimulationSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementTaxSimulationSection })));
 const LevelCalculatorSection = React.lazy(() => import('./components/LevelCalculatorSection').then((module) => ({ default: module.LevelCalculatorSection })));
 const PrestigeDamageOptimizerSection = React.lazy(() => import('./components/PrestigeDamageOptimizerSection').then((module) => ({ default: module.PrestigeDamageOptimizerSection })));
 const MarketPricesSection = React.lazy(() => import('./components/MarketPricesSection').then((module) => ({ default: module.MarketPricesSection })));
@@ -36,8 +32,6 @@ import {
 import { AlertCircle } from 'lucide-react';
 
 export type ActiveTab = 
-  | 'donations' 
-  | 'armyStats' 
   | 'countryStats' 
   | 'combatArmyInfo' 
   | 'combatDetails' 
@@ -46,66 +40,50 @@ export type ActiveTab =
   | 'mgmtDonations'
   | 'mgmtUnit'
   | 'mgmtOrders'
-  | 'mgmtTreasury'
   | 'mgmtDiplomacy'
-  | 'mgmtDashboard'
-  | 'mgmtWarRoom'
   | 'mgmtCitizens'
   | 'mgmtCountryTracker'
-  | 'mgmtTax'
   | 'levelCalculator'
   | 'prestigeOptimizer'
   | 'marketPrices';
 
 
 export const TAB_TO_SLUG: Record<ActiveTab, string> = {
-  donations: 'bagis-takibi',
-  armyStats: 'ordu-istatistikleri',
   countryStats: 'ulke-istatistikleri',
   combatArmyInfo: 'ordu-bilgisi',
   combatDetails: 'detayli-bilgi',
   combatDamage: 'hasar',
   mgmtArmies: 'ordu-takibi',
-  mgmtDonations: 'yonetim-bagis',
+  mgmtDonations: 'bagis-takibi',
   mgmtUnit: 'birlik-yonetimi',
   mgmtOrders: 'gorev-ve-emirler',
-  mgmtTreasury: 'kasa-lojistik',
   mgmtDiplomacy: 'ittifak-diplomasi',
-  mgmtDashboard: 'yonetim-ozeti',
-  mgmtWarRoom: 'savas-merkezi',
   mgmtCitizens: 'vatandaslar-ve-hukumet',
   mgmtCountryTracker: 'ulke-takibi',
-  mgmtTax: 'vergi-simulatoru',
   levelCalculator: 'seviye-hesaplayici',
   prestigeOptimizer: 'prestij-hasar-optimizasyonu',
   marketPrices: 'market-fiyatlari',
 };
 
 const TAB_TITLES: Record<ActiveTab, string> = {
-  donations: 'Nizam-ı Türkiye - Bağış Takip Paneli',
-  armyStats: 'Nizam-ı Türkiye - Ordu İstatistikleri',
   countryStats: 'Nizam-ı Türkiye - Ülke İstatistikleri',
-  combatArmyInfo: 'Nizam-ı Türkiye - Ordu Bilgisi (Savaş Modu)',
+  combatArmyInfo: 'Nizam-ı Türkiye - Ordu Bilgisi',
   combatDetails: 'Nizam-ı Türkiye - Detaylı Bilgi (Savaş Modu)',
   combatDamage: 'Nizam-ı Türkiye - Hasar Telemetrisi (Savaş Modu)',
   mgmtArmies: 'Nizam-ı Türkiye - Ordu Takibi (Yönetim Modu)',
-  mgmtDonations: 'Nizam-ı Türkiye - Bağış Takibi (Yönetim Modu)',
+  mgmtDonations: 'Nizam-ı Türkiye - Bağış Takibi',
   mgmtUnit: 'Nizam-ı Türkiye - Birlik Yönetimi (Yönetim Modu)',
   mgmtOrders: 'Nizam-ı Türkiye - Görev & Emirler (Yönetim Modu)',
-  mgmtTreasury: 'Nizam-ı Türkiye - Kasa & Lojistik (Yönetim Modu)',
   mgmtDiplomacy: 'Nizam-ı Türkiye - İttifak & Diplomasi (Yönetim Modu)',
-  mgmtDashboard: 'Nizam-ı Türkiye - Günlük Yönetim Özeti',
-  mgmtWarRoom: 'Nizam-ı Türkiye - Ülke Savaş Merkezi',
   mgmtCitizens: 'Nizam-ı Türkiye - Vatandaşlar & Hükümet',
   mgmtCountryTracker: 'Nizam-ı Türkiye - Ülke Takibi & Karşılaştırma',
-  mgmtTax: 'Nizam-ı Türkiye - Vergi Simülatörü & Gelir Tahmini',
   levelCalculator: 'Nizam-ı Türkiye - Seviye Hesaplayıcı',
   prestigeOptimizer: 'Nizam-ı Türkiye - Prestij - Hasar Optimizasyonu',
   marketPrices: 'Nizam-ı Türkiye - Market Fiyatları',
 };
 
 export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
-  if (typeof window === 'undefined') return { tab: 'donations', muId: null };
+  if (typeof window === 'undefined') return { tab: 'mgmtDonations', muId: null };
 
   const path = window.location.pathname.toLowerCase().replace(/^\/+|\/+$/g, '');
   const segments = path.split('/').filter(Boolean);
@@ -140,30 +118,26 @@ export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
   }
 
   // Map slug to ActiveTab
-  let tab: ActiveTab = 'donations';
+  let tab: ActiveTab = 'mgmtDonations';
 
   if (tabSlug === 'ordu-takibi' || tabSlug === 'ordu-takip' || tabSlug === 'yonetim-ordu-takibi') {
     tab = 'mgmtArmies';
-  } else if (tabSlug === 'yonetim-bagis' || tabSlug === 'bagis-hedef' || tabSlug === 'bagis-takibi-yonetim' || tabSlug === 'yonetim-bagis-takibi') {
+  } else if (tabSlug === 'bagis-takibi' || tabSlug === 'bagis-takip' || tabSlug === 'bagis' || tabSlug === 'donations' || tabSlug === 'donation' || tabSlug === 'yonetim-bagis' || tabSlug === 'bagis-hedef' || tabSlug === 'bagis-takibi-yonetim' || tabSlug === 'yonetim-bagis-takibi') {
     tab = 'mgmtDonations';
   } else if (tabSlug === 'birlik-yonetimi' || tabSlug === 'birlik' || tabSlug === 'unit-management' || tabSlug === 'yonetim') {
     tab = 'mgmtArmies';
   } else if (tabSlug === 'gorev-ve-emirler' || tabSlug === 'emirler' || tabSlug === 'orders' || tabSlug === 'gorev') {
     tab = 'mgmtOrders';
-  } else if (tabSlug === 'kasa-lojistik' || tabSlug === 'kasa' || tabSlug === 'treasury' || tabSlug === 'lojistik') {
-    tab = 'mgmtTreasury';
   } else if (tabSlug === 'ittifak-diplomasi' || tabSlug === 'diplomasi' || tabSlug === 'diplomacy' || tabSlug === 'ittifak') {
     tab = 'mgmtDiplomacy';
-  } else if (tabSlug === 'yonetim-ozeti' || tabSlug === 'gunluk-yonetim-ozeti' || tabSlug === 'daily-management') {
-    tab = 'mgmtDashboard';
-  } else if (tabSlug === 'savas-merkezi' || tabSlug === 'ulke-savas-merkezi' || tabSlug === 'war-room') {
-    tab = 'mgmtWarRoom';
+  } else if (tabSlug === 'yonetim-ozeti' || tabSlug === 'gunluk-yonetim-ozeti' || tabSlug === 'daily-management' || tabSlug === 'kasa-lojistik' || tabSlug === 'kasa' || tabSlug === 'treasury' || tabSlug === 'lojistik' || tabSlug === 'savas-merkezi' || tabSlug === 'ulke-savas-merkezi' || tabSlug === 'war-room') {
+    tab = 'mgmtDonations';
   } else if (tabSlug === 'vatandaslar-ve-hukumet' || tabSlug === 'vatandaslar' || tabSlug === 'citizens') {
     tab = 'mgmtCitizens';
   } else if (tabSlug === 'ulke-takibi' || tabSlug === 'ulke-karsilastirma' || tabSlug === 'country-tracker') {
     tab = 'mgmtCountryTracker';
   } else if (tabSlug === 'vergi-simulatoru' || tabSlug === 'gelir-tahmini' || tabSlug === 'tax-simulator') {
-    tab = 'mgmtTax';
+    tab = 'mgmtDonations';
   } else if (tabSlug === 'ordu-bilgisi' || tabSlug === 'ordubilgisi' || tabSlug === 'army-info') {
     tab = 'combatArmyInfo';
   } else if (tabSlug === 'detayli-bilgi' || tabSlug === 'detaylibilgi' || tabSlug === 'detailed-info' || tabSlug === 'detay') {
@@ -187,7 +161,7 @@ export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
     tabSlug === 'armystats' ||
     tabSlug === 'army'
   ) {
-    tab = 'armyStats';
+    tab = 'combatArmyInfo';
   } else if (
     tabSlug === 'ulke-istatistikleri' ||
     tabSlug === 'ulke' ||
@@ -196,14 +170,6 @@ export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
     tabSlug === 'country'
   ) {
     tab = 'countryStats';
-  } else if (
-    tabSlug === 'bagis-takibi' ||
-    tabSlug === 'bagis-takip' ||
-    tabSlug === 'bagis' ||
-    tabSlug === 'donations' ||
-    tabSlug === 'donation'
-  ) {
-    tab = 'donations';
   }
 
   return { tab, muId: urlMuId };
@@ -218,6 +184,10 @@ export default function App() {
   const initialTargetMu = initialRoute.muId || getCookie('warera_last_mu') || DEFAULT_MU_ID;
 
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => initialRoute.tab);
+  const [donationView, setDonationView] = useState<'weekly' | 'panel'>('weekly');
+  const [armyInfoView, setArmyInfoView] = useState<'overview' | 'stats'>(() =>
+    typeof window !== 'undefined' && window.location.pathname.toLowerCase().startsWith('/ordu-istatistikleri') ? 'stats' : 'overview',
+  );
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window !== 'undefined' && window.innerWidth >= 768,
   );
@@ -283,7 +253,7 @@ export default function App() {
   const handleTabChange = useCallback((newTab: ActiveTab) => {
     setActiveTab(newTab);
     const slug = TAB_TO_SLUG[newTab];
-    const hasMuPath = !(['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtDashboard', 'mgmtWarRoom', 'mgmtCitizens', 'mgmtCountryTracker', 'mgmtTax'] as ActiveTab[]).includes(newTab);
+    const hasMuPath = !(['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtCitizens', 'mgmtCountryTracker', 'mgmtDonations'] as ActiveTab[]).includes(newTab);
     const newPath = hasMuPath ? `/${slug}/${muId}${window.location.search}` : `/${slug}${window.location.search}`;
     const expectedPathname = hasMuPath ? `/${slug}/${muId}` : `/${slug}`;
     if (window.location.pathname !== expectedPathname) {
@@ -319,9 +289,9 @@ export default function App() {
     // If loaded on root "/" or on slug without MU ID, gracefully update URL to include the MU ID
     const currentPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
     const currentSlug = TAB_TO_SLUG[route.tab];
-    const noMuTabs: ActiveTab[] = ['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtDashboard', 'mgmtWarRoom', 'mgmtCitizens', 'mgmtCountryTracker', 'mgmtTax'];
+    const noMuTabs: ActiveTab[] = ['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtCitizens', 'mgmtCountryTracker', 'mgmtDonations'];
     const targetExpectedPath = noMuTabs.includes(route.tab) ? `/${currentSlug}` : `/${currentSlug}/${muId}`;
-    if (currentPath === '' || currentPath === currentSlug) {
+    if (`/${currentPath}` !== targetExpectedPath) {
       window.history.replaceState({ tab: route.tab, muId }, '', `${targetExpectedPath}${window.location.search}`);
     }
 
@@ -347,7 +317,7 @@ export default function App() {
 
     // Update browser URL path with the new MU ID
     const slug = TAB_TO_SLUG[activeTab];
-    const noMuTabs: ActiveTab[] = ['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtDashboard', 'mgmtWarRoom', 'mgmtCitizens', 'mgmtCountryTracker', 'mgmtTax'];
+    const noMuTabs: ActiveTab[] = ['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtCitizens', 'mgmtCountryTracker', 'mgmtDonations'];
     const newPath = noMuTabs.includes(activeTab) ? `/${slug}${window.location.search}` : `/${slug}/${newId}${window.location.search}`;
     const expectedPathname = noMuTabs.includes(activeTab) ? `/${slug}` : `/${slug}/${newId}`;
     if (window.location.pathname !== expectedPathname) {
@@ -405,15 +375,17 @@ export default function App() {
     [muId, players.length]
   );
 
-  // Initial load
+  const shouldFetchArmyData = activeTab !== 'mgmtDonations' || donationView === 'panel';
+
+  // Load military-unit data only when a view needs it. The weekly donation tracker uses its consolidated management endpoint.
   useEffect(() => {
-    fetchData(false);
-  }, [fetchData]);
+    if (shouldFetchArmyData) fetchData(false);
+  }, [fetchData, shouldFetchArmyData]);
 
   // Real-time polling interval (every 30 seconds when autoRefresh is on)
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
-    if (autoRefresh) {
+    if (autoRefresh && shouldFetchArmyData) {
       timerRef.current = setInterval(() => {
         fetchData(false);
       }, 30000);
@@ -423,7 +395,7 @@ export default function App() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [autoRefresh, fetchData]);
+  }, [autoRefresh, fetchData, shouldFetchArmyData]);
 
   // Active army & factory summary metrics for top cards
   const armyMetrics = useMemo(() => {
@@ -499,27 +471,60 @@ export default function App() {
         ) : activeTab === 'mgmtArmies' ? (
           <ManagementArmyTrackingSection onSelectArmy={handleMuIdChange} onNavigateTab={handleTabChange} />
         ) : activeTab === 'mgmtDonations' ? (
-          <ManagementDonationTrackingSection currentMuId={muId} onSelectArmy={handleMuIdChange} />
-        ) : activeTab === 'mgmtTreasury' ? (
-          <ManagementTreasurySection />
-        ) : activeTab === 'mgmtDashboard' ? (
-          <ManagementDailyDashboardSection />
-        ) : activeTab === 'mgmtWarRoom' ? (
-          <ManagementWarRoomSection />
+          <div className="space-y-4">
+            <div className="inline-flex flex-wrap gap-2 rounded-xl border border-[#3282B8]/20 bg-[#182329] p-1.5">
+              <button type="button" onClick={() => setDonationView('weekly')} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${donationView === 'weekly' ? 'bg-emerald-900/50 text-emerald-100 ring-1 ring-emerald-500/30' : 'text-[#BBE1FA]/60 hover:bg-[#141C21] hover:text-white'}`}>Bağış Takibi · Haftalık Kota</button>
+              <button type="button" onClick={() => setDonationView('panel')} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${donationView === 'panel' ? 'bg-emerald-900/50 text-emerald-100 ring-1 ring-emerald-500/30' : 'text-[#BBE1FA]/60 hover:bg-[#141C21] hover:text-white'}`}>Bağış Takip Paneli · Son İşlemler</button>
+            </div>
+            {donationView === 'weekly' ? (
+              <ManagementDonationTrackingSection currentMuId={muId} onSelectArmy={handleMuIdChange} />
+            ) : (
+              <>
+                <MetricsCards
+                  totalMembers={players.length}
+                  activePlayers={armyMetrics.activePlayers}
+                  totalActiveFactories={armyMetrics.totalActiveFactories}
+                  totalAllFactories={armyMetrics.totalAllFactories}
+                  totalActiveEnginePower={armyMetrics.totalActiveEnginePower}
+                  totalWealth={armyMetrics.totalWealth}
+                  muData={muData}
+                  currentMuId={muId}
+                  onMuIdChange={handleMuIdChange}
+                />
+                <ApiKeySection onKeyChange={() => fetchData(true)} />
+                <PlayerTable
+                  players={players}
+                  isLoading={isLoading}
+                  isRefreshing={isRefreshing}
+                  onRefresh={() => fetchData(true)}
+                  muName={muData?.name || 'Turkic Tribe'}
+                  muAvatarUrl={muData?.avatarUrl}
+                />
+              </>
+            )}
+          </div>
         ) : activeTab === 'mgmtCitizens' ? (
           <ManagementCitizensSection />
         ) : activeTab === 'mgmtCountryTracker' ? (
           <ManagementCountryTrackerSection />
-        ) : activeTab === 'mgmtTax' ? (
-          <ManagementTaxSimulationSection />
         ) : activeTab === 'combatArmyInfo' ? (
-          <MilitaryOverviewSection muId={muId} onMuIdChange={handleMuIdChange} onNavigateTab={handleTabChange} />
+          <div className="space-y-4">
+            <div className="inline-flex flex-wrap gap-2 rounded-xl border border-[#3282B8]/20 bg-[#182329] p-1.5">
+              <button type="button" onClick={() => setArmyInfoView('overview')} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${armyInfoView === 'overview' ? 'bg-rose-950/50 text-rose-100 ring-1 ring-rose-500/30' : 'text-[#BBE1FA]/60 hover:bg-[#141C21] hover:text-white'}`}>Ordu Bilgisi</button>
+              <button type="button" onClick={() => setArmyInfoView('stats')} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${armyInfoView === 'stats' ? 'bg-rose-950/50 text-rose-100 ring-1 ring-rose-500/30' : 'text-[#BBE1FA]/60 hover:bg-[#141C21] hover:text-white'}`}>Ordu İstatistikleri</button>
+            </div>
+            {armyInfoView === 'overview' ? (
+              <MilitaryOverviewSection muId={muId} onMuIdChange={handleMuIdChange} onNavigateTab={handleTabChange} />
+            ) : (
+              <ArmyStatsTable players={players} isLoading={isLoading} onRefresh={() => fetchData(true)} isRefreshing={isRefreshing} muName={muData?.name || 'Turkic Tribe'} muId={muId} />
+            )}
+          </div>
         ) : activeTab === 'combatDetails' ? (
           <MilitaryDetailsSection muId={muId} onMuIdChange={handleMuIdChange} onNavigateTab={handleTabChange} />
         ) : activeTab === 'combatDamage' ? (
           <DailyDamageTelemetrySection muId={muId} onMuIdChange={handleMuIdChange} onNavigateTab={handleTabChange} />
         ) : activeTab === 'mgmtUnit' || activeTab === 'mgmtOrders' || activeTab === 'mgmtDiplomacy' ? (
-          <WorkInProgressPanel activeTab={activeTab} onSwitchToEconomy={() => handleTabChange('donations')} />
+          <WorkInProgressPanel activeTab={activeTab} onSwitchToEconomy={() => handleTabChange('mgmtDonations')} />
         ) : (
           <>
             {/* Top 4-Column Equal Cards (Army Selector, Active Soldiers, Active Factories, Active Engine Power) - shown in army/donation tabs */}
@@ -531,40 +536,15 @@ export default function App() {
                 totalAllFactories={armyMetrics.totalAllFactories}
                 totalActiveEnginePower={armyMetrics.totalActiveEnginePower}
                 totalWealth={armyMetrics.totalWealth}
-                showWealthMetrics={activeTab === 'armyStats'}
+                showWealthMetrics={false}
                 muData={muData}
                 currentMuId={muId}
                 onMuIdChange={handleMuIdChange}
               />
             )}
 
-            {/* Tab 1: Bağış Takip Paneli | Tab 2: Ordu İstatistikleri | Tab 3: Ülke İstatistikleri */}
-            {activeTab === 'donations' ? (
-              <div>
-                {/* WarEra API Key Giriş Bölümü */}
-                <ApiKeySection onKeyChange={() => fetchData(true)} />
-
-                <PlayerTable
-                  players={players}
-                  isLoading={isLoading}
-                  isRefreshing={isRefreshing}
-                  onRefresh={() => fetchData(true)}
-                  muName={muData?.name || 'Turkic Tribe'}
-                  muAvatarUrl={muData?.avatarUrl}
-                />
-              </div>
-            ) : activeTab === 'armyStats' ? (
-              <ArmyStatsTable
-                players={players}
-                isLoading={isLoading}
-                isRefreshing={isRefreshing}
-                onRefresh={() => fetchData(true)}
-                muName={muData?.name || 'Turkic Tribe'}
-                muId={muId}
-              />
-            ) : (
-              <CountryStatsPanel />
-            )}
+            {/* Ordu and country statistics */}
+            <CountryStatsPanel />
           </>
         )}
         </React.Suspense>

@@ -47,6 +47,7 @@ type SortField =
   | "level"
   | "pill"
   | "damage"
+  | "potentialDamage"
   | "health"
   | "skillsReset";
 type SortDirection = "asc" | "desc";
@@ -76,6 +77,7 @@ export const DailyDamageTelemetrySection: React.FC<
     pill: true,
     resources: true,
     damage: true,
+    potentialDamage: true,
     skillsReset: true,
   });
   const [isColumnsMenuOpen, setIsColumnsMenuOpen] = useState(false);
@@ -228,6 +230,15 @@ export const DailyDamageTelemetrySection: React.FC<
     return membersWithDailyDamage.reduce((sum, m) => sum + m.dailyDamage, 0);
   }, [data, membersWithDailyDamage]);
 
+  const totalPotentialDamage = useMemo(
+    () => membersWithDailyDamage.reduce((sum, member) => sum + (member.potentialDamage || 0), 0),
+    [membersWithDailyDamage],
+  );
+  const fighterCount = useMemo(
+    () => membersWithDailyDamage.filter((member) => member.isFighter).length,
+    [membersWithDailyDamage],
+  );
+
   // Pill remaining countdown helper
   const getPillRemainingMs = (expiresAt: string | null) => {
     if (!expiresAt) return 0;
@@ -325,6 +336,8 @@ export const DailyDamageTelemetrySection: React.FC<
         comparison = a.level - b.level;
       } else if (sortField === "damage") {
         comparison = a.dailyDamage - b.dailyDamage;
+      } else if (sortField === "potentialDamage") {
+        comparison = a.potentialDamage - b.potentialDamage;
       } else if (sortField === "health") {
         comparison = a.health.current - b.health.current;
       } else if (sortField === "pill") {
@@ -445,7 +458,7 @@ export const DailyDamageTelemetrySection: React.FC<
       </div>
 
       {/* 2. ÜST ÖZET KARTLARI (3 Gösterge) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
         {/* Kart 1: ORDU GÜNLÜK HASARI */}
         <div className="rounded-xl bg-gradient-to-b from-[#1C2830] to-[#162127] border border-rose-500/25 hover:border-rose-500/50 p-5 flex flex-col justify-between shadow-lg relative overflow-hidden group transition-all">
           <div>
@@ -700,6 +713,18 @@ export const DailyDamageTelemetrySection: React.FC<
             Hızlı filtreleme için butonlara tıklayın
           </div>
         </div>
+
+        <div className="rounded-xl bg-gradient-to-b from-[#211d30] to-[#191b28] border border-violet-500/30 p-5 flex flex-col justify-between shadow-lg">
+          <div>
+            <div className="flex items-center gap-2 text-violet-300 font-bold text-xs">
+              <div className="w-7 h-7 rounded-lg bg-violet-950/60 border border-violet-500/30 flex items-center justify-center"><Swords className="w-3.5 h-3.5" /></div>
+              <span>TAHMİNİ POTANSİYEL HASAR</span>
+            </div>
+            <div className="mt-4 text-3xl font-black text-white">{formatDamage(totalPotentialDamage)} <span className="text-xs text-violet-300">DMG</span></div>
+            <div className="mt-2 text-[11px] text-[#BBE1FA]/65">{fighterCount} savaş buildli oyuncu · can ve açlık durumuna göre</div>
+          </div>
+          <div className="mt-4 border-t border-violet-500/20 pt-3 text-[10px] text-[#BBE1FA]/50">Tam hazırlıkta Lv. 30 ≈ 1M · Lv. 50 ≈ 2M</div>
+        </div>
       </div>
 
       {/* 3. TABLO KONTROLLERİ VE ARAÇ ÇUBUĞU */}
@@ -842,6 +867,18 @@ export const DailyDamageTelemetrySection: React.FC<
                 </label>
 
                 <label className="flex items-center justify-between text-[#BBE1FA] cursor-pointer hover:text-white">
+                  <span>Potansiyel Hasar</span>
+                  <input
+                    type="checkbox"
+                    checked={visibleColumns.potentialDamage}
+                    onChange={(e) =>
+                      setVisibleColumns((p) => ({ ...p, potentialDamage: e.target.checked }))
+                    }
+                    className="accent-rose-500 cursor-pointer"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between text-[#BBE1FA] cursor-pointer hover:text-white">
                   <span>Skills Reset</span>
                   <input
                     type="checkbox"
@@ -954,6 +991,12 @@ export const DailyDamageTelemetrySection: React.FC<
                         : "↕"}
                     </span>
                   </div>
+                </th>
+              )}
+
+              {visibleColumns.potentialDamage && (
+                <th onClick={() => handleSort("potentialDamage")} className="p-3.5 cursor-pointer hover:text-violet-300 transition-colors select-none text-right">
+                  <div className="flex items-center justify-end gap-1.5"><span>POTANSİYEL HASAR</span><span className="text-[10px] text-violet-400">{sortField === "potentialDamage" ? sortDirection === "asc" ? "▲" : "▼" : "↕"}</span></div>
                 </th>
               )}
 
@@ -1126,6 +1169,12 @@ export const DailyDamageTelemetrySection: React.FC<
                     </td>
                   )}
 
+                  {visibleColumns.potentialDamage && (
+                    <td className="p-3.5 text-right font-mono font-bold text-violet-300 text-sm">
+                      {member.isFighter ? formatDamage(member.potentialDamage || 0) : "—"}
+                    </td>
+                  )}
+
                   {/* Sütun 5: Skills Reset */}
                   {visibleColumns.skillsReset && (
                     <td className="p-3.5 text-right">
@@ -1148,7 +1197,7 @@ export const DailyDamageTelemetrySection: React.FC<
             {filteredAndSortedMembers.length === 0 && (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={1 + Object.values(visibleColumns).filter(Boolean).length}
                   className="p-8 text-center text-[#BBE1FA]/50 text-xs font-mono"
                 >
                   Arama kriterlerine uygun asker bulunamadı.

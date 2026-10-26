@@ -310,6 +310,8 @@ export interface CombatMemberTelemetry {
   username: string;
   avatarUrl: string;
   level: number;
+  isFighter: boolean;
+  potentialDamage: number;
   militaryRank: number;
   role: "leader" | "commander" | "manager" | "soldier";
   isLeader: boolean;

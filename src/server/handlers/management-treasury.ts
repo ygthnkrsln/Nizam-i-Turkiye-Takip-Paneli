@@ -71,7 +71,7 @@ export default async function handler(req: any, res: any) {
         tx?.sellerCountryId, tx?.sellerMuId, tx?.itemCode, tx?.money].join("-"));
       byId.set(id, tx);
     }
-    const transactions = Array.from(byId.values()).map((tx: any) => {
+    const transactions = Array.from(byId.entries()).map(([id, tx]: [string, any]) => {
       const type = String(tx?.transactionType || tx?.type || "unknown");
       const amount = Number(tx?.money ?? tx?.amount ?? tx?.value ?? 0);
       const sellerCountryId = String(tx?.sellerCountryId || "");

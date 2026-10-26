@@ -16,6 +16,7 @@ import {
   getMilitaryUnitWeeklyDamage,
 } from "../../lib/dailyDamage.js";
 import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
+import { calculatePotentialDamage, isCombatBuild } from "../../lib/potentialDamage.js";
 
 export const PRESET_8_ARMIES = TRACKED_ARMIES;
 const GAME_DAY_RESET_MS = 3 * 60 * 60 * 1000;
@@ -88,18 +89,20 @@ async function fetchWarEra(
   url: string,
   init?: RequestInit,
   retries = 4,
+  userApiKey = "",
 ): Promise<Response> {
   let attempt = 0;
-  const configuredTokens = getWarEraTokens();
-  if (configuredTokens.length === 0) {
+  const serverTokens = getWarEraTokens();
+  const tokens = serverTokens.length > 0 ? serverTokens : userApiKey ? [userApiKey] : [];
+  if (tokens.length === 0) {
     throw new Error("WarEra API anahtarı yapılandırılmamış");
   }
-  const maxAttempts = Math.max(retries + 1, configuredTokens.length);
+  const maxAttempts = Math.max(retries + 1, tokens.length);
   let lastResponse: Response | null = null;
-  const firstToken = getNextWarEraToken();
-  const firstTokenIndex = Math.max(0, configuredTokens.indexOf(firstToken));
+  const firstToken = serverTokens.length > 0 ? getNextWarEraToken() : tokens[0];
+  const firstTokenIndex = Math.max(0, tokens.indexOf(firstToken));
   while (attempt < maxAttempts) {
-    const token = configuredTokens[(firstTokenIndex + attempt) % configuredTokens.length];
+    const token = tokens[(firstTokenIndex + attempt) % tokens.length];
     const headers: Record<string, string> = {
       Accept: "application/json",
       "X-API-Key": token,
@@ -115,7 +118,7 @@ async function fetchWarEra(
       if (res.status === 401 || res.status === 403) {
         lastResponse = res;
         attempt++;
-        if (attempt < configuredTokens.length) continue;
+        if (attempt < tokens.length) continue;
         return res;
       }
       if (res.status === 503 && attempt + 1 < maxAttempts) {
@@ -187,13 +190,14 @@ async function processSingleArmy(
   effectiveDate: string,
   donationHistoryDates: string[],
   includeDonations: boolean,
+  userApiKey = "",
 ) {
   try {
     // Fetch MU
     const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(
       JSON.stringify({ muId: army.id }),
     )}`;
-    const muRes = await fetchWarEra(muUrl);
+    const muRes = await fetchWarEra(muUrl, undefined, 4, userApiKey);
     if (!muRes.ok) throw upstreamError(muRes, `Ordu bilgisi alınamadı`);
 
     const muJson = await muRes.json();
@@ -225,7 +229,7 @@ async function processSingleArmy(
       const batchUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(
         JSON.stringify(batchInput),
       )}`;
-      const response = await fetchWarEra(batchUrl);
+      const response = await fetchWarEra(batchUrl, undefined, 4, userApiKey);
       if (!response.ok) throw upstreamError(response, "Üye profilleri alınamadı");
       const payload = await response.json();
       if (!Array.isArray(payload) || payload.length !== chunk.length) {
@@ -280,7 +284,7 @@ async function processSingleArmy(
           });
 
           const txUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
-          const txRes = await fetchWarEra(txUrl);
+          const txRes = await fetchWarEra(txUrl, undefined, 4, userApiKey);
           if (!txRes.ok) throw upstreamError(txRes, "Bağış işlemleri alınamadı");
           const txJson = await txRes.json();
           const txResults = Array.isArray(txJson) ? txJson : [txJson];
@@ -331,6 +335,7 @@ async function processSingleArmy(
     let totalHungerMax = 0;
 
     let armyDailyDamage = 0;
+    let armyPotentialDamage = 0;
     const armyWeeklyDamage = getMilitaryUnitWeeklyDamage(muData);
 
     let targetDonationSum = 0;
@@ -371,6 +376,16 @@ async function processSingleArmy(
       // Oyuncu Modu (Ülke İstatistikleri ile birebir aynı beceriye dayalı yaklaşım)
       const { isEconomy, playerMode, ecoSkillPoints, totalSkillPoints } =
         calculatePlayerSkillMode(u);
+      const isFighter = isCombatBuild(u);
+      const potentialDamage = calculatePotentialDamage(
+        level,
+        hCurrent,
+        hMax,
+        hungerCur,
+        hungerMx,
+        isFighter,
+      );
+      armyPotentialDamage += potentialDamage;
 
       // Kural:
       // Bağış yapacak oyuncular:
@@ -429,6 +444,8 @@ async function processSingleArmy(
         level,
         wealth,
         playerMode,
+        isFighter,
+        potentialDamage,
         isEconomy,
         ecoSkillPoints,
         totalSkillPoints,
@@ -494,6 +511,7 @@ async function processSingleArmy(
         percentage: hungerPct,
       },
       todayDamage: armyDailyDamage,
+      potentialDamage: armyPotentialDamage,
       weeklyDamage: armyWeeklyDamage,
       donations: {
         targetDonation: targetDonationSum,
@@ -517,7 +535,7 @@ async function processSingleArmy(
 }
 
 export default async function handler(req: any, res: any) {
-  if (["war-room", "citizens", "country-tracker", "daily-dashboard", "tax-simulator"].includes(String(req.query?.view || ""))) {
+  if (["citizens", "country-tracker"].includes(String(req.query?.view || ""))) {
     const { default: intelligenceHandler } = await import("./management-intelligence.js");
     return intelligenceHandler(req, res);
   }
@@ -531,7 +549,7 @@ export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-API-Key",
+    "Content-Type, Authorization, X-API-Key, X-User-API-Key",
   );
 
   if (req.method === "OPTIONS") {
@@ -541,6 +559,9 @@ export default async function handler(req: any, res: any) {
   const targetDateQuery = (req.query?.date as string) || "";
   const forceRefresh = req.query?.refresh === "true";
   const includeDonations = req.query?.donations !== "false";
+  const userApiKey = typeof req.headers?.["x-user-api-key"] === "string"
+    ? req.headers["x-user-api-key"]
+    : "";
 
   // WarEra's day/week boundary is 03:00 UTC (06:00 in Türkiye).
   const now = new Date();
@@ -560,7 +581,7 @@ export default async function handler(req: any, res: any) {
     effectiveDate === todayDateStr ? 30 * 1000 : CACHE_TTL_MS;
 
   const donationHistoryDates = getDonationHistoryDates(effectiveDate);
-  const cacheKey = `mgmt_overview_v10_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v11_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < cacheTtlMs) {
     return res.status(200).json(cached.data);
@@ -587,7 +608,7 @@ export default async function handler(req: any, res: any) {
     const armyOverviews = await mapWithConcurrency(
       PRESET_8_ARMIES,
       4,
-      (army) => processSingleArmy(army, snapshots, effectiveDate, donationHistoryDates, includeDonations),
+      (army) => processSingleArmy(army, snapshots, effectiveDate, donationHistoryDates, includeDonations, userApiKey),
     );
 
     // Alliance Aggregates
@@ -617,6 +638,10 @@ export default async function handler(req: any, res: any) {
 
     const totalAllTodayDamage = armyOverviews.reduce(
       (s, a) => s + a.todayDamage,
+      0,
+    );
+    const totalAllPotentialDamage = armyOverviews.reduce(
+      (s, a) => s + a.potentialDamage,
       0,
     );
     const totalAllTargetDonation = armyOverviews.reduce(
@@ -663,6 +688,7 @@ export default async function handler(req: any, res: any) {
           percentage: allianceHungerPct,
         },
         totalTodayDamage: totalAllTodayDamage,
+        totalPotentialDamage: totalAllPotentialDamage,
         donations: {
           totalTarget: totalAllTargetDonation,
           totalCollected: totalAllCollectedDonation,

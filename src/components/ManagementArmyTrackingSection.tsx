@@ -139,7 +139,7 @@ export const ManagementArmyTrackingSection: React.FC<
       </div>
 
       {/* 2. ÜST 3 BÜYÜK GÖSTERGE KARTI (İttifak Toplam Can, Açlık, Günlük Hasar) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* KART 1: İTTİFAK TOPLAM CAN DOLULUK ORANI */}
         <div className="rounded-xl bg-[#182329] border border-rose-500/30 p-4 flex flex-col justify-between shadow-lg relative overflow-hidden group">
           <div className="flex items-center justify-between mb-2">
@@ -256,6 +256,18 @@ export const ManagementArmyTrackingSection: React.FC<
             </span>
           </div>
         </div>
+
+        <div className="rounded-xl bg-[#182329] border border-violet-500/30 p-4 flex flex-col justify-between shadow-lg relative overflow-hidden group">
+          <div className="flex items-center gap-2 text-violet-300">
+            <div className="w-7 h-7 rounded-lg bg-violet-950/80 border border-violet-500/30 flex items-center justify-center"><Swords className="w-4 h-4" /></div>
+            <span className="text-xs font-bold uppercase tracking-wider">TAHMİNİ POTANSİYEL HASAR</span>
+          </div>
+          <div className="my-3">
+            <div className="text-3xl sm:text-4xl font-black text-violet-300">{formatDmg(alliance?.totalPotentialDamage ?? 0)}</div>
+            <div className="mt-1 text-[10px] text-[#BBE1FA]/65">Savaş buildi · mevcut can ve açlık oranıyla</div>
+          </div>
+          <div className="border-t border-violet-500/20 pt-2 text-[10px] text-[#BBE1FA]/50">Lv. 30 ≈ 1M · Lv. 50 ≈ 2M tam hazırlıkta</div>
+        </div>
       </div>
 
       {/* 3. 8 ORDU CANLI TABLOSU */}
@@ -273,7 +285,7 @@ export const ManagementArmyTrackingSection: React.FC<
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] md:min-w-0 text-left text-xs font-mono">
+          <table className="w-full min-w-[1040px] text-left text-xs font-mono">
             <thead>
               <tr className="bg-[#141C21]/80 border-b border-amber-500/20 text-[#BBE1FA]/70 text-[11px] uppercase tracking-wider">
                 <th className="py-3 px-4 text-center w-12">#</th>
@@ -283,6 +295,7 @@ export const ManagementArmyTrackingSection: React.FC<
                   Can Doluluk Oranı (HP)
                 </th>
                 <th className="py-3 px-4 min-w-[200px]">Açlık Doluluk Oranı</th>
+                <th className="py-3 px-4 text-right">Potansiyel Hasar</th>
                 <th className="py-3 px-4 text-right">Bugünkü Hasar</th>
                 <th className="py-3 px-4 text-center w-28">İşlem</th>
               </tr>
@@ -389,6 +402,12 @@ export const ManagementArmyTrackingSection: React.FC<
                           />
                         </div>
                       </div>
+                    </td>
+
+                    {/* Bugünkü Hasar */}
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="font-bold text-violet-300 text-sm">{formatDmg(army.potentialDamage || 0)} DMG</div>
+                      <div className="text-[10px] text-[#BBE1FA]/45">Savaşçı build tahmini</div>
                     </td>
 
                     {/* Bugünkü Hasar */}

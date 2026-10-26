@@ -1,24 +1,18 @@
 import React from 'react';
 import {
   BarChart3,
-  Building2,
   Calculator,
   ChevronLeft,
   ChevronRight,
-  Coins,
   Crosshair,
   Flame,
   HeartHandshake,
-  Landmark,
   Menu,
   ShoppingCart,
   Sparkles,
   Shield,
-  ShieldAlert,
   Users,
   Map,
-  Percent,
-  Gauge,
   X,
 } from 'lucide-react';
 import { ActiveTab } from '../App';
@@ -40,11 +34,10 @@ const groups: {
     label: 'Ekonomi',
     theme: 'emerald',
     tabs: [
-      { id: 'donations', title: 'Bağış Takip Paneli', icon: HeartHandshake },
+      { id: 'mgmtDonations', title: 'Bağış Takibi', icon: HeartHandshake },
       { id: 'marketPrices', title: 'Market Fiyatları', icon: ShoppingCart },
       { id: 'countryStats', title: 'Ülke İstatistikleri', icon: BarChart3 },
       { id: 'mgmtCountryTracker', title: 'Ülke Takibi & Karşılaştırma', icon: Map },
-      { id: 'mgmtTax', title: 'Vergi Simülatörü', icon: Percent },
     ],
   },
   {
@@ -52,21 +45,16 @@ const groups: {
     theme: 'rose',
     tabs: [
       { id: 'combatArmyInfo', title: 'Ordu Bilgisi', icon: Shield },
-      { id: 'armyStats', title: 'Ordu İstatistikleri', icon: Building2 },
       { id: 'combatDetails', title: 'Detaylı Bilgi', icon: Crosshair },
       { id: 'combatDamage', title: 'Hasar', icon: Flame },
-      { id: 'mgmtWarRoom', title: 'Ülke Savaş Merkezi', icon: ShieldAlert },
     ],
   },
   {
     label: 'Yönetim',
     theme: 'amber',
     tabs: [
-      { id: 'mgmtDashboard', title: 'Günlük Yönetim Özeti', icon: Gauge },
       { id: 'mgmtCitizens', title: 'Vatandaşlar & Hükümet', icon: Users },
       { id: 'mgmtArmies', title: 'Ordu Takibi', icon: Shield },
-      { id: 'mgmtDonations', title: 'Bağış Takibi', icon: Coins },
-      { id: 'mgmtTreasury', title: 'Kasa & Lojistik', icon: Landmark },
     ],
   },
   {
@@ -132,7 +120,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange, open, on
       <div className={`flex h-[76px] shrink-0 items-center border-b border-[#3282B8]/15 ${open ? 'justify-between px-4' : 'justify-between px-2'}`}>
         <button
           type="button"
-          onClick={() => onTabChange('donations')}
+          onClick={() => onTabChange('mgmtDonations')}
           className={`flex min-w-0 items-center gap-2.5 text-left ${open ? '' : 'mr-auto'}`}
           title="Nizam-ı Türkiye ana sayfa"
         >
