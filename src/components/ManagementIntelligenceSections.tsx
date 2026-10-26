@@ -130,7 +130,7 @@ function ActionList({ items }: { items: AnyRecord[] }) {
       <span className="mt-0.5 text-[10px] font-black opacity-65">{String(index + 1).padStart(2, "0")}</span>
       <div className="min-w-0"><div className="text-[10px] font-bold uppercase tracking-wider opacity-65">{item.domain}</div><p className="mt-0.5 text-xs leading-relaxed">{item.text}</p></div>
     </div>
-  )}</div>;
+  ))}</div>;
 }
 
 function BattleCard({ battle }: { battle: AnyRecord }) {
