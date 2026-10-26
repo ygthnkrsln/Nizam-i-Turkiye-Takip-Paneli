@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Coins,
   Copy,
+  FileDown,
   RefreshCw,
   Search,
   Settings2,
@@ -193,6 +194,8 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
   const [memberFilter, setMemberFilter] = useState("owing");
   const [search, setSearch] = useState("");
   const [copied, setCopied] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const loadData = async (forceRefresh = false) => {
     activeRequest.current?.abort();
@@ -393,6 +396,73 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
     }
   };
 
+  const exportPdf = async () => {
+    if (!data || isExportingPdf) return;
+    setIsExportingPdf(true);
+    setPdfError(null);
+    try {
+      const { generateDonationTrackingPdf } = await import("../services/donationReportGenerator");
+      const paymentLabels: Record<PaymentView, string> = { total: "Toplam", country: "Ulke", mu: "Birlik" };
+      const memberFilterLabels: Record<string, string> = {
+        owing: "Eksik odeyenler", paid: "Guncel olanlar", eco: "Ekonomi modu",
+        fighter: "Savas modu", below: "Seviye alti", excluded: "Haric tutulanlar", all: "Herkes",
+      };
+      const selectedArmy = armyFilter === "all" ? "Tum birlikler" : data.armies.find((army) => army.muId === armyFilter)?.name || "Secili birlik";
+      const activeFilters = [selectedArmy, memberFilterLabels[memberFilter] || "Herkes"];
+      if (search.trim()) activeFilters.push(`Arama: ${search.trim()}`);
+      const ruleLabel = `Seviye ${rules.minLevel}+ ekonomi | ${rules.wealthThreshold.toLocaleString("tr-TR")} Gold alti x${rules.multiplier} | esik ve ustu x${rules.multiplierRich}${rules.startDate ? ` | baslangic ${rules.startDate}` : ""}`;
+
+      generateDonationTrackingPdf({
+        weekStart,
+        dates,
+        generatedAt: new Date(),
+        paymentViewLabel: paymentLabels[paymentView],
+        filterLabel: activeFilters.join(" | "),
+        ruleLabel,
+        summary: {
+          weeklyQuota: totals.weeklyQuota,
+          paidThisWeek: totals.paidThisWeek,
+          paidToDate: totals.paidToDate,
+          poolCarryIn: totals.poolCarryIn,
+          gap: totals.gap,
+          completion: totals.completion,
+          eligible: totals.eligible,
+          owing: totals.owing,
+        },
+        armies: armyTotals
+          .filter((army) => armyFilter === "all" || army.muId === armyFilter)
+          .map((army) => ({
+            name: army.name,
+            memberCount: army.memberCount,
+            eligible: army.eligible,
+            quota: army.quota,
+            paid: army.paid,
+            poolCarryIn: army.poolCarryIn,
+            unpaid: army.unpaid,
+          })),
+        members: filteredRows.map((row) => ({
+          username: row.username,
+          armyName: row.armyName,
+          level: row.level,
+          wealth: row.wealth,
+          donationClass: row.donationClass,
+          dailyTarget: row.dailyTarget,
+          weeklyTarget: row.weeklyTarget,
+          days: row.donationCells.map((cell) => ({ amount: amountFor(cell, paymentView), state: cell.state })),
+          weeklyPaid: paymentView === "country" ? row.countryThisWeek : paymentView === "mu" ? row.muThisWeek : row.paidThisWeek,
+          surplus: row.surplus,
+          unpaid: row.unpaid,
+          status: row.statusLabel,
+        })),
+      });
+    } catch (exportError) {
+      console.error("Donation report PDF export error:", exportError);
+      setPdfError("PDF olusturulamadi. Tekrar deneyin.");
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const changeWeek = (offset: number) => setWeekStart((current) => shiftDate(current, offset * 7));
   const weekEndLabel = dateLabel(dates[6], { day: "2-digit", month: "long", year: "numeric" });
 
@@ -417,6 +487,9 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
             <button type="button" onClick={() => loadData(true)} disabled={isRefreshing || isLoading} className="inline-flex items-center gap-2 rounded-lg border border-[#3282B8]/35 bg-[#0F4C75]/35 px-3 py-2 text-xs font-bold text-[#BBE1FA] hover:bg-[#0F4C75]/60 disabled:opacity-50">
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} /> Yenile
             </button>
+            <button type="button" onClick={exportPdf} disabled={!data || isLoading || isExportingPdf} className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-950/35 px-3 py-2 text-xs font-bold text-emerald-200 hover:bg-emerald-900/50 disabled:cursor-not-allowed disabled:opacity-50">
+              <FileDown className={`w-3.5 h-3.5 ${isExportingPdf ? "animate-pulse" : ""}`} /> {isExportingPdf ? "PDF hazirlaniyor" : "PDF indir"}
+            </button>
             <button type="button" onClick={() => setSettingsOpen((open) => !open)} className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/25 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-950/50"><Settings2 className="w-3.5 h-3.5" /> Kurallar</button>
           </div>
         </div>
@@ -432,6 +505,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
           </div>
           <p className="mt-3 text-[10px] text-[#BBE1FA]/45">Varsayılan: seviye 30+, günlük seviye × 1,5; serveti {rules.wealthThreshold.toLocaleString("tr-TR")} Gold ve üzeri için × {rules.multiplierRich}. Savaş modu varsayılan olarak muaf tutulur.</p>
         </div>}
+        {pdfError && <div role="alert" className="mt-4 rounded-xl border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-200">{pdfError}</div>}
         {error && <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-200"><span>{error}</span><button type="button" onClick={() => loadData(true)} className="shrink-0 rounded-lg border border-rose-500/30 px-3 py-1.5 font-bold">Tekrar dene</button></div>}
         {(isLoading || isRefreshing) && <div className="mt-4 rounded-xl border border-[#3282B8]/20 bg-[#141C21] p-3 text-xs text-[#BBE1FA]/70">Üyeler ve haftalık bağış işlemleri WarEra’dan güncelleniyor…</div>}
       </section>
