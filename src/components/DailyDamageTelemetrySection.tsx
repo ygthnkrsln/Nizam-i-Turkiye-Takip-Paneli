@@ -723,7 +723,7 @@ export const DailyDamageTelemetrySection: React.FC<
             <div className="mt-4 text-3xl font-black text-white">{formatDamage(totalPotentialDamage)} <span className="text-xs text-violet-300">DMG</span></div>
             <div className="mt-2 text-[11px] text-[#BBE1FA]/65">{fighterCount} savaş buildli oyuncu · can ve açlık durumuna göre</div>
           </div>
-          <div className="mt-4 border-t border-violet-500/20 pt-3 text-[10px] text-[#BBE1FA]/50">Prestij optimizasyonundaki seviye hasar eğrisi, mevcut prestij, can ve yemek durumuna göre ölçeklenir.</div>
+          <div className="mt-4 border-t border-violet-500/20 pt-3 text-[10px] text-[#BBE1FA]/50">Prestij eğrisi, can ve yemek oranıyla ölçeklenir; 72 saati aşan inaktiflik hesaba katılmaz.</div>
         </div>
       </div>
 

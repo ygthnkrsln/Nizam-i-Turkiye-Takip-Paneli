@@ -413,6 +413,7 @@ async function processSingleArmy(
         hungerMx,
         isFighter,
         u.leveling?.prestigeLevel || 0,
+        u.dates?.lastConnectionAt,
       );
       armyPotentialDamage += potentialDamage;
 
@@ -613,7 +614,7 @@ export default async function handler(req: any, res: any) {
     effectiveDate === todayDateStr ? 30 * 1000 : CACHE_TTL_MS;
 
   const donationHistoryDates = getDonationHistoryDates(effectiveDate);
-  const cacheKey = `mgmt_overview_v14_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v15_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < cacheTtlMs) {
     return res.status(200).json(cached.data);

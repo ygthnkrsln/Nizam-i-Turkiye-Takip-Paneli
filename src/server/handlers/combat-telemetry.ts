@@ -209,6 +209,7 @@ export default async function handler(req: any, res: any) {
         hungerMax,
         isFighter,
         u.leveling?.prestigeLevel || 0,
+        u.dates?.lastConnectionAt,
       );
 
       return {

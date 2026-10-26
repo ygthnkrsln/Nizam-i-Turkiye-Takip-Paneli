@@ -36,9 +36,20 @@ export function calculatePotentialDamage(
   hungerMax: unknown,
   isFighter: boolean,
   prestigeLevel: unknown = 0,
+  lastConnectionAt?: unknown,
 ): number {
   const playerLevel = Number(level);
   if (!isFighter || !Number.isFinite(playerLevel) || playerLevel < 1) return 0;
+
+  const lastConnectionTime = lastConnectionAt instanceof Date
+    ? lastConnectionAt.getTime()
+    : typeof lastConnectionAt === "number"
+      ? lastConnectionAt
+      : lastConnectionAt
+        ? new Date(String(lastConnectionAt)).getTime()
+        : NaN;
+  const inactiveThresholdMs = 3 * 24 * 60 * 60 * 1000;
+  if (Number.isFinite(lastConnectionTime) && Date.now() - lastConnectionTime > inactiveThresholdMs) return 0;
 
   const rawPrestige = Number(prestigeLevel);
   const safePrestige = Number.isFinite(rawPrestige) ? Math.max(0, rawPrestige) : 0;

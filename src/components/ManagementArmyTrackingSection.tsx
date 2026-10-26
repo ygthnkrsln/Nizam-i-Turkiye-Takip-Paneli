@@ -266,7 +266,7 @@ export const ManagementArmyTrackingSection: React.FC<
             <div className="text-3xl sm:text-4xl font-black text-violet-300">{formatDmg(alliance?.totalPotentialDamage ?? 0)}</div>
             <div className="mt-1 text-[10px] text-[#BBE1FA]/65">Savaş buildi · mevcut can ve açlık oranıyla</div>
           </div>
-          <div className="border-t border-violet-500/20 pt-2 text-[10px] text-[#BBE1FA]/50">Prestij optimizasyonundaki seviye hasar eğrisi; prestij, can ve yemek durumuna göre ölçeklenir.</div>
+          <div className="border-t border-violet-500/20 pt-2 text-[10px] text-[#BBE1FA]/50">Prestij eğrisi, can ve yemek oranıyla ölçeklenir; 72 saati aşan inaktiflik hesaba katılmaz.</div>
         </div>
       </div>
 
