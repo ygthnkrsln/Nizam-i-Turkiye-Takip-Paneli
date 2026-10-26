@@ -1,4 +1,4 @@
-import { MissionKey, MISSION_XP, prestigeXpMultiplier, totalXpForLevel, xpRequiredForLevel } from "./levelProgression";
+import { MissionKey, MISSION_XP, prestigeXpMultiplier, totalXpForLevel, xpRequiredForLevel } from "./levelProgression.js";
 
 export interface LevelDamageRate {
   level: number;
