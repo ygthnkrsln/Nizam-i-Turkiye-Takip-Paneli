@@ -68,7 +68,16 @@ export const AllianceDamageSection: React.FC = () => {
     force ? setRefreshing(true) : setLoading(true);
     setError(null);
     try {
-      setData(await fetchManagementIntelligence<AllianceDamageData>("alliance-damage", force));
+      const result = await fetchManagementIntelligence<AllianceDamageData>("alliance-damage", force);
+      if (!result || !Array.isArray(result.countries)) {
+        throw new Error("İttifak API yanıtı beklenen ülke listesini içermiyor. Sunucu güncellendikten sonra Yenile ile tekrar deneyin.");
+      }
+      setData({
+        ...result,
+        alliance: result.alliance || { id: null, name: "Turkish Union" },
+        currentTotal: Number(result.currentTotal) || 0,
+        countries: result.countries,
+      });
     } catch (err: any) {
       setError(err?.message || "İttifak hasar verileri alınamadı.");
     } finally {

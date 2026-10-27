@@ -568,7 +568,7 @@ async function processSingleArmy(
 }
 
 export default async function handler(req: any, res: any) {
-  if (["citizens", "country-tracker"].includes(String(req.query?.view || ""))) {
+  if (["citizens", "country-tracker", "alliance-damage"].includes(String(req.query?.view || ""))) {
     const { default: intelligenceHandler } = await import("./management-intelligence.js");
     return intelligenceHandler(req, res);
   }
