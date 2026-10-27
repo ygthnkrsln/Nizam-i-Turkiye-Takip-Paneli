@@ -14,6 +14,21 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      window.addEventListener('vite:preloadError', (event) => {
+        event.preventDefault();
+        const recoveryKey = 'turkera-vite-preload-recovery';
+        try {
+          const lastRecovery = Number(sessionStorage.getItem(recoveryKey) || 0);
+          if (Date.now() - lastRecovery > 15000) {
+            sessionStorage.setItem(recoveryKey, String(Date.now()));
+            window.location.reload();
+          }
+        } catch {
+          window.location.reload();
+        }
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
