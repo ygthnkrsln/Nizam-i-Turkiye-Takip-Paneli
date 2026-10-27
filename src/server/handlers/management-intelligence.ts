@@ -366,6 +366,9 @@ async function allianceDamageData(force = false) {
   const { raw, home } = await getCountries(force);
   const homeId = countryId(home);
   const allianceId = String(home?.allianceId || "");
+  const allianceInfo = allianceId
+    ? await query("alliance.getById", { allianceId }, force, 60_000).catch(() => null)
+    : null;
   const unionCountryIds = new Set([
     homeId,
     "6813b6d546e731854c7ac8d1", // Azerbaijan
@@ -401,6 +404,9 @@ async function allianceDamageData(force = false) {
   const otherMembers = countryMetrics.filter((country) => !unionMembers.includes(country));
   const unionCurrent = unionMembers.reduce((sum, country) => sum + (country.weeklyDamage || 0), 0);
   const unionPreviousAvailable = previousAvailable && unionMembers.every((country) => country.previousWeeklyDamage !== null);
+  const unionPrevious = unionPreviousAvailable
+    ? unionMembers.reduce((sum, country) => sum + (country.previousWeeklyDamage || 0), 0)
+    : null;
   const countries = [
     {
       id: "turkish-union",
@@ -416,10 +422,10 @@ async function allianceDamageData(force = false) {
   ].sort((a, b) => (b.weeklyDamage || 0) - (a.weeklyDamage || 0));
   return {
     success: true,
-    alliance: { id: allianceId || null, name: "Turkish Union" },
+    alliance: { id: allianceId || null, name: String(allianceInfo?.name || "İttifak bilgisi alınamadı") },
     countries,
-    currentTotal: countries.reduce((sum, country) => sum + (country.weeklyDamage || 0), 0),
-    previousTotal: previousAvailable ? countries.reduce((sum, country) => sum + (country.previousWeeklyDamage || 0), 0) : null,
+    currentTotal: unionCurrent,
+    previousTotal: unionPrevious,
     previousSnapshotDate: previousSnapshot?.date || null,
     currentSnapshotDate: today,
     previousAvailable,
