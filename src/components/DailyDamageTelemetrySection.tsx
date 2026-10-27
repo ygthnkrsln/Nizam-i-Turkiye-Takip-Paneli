@@ -28,11 +28,13 @@ import {
 import { calculateDailyDamageFromSnapshot } from "../lib/dailyDamage";
 import {
   fetchCombatTelemetry,
+  fetchManagementOverview,
   getCachedCombatTelemetry,
   fetchDailyDamageSnapshots,
   triggerDailySnapshotCron,
 } from "../services/wareraApi";
 import type { ArmyReportColumns, ArmyReportMember, ArmyReportMeta } from "../services/pdfReportGenerator";
+import type { ManagementOverviewResponse } from "../services/wareraApi";
 import { TurkeyFlagSVG } from "./DestinationFlag";
 import { ActiveTab } from "../App";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -52,10 +54,15 @@ type SortField =
   | "health"
   | "skillsReset";
 type SortDirection = "asc" | "desc";
+const ALL_ARMIES_FILTER = "__all_armies__";
 
 export const DailyDamageTelemetrySection: React.FC<
   DailyDamageTelemetrySectionProps
 > = ({ muId, onMuIdChange, onNavigateTab }) => {
+  const [armyFilter, setArmyFilter] = useState(muId);
+  const [allArmiesData, setAllArmiesData] = useState<ManagementOverviewResponse | null>(null);
+  const [allArmiesLoading, setAllArmiesLoading] = useState(false);
+  const [allArmiesError, setAllArmiesError] = useState<string | null>(null);
   const [data, setData] = useState<CombatTelemetryData | null>(() =>
     getCachedCombatTelemetry(muId),
   );
@@ -166,6 +173,21 @@ export const DailyDamageTelemetrySection: React.FC<
     window.addEventListener("focus", onWindowFocus);
     return () => window.removeEventListener("focus", onWindowFocus);
   }, [muId]);
+
+  useEffect(() => {
+    if (armyFilter !== ALL_ARMIES_FILTER) {
+      if (armyFilter !== muId) setArmyFilter(muId);
+      return;
+    }
+    let cancelled = false;
+    setAllArmiesLoading(true);
+    setAllArmiesError(null);
+    fetchManagementOverview(undefined, false, undefined, false)
+      .then((overview) => { if (!cancelled) setAllArmiesData(overview); })
+      .catch((err: any) => { if (!cancelled) setAllArmiesError(err?.message || "Tüm ordu durumları alınamadı."); })
+      .finally(() => { if (!cancelled) setAllArmiesLoading(false); });
+    return () => { cancelled = true; };
+  }, [armyFilter, muId]);
 
   const [snapshotData, setSnapshotData] =
     useState<DailyDamageSnapshotsResponse | null>(null);
