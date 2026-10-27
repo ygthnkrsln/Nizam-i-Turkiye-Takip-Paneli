@@ -13,6 +13,7 @@ import {
   fetchManagementIntelligence,
   ManagementIntelligenceView,
 } from "../services/wareraApi";
+import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type Tone = "good" | "warn" | "bad" | "info";
 type AnyRecord = Record<string, any>;
@@ -220,6 +221,29 @@ export function ManagementCitizensSection() {
           <MetricCard label="Asker / ekonomist" value={`${formatNumber(data.counts.soldiers)} / ${formatNumber(data.counts.economists)}`} detail={`${formatNumber(data.counts.mixed)} karma · ${formatNumber(data.counts.novices)} acemi`} tone="info" icon={<Swords className="h-4 w-4" />} />
           <MetricCard label="Oy verebilen" value={formatNumber(data.counts.voters)} detail={`Seviye ${formatNumber(data.government.voters.minLevel)}+`} tone="info" icon={<CheckCircle2 className="h-4 w-4" />} />
         </div>
+        <Panel title="Vatandaş aktivite dağılımı" subtitle="Aktiflik sınıflarına göre vatandaşların mevcut durumu.">
+          {(() => {
+            const activity = [
+              { name: "Aktif", value: Number(data.counts.active) || 0, color: "#34d399" },
+              { name: "Uykuda", value: Number(data.counts.sleeping) || 0, color: "#fbbf24" },
+              { name: "İnaktif", value: Number(data.counts.inactive) || 0, color: "#fb7185" },
+            ].filter((item) => item.value > 0);
+            return <div className="grid items-center gap-4 sm:grid-cols-[250px_1fr]">
+              <div className="relative mx-auto h-60 w-full max-w-[260px]">
+                <ResponsiveContainer width="100%" height="100%"><PieChart>
+                  <Pie data={activity} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="58%" outerRadius="86%" paddingAngle={activity.length > 1 ? 3 : 0} stroke="#182329" strokeWidth={3}>
+                    {activity.map((item) => <Cell key={item.name} fill={item.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(value, name) => [formatNumber(value), String(name)]} contentStyle={{ background: "#0b1419", border: "1px solid rgba(56,189,248,.35)", borderRadius: 10, color: "#fff" }} />
+                </PieChart></ResponsiveContainer>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="text-[10px] uppercase tracking-wider text-[#BBE1FA]/50">Vatandaş</span><b className="mt-1 text-2xl text-white">{formatNumber(data.counts.total)}</b><span className="text-[10px] text-[#BBE1FA]/45">toplam</span></div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {activity.map((item) => <div key={item.name} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-[#141C21] p-3"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} /><div className="min-w-0"><div className="text-[10px] uppercase tracking-wider text-[#BBE1FA]/50">{item.name}</div><div className="text-lg font-black text-white">{formatNumber(item.value)}</div><div className="text-[10px] text-[#BBE1FA]/45">{(item.value / Math.max(1, Number(data.counts.total)) * 100).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%</div></div></div>)}
+              </div>
+            </div>;
+          })()}
+        </Panel>
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           {(data.governments || []).map((government: AnyRecord) => <Panel key={government.country.key} title={`${government.country.label || government.country.name} · Hükümet`} subtitle={`Parti: ${government.government.party.name}`}>
             <div className="mb-3 rounded-lg border border-[#3282B8]/15 bg-[#141C21] p-3 text-xs text-[#BBE1FA]/75">Uygun seçmen: <b className="text-white">{formatNumber(government.government.voters.eligible)}</b> · Oy verme seviyesi: <b className="text-white">{formatNumber(government.government.voters.minLevel)}+</b></div>
@@ -350,6 +374,15 @@ export function ManagementCountryTrackerSection() {
     return rows.slice(0, 80);
   }, [countries, search]);
   const chart = useMemo(() => indexedChart(snapshots, selectedIds, metric), [snapshots, selectedIds, metric]);
+  const chartRows = useMemo(() => chart.points.map((point: string) => {
+    const row: AnyRecord = { date: point };
+    chart.lines.forEach((line: AnyRecord) => {
+      const sample = line.values.find((value: AnyRecord) => value.date === point);
+      const baselineValue = Number(line.values[0]?.value || 0);
+      row[line.id] = sample && baselineValue ? sample.value / baselineValue * 100 : null;
+    });
+    return row;
+  }), [chart]);
   const metricInfo = COUNTRY_METRICS.find((item) => item.key === metric) || COUNTRY_METRICS[0];
   const toggleCountry = (id: string) => setSelectedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : current.length >= 4 ? current : [...current, id]);
   const selectedCountries = selectedIds.map((id) => countries.find((row: AnyRecord) => row.id === id)).filter(Boolean) as AnyRecord[];
@@ -372,13 +405,17 @@ export function ManagementCountryTrackerSection() {
           </Panel>
           <Panel title="Günlük değişim" subtitle="Grafik, ilk görülen günün değerini 100 kabul ederek göreli değişimi gösterir." right={<select value={metric} onChange={(event) => setMetric(event.target.value)} className="rounded-md border border-[#3282B8]/20 bg-[#141C21] px-2 py-1.5 text-xs text-white">{COUNTRY_METRICS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select>}>
             {chart.lines.length < 1 ? <div className="flex h-48 items-center justify-center text-xs text-[#BBE1FA]/50">Grafik için ülke seç.</div> : <>
-              <div className="overflow-x-auto"><svg viewBox="0 0 700 220" role="img" aria-label={`${metricInfo.label} karşılaştırma grafiği`} className="h-52 min-w-[560px] w-full">
-                {[30, 70, 110, 150, 190].map((y) => <line key={y} x1="30" x2="670" y1={y} y2={y} stroke="rgba(187,225,250,.09)" strokeDasharray={y === 190 ? undefined : "4 5"} />)}
-                <line x1="30" x2="670" y1="190" y2="190" stroke="rgba(187,225,250,.18)" />
-                <text x="4" y="34" fill="rgba(187,225,250,.4)" fontSize="10">↑</text><text x="4" y="190" fill="rgba(187,225,250,.4)" fontSize="10">100</text>
-                {chart.lines.map((line: AnyRecord) => <g key={line.id}><polyline points={line.points} fill="none" stroke={line.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />{line.values.map((point: AnyRecord, index: number) => index === line.values.length - 1 ? <circle key={point.date} cx={point.x} cy={190 - (point.y / Math.max(110, ...chart.lines.flatMap((l: AnyRecord) => l.values.map((p: AnyRecord) => p.y)))) * 160} r="4" fill={line.color} /> : null)}</g>)}
-                <text x="30" y="210" fill="rgba(187,225,250,.4)" fontSize="9">{chart.points[0] || ""}</text><text x="670" y="210" textAnchor="end" fill="rgba(187,225,250,.4)" fontSize="9">{chart.points.at(-1) || ""}</text>
-              </svg></div>
+              <div className="h-56 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartRows} margin={{ top: 8, right: 18, bottom: 2, left: 2 }}>
+                    <CartesianGrid stroke="#9fb3c8" strokeOpacity={0.16} strokeDasharray="3 5" />
+                    <XAxis dataKey="date" tickFormatter={(value) => String(value).slice(5)} tick={{ fill: "#BBE1FA", fillOpacity: 0.55, fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={18} />
+                    <YAxis tickFormatter={(value) => `${Math.round(Number(value))}%`} tick={{ fill: "#BBE1FA", fillOpacity: 0.55, fontSize: 9 }} axisLine={false} tickLine={false} width={46} />
+                    <Tooltip labelFormatter={(value) => `Tarih: ${value}`} formatter={(value, name) => [`${Number(value).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%`, countries.find((country: AnyRecord) => country.id === name)?.name || String(name)]} contentStyle={{ background: "#0b1419", border: "1px solid rgba(56,189,248,.35)", borderRadius: 10, color: "#fff" }} labelStyle={{ color: "#fff", fontWeight: 700 }} />
+                    {chart.lines.map((line: AnyRecord) => <Line key={line.id} type="monotone" dataKey={line.id} name={countries.find((country: AnyRecord) => country.id === line.id)?.name || line.id} stroke={line.color} strokeWidth={2.5} dot={{ r: 2.5, fill: line.color, strokeWidth: 0 }} activeDot={{ r: 5, stroke: "#fff", strokeWidth: 1 }} connectNulls />)}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
               <div className="flex flex-wrap gap-x-4 gap-y-2">{chart.lines.map((line: AnyRecord) => <div key={line.id} className="flex items-center gap-1.5 text-[10px] text-[#BBE1FA]/65"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: line.color }} />{countries.find((row: AnyRecord) => row.id === line.id)?.name || line.id}</div>)}</div>
             </>}
           </Panel>

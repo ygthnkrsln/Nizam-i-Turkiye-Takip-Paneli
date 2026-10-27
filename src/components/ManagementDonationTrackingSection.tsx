@@ -19,6 +19,7 @@ import {
   ManagementMemberItem,
   ManagementOverviewResponse,
 } from "../services/wareraApi";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const GAME_RESET_MS = 3 * 60 * 60 * 1000;
 const RULES_KEY = "nizam-donation-rules-v1";
@@ -531,6 +532,26 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#10171b]"><div className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-300 transition-all" style={{ width: `${totals.completion}%` }} /></div>
           <div className="mt-2 flex flex-wrap justify-between gap-2 text-[10px] text-[#BBE1FA]/45"><span>Eksik kota: {money(totals.gap)}</span><span>Günlük sıfırlama: 06:00 Türkiye saati</span></div>
+        </section>
+
+        <section className="rounded-xl border border-emerald-500/20 bg-[#182329]/85 p-4 shadow-lg">
+          <div className="mb-3">
+            <h2 className="text-sm font-bold text-emerald-200">Birliklere göre haftalık bağış performansı</h2>
+            <p className="mt-1 text-[10px] text-[#BBE1FA]/50">Haftalık hedef ile ödenen bağış ve devreden havuz tutarını karşılaştır.</p>
+          </div>
+          <div className="h-[360px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={armyTotals} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 4 }} barCategoryGap="30%">
+                <CartesianGrid stroke="#9fb3c8" strokeOpacity={0.18} strokeDasharray="3 5" horizontal={false} />
+                <XAxis type="number" tickFormatter={(value) => `${(Number(value) / 1000).toLocaleString("tr-TR", { maximumFractionDigits: 0 })}K`} tick={{ fill: "#cbd5e1", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" width={136} tick={{ fill: "#f1f5f9", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip formatter={(value, name) => [`${money(Number(value))}`, String(name)]} contentStyle={{ background: "#0b1419", border: "1px solid rgba(52,211,153,.35)", borderRadius: 10, color: "#fff" }} labelStyle={{ color: "#fff", fontWeight: 700 }} />
+                <Legend wrapperStyle={{ color: "#dbeafe", fontSize: 11 }} />
+                <Bar dataKey="quota" name="Haftalık hedef" fill="#34d399" radius={[0, 5, 5, 0]} maxBarSize={16} />
+                <Bar dataKey="paid" name="Ödenen + devir" fill="#f4c76b" radius={[0, 5, 5, 0]} maxBarSize={16} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </section>
 
         <section className="overflow-hidden rounded-xl border border-emerald-500/20 bg-[#182329]/80 shadow-lg">

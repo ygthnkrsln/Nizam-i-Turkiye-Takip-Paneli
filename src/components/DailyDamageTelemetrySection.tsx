@@ -35,6 +35,7 @@ import {
 import type { ArmyReportColumns, ArmyReportMember, ArmyReportMeta } from "../services/pdfReportGenerator";
 import { TurkeyFlagSVG } from "./DestinationFlag";
 import { ActiveTab } from "../App";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 interface DailyDamageTelemetrySectionProps {
   muId: string;
@@ -238,6 +239,10 @@ export const DailyDamageTelemetrySection: React.FC<
     () => membersWithDailyDamage.filter((member) => member.isFighter).length,
     [membersWithDailyDamage],
   );
+  const snapshotDamageHistory = useMemo(() => (snapshotData?.dates || []).slice(-14).map((day) => ({
+    date: day,
+    weeklyDamage: Number(snapshotData?.snapshots?.[day]?.armies?.[muId]?.armyTotalWeeklyDamage || 0),
+  })), [snapshotData, muId]);
 
   // Pill remaining countdown helper
   const getPillRemainingMs = (expiresAt: string | null) => {
@@ -1279,6 +1284,21 @@ export const DailyDamageTelemetrySection: React.FC<
                     <span>02:55 Snapshot'ı Şimdi Al (Test)</span>
                   </button>
                 </div>
+
+                {snapshotDamageHistory.length > 1 && <div className="rounded-lg border border-rose-500/15 bg-[#10171b] p-3">
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-[#BBE1FA]/60">Snapshot geçmişi · haftalık hasar</div>
+                  <div className="h-44 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={snapshotDamageHistory} margin={{ top: 8, right: 10, bottom: 0, left: 0 }}>
+                        <CartesianGrid stroke="#9fb3c8" strokeOpacity={0.14} strokeDasharray="3 5" />
+                        <XAxis dataKey="date" tickFormatter={(value) => String(value).slice(5)} tick={{ fill: "#BBE1FA", fillOpacity: 0.55, fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={12} />
+                        <YAxis tickFormatter={(value) => formatDamage(Number(value))} tick={{ fill: "#BBE1FA", fillOpacity: 0.55, fontSize: 9 }} axisLine={false} tickLine={false} width={48} />
+                        <Tooltip labelFormatter={(value) => `Snapshot: ${value}`} formatter={(value) => [`${formatDamage(Number(value))} hasar`, "Haftalık hasar"]} contentStyle={{ background: "#081116", border: "1px solid rgba(244,114,182,.35)", borderRadius: 10, color: "#fff" }} labelStyle={{ color: "#fff", fontWeight: 700 }} />
+                        <Line type="monotone" dataKey="weeklyDamage" name="Haftalık hasar" stroke="#fb7185" strokeWidth={2.5} dot={{ r: 3, fill: "#fb7185", strokeWidth: 0 }} activeDot={{ r: 5, stroke: "#fff", strokeWidth: 1 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>}
 
                 <div className="space-y-2 text-xs">
                   <div className="p-2.5 rounded-lg bg-[#182329] border border-rose-500/30 flex items-center justify-between">

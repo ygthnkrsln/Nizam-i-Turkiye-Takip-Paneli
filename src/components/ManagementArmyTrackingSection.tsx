@@ -20,6 +20,7 @@ import {
   ManagementArmyItem,
 } from "../services/wareraApi";
 import { ActiveTab } from "../App";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 interface ManagementArmyTrackingSectionProps {
   onSelectArmy: (muId: string) => void;
@@ -269,6 +270,26 @@ export const ManagementArmyTrackingSection: React.FC<
           <div className="border-t border-violet-500/20 pt-2 text-[10px] text-[#BBE1FA]/50">Prestij eğrisi, can ve yemek oranıyla ölçeklenir; 72 saati aşan inaktiflik hesaba katılmaz.</div>
         </div>
       </div>
+
+      <section className="rounded-xl border border-cyan-500/20 bg-[#182329] p-4 shadow-lg">
+        <div className="mb-3">
+          <h2 className="text-sm font-bold text-cyan-200">Birliklere göre günlük ve potansiyel hasar</h2>
+          <p className="mt-1 text-[10px] text-[#BBE1FA]/50">Günlük gerçek hasarı, mevcut hazırlık seviyesindeki tahmini potansiyelle karşılaştır.</p>
+        </div>
+        <div className="h-[360px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={sortedArmies} layout="vertical" margin={{ top: 4, right: 22, bottom: 4, left: 4 }} barCategoryGap="28%">
+              <CartesianGrid stroke="#9fb3c8" strokeOpacity={0.18} strokeDasharray="3 5" horizontal={false} />
+              <XAxis type="number" tickFormatter={(value) => formatDmg(Number(value))} tick={{ fill: "#cbd5e1", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="name" width={138} tick={{ fill: "#f1f5f9", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip formatter={(value, name) => [`${formatDmg(Number(value))} hasar`, String(name)]} contentStyle={{ background: "#0b1419", border: "1px solid rgba(56,189,248,.35)", borderRadius: 10, color: "#fff" }} labelStyle={{ color: "#fff", fontWeight: 700 }} />
+              <Legend wrapperStyle={{ color: "#dbeafe", fontSize: 11 }} />
+              <Bar dataKey="todayDamage" name="Bugünkü hasar" fill="#38bdf8" radius={[0, 5, 5, 0]} maxBarSize={16} />
+              <Bar dataKey="potentialDamage" name="Potansiyel hasar" fill="#a78bfa" radius={[0, 5, 5, 0]} maxBarSize={16} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
 
       {/* 3. 8 ORDU CANLI TABLOSU */}
       <div className="rounded-xl bg-[#182329] border border-amber-500/25 overflow-hidden shadow-xl">
