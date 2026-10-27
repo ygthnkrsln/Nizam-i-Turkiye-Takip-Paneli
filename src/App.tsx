@@ -16,6 +16,7 @@ const ManagementArmyTrackingSection = React.lazy(() => import('./components/Mana
 const ManagementDonationTrackingSection = React.lazy(() => import('./components/ManagementDonationTrackingSection').then((module) => ({ default: module.ManagementDonationTrackingSection })));
 const ManagementCitizensSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementCitizensSection })));
 const ManagementCountryTrackerSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementCountryTrackerSection })));
+const AllianceDamageSection = React.lazy(() => import('./components/AllianceDamageSection').then((module) => ({ default: module.AllianceDamageSection })));
 const LevelCalculatorSection = React.lazy(() => import('./components/LevelCalculatorSection').then((module) => ({ default: module.LevelCalculatorSection })));
 const PrestigeDamageOptimizerSection = React.lazy(() => import('./components/PrestigeDamageOptimizerSection').then((module) => ({ default: module.PrestigeDamageOptimizerSection })));
 const MarketPricesSection = React.lazy(() => import('./components/MarketPricesSection').then((module) => ({ default: module.MarketPricesSection })));
@@ -41,6 +42,7 @@ export type ActiveTab =
   | 'mgmtDiplomacy'
   | 'mgmtCitizens'
   | 'mgmtCountryTracker'
+  | 'allianceDamage'
   | 'levelCalculator'
   | 'prestigeOptimizer'
   | 'marketPrices';
@@ -58,6 +60,7 @@ export const TAB_TO_SLUG: Record<ActiveTab, string> = {
   mgmtDiplomacy: 'ittifak-diplomasi',
   mgmtCitizens: 'vatandaslar-ve-hukumet',
   mgmtCountryTracker: 'ulke-takibi',
+  allianceDamage: 'ittifak-hasari',
   levelCalculator: 'seviye-hesaplayici',
   prestigeOptimizer: 'prestij-hasar-optimizasyonu',
   marketPrices: 'market-fiyatlari',
@@ -75,6 +78,7 @@ const TAB_TITLES: Record<ActiveTab, string> = {
   mgmtDiplomacy: 'TürkEra - İttifak & Diplomasi (Yönetim Modu)',
   mgmtCitizens: 'TürkEra - Vatandaşlar & Hükümet',
   mgmtCountryTracker: 'TürkEra - Ülke Takibi & Karşılaştırma',
+  allianceDamage: 'TürkEra - İttifak Hasarı',
   levelCalculator: 'TürkEra - Seviye Hesaplayıcı',
   prestigeOptimizer: 'TürkEra - Prestij - Hasar Optimizasyonu',
   marketPrices: 'TürkEra - Market Fiyatları',
@@ -134,6 +138,8 @@ export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
     tab = 'mgmtCitizens';
   } else if (tabSlug === 'ulke-takibi' || tabSlug === 'ulke-karsilastirma' || tabSlug === 'country-tracker') {
     tab = 'mgmtCountryTracker';
+  } else if (tabSlug === 'ittifak-hasari' || tabSlug === 'ittifak' || tabSlug === 'alliance-damage') {
+    tab = 'allianceDamage';
   } else if (tabSlug === 'vergi-simulatoru' || tabSlug === 'gelir-tahmini' || tabSlug === 'tax-simulator') {
     tab = 'mgmtDonations';
   } else if (tabSlug === 'ordu-bilgisi' || tabSlug === 'ordubilgisi' || tabSlug === 'army-info') {
@@ -250,7 +256,7 @@ export default function App() {
   const handleTabChange = useCallback((newTab: ActiveTab) => {
     setActiveTab(newTab);
     const slug = TAB_TO_SLUG[newTab];
-    const hasMuPath = !(['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtCitizens', 'mgmtCountryTracker', 'mgmtDonations'] as ActiveTab[]).includes(newTab);
+    const hasMuPath = !(['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtCitizens', 'mgmtCountryTracker', 'allianceDamage', 'mgmtDonations'] as ActiveTab[]).includes(newTab);
     const newPath = hasMuPath ? `/${slug}/${muId}${window.location.search}` : `/${slug}${window.location.search}`;
     const expectedPathname = hasMuPath ? `/${slug}/${muId}` : `/${slug}`;
     if (window.location.pathname !== expectedPathname) {
@@ -286,7 +292,7 @@ export default function App() {
     // If loaded on root "/" or on slug without MU ID, gracefully update URL to include the MU ID
     const currentPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
     const currentSlug = TAB_TO_SLUG[route.tab];
-    const noMuTabs: ActiveTab[] = ['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtCitizens', 'mgmtCountryTracker', 'mgmtDonations'];
+    const noMuTabs: ActiveTab[] = ['countryStats', 'levelCalculator', 'prestigeOptimizer', 'marketPrices', 'mgmtCitizens', 'mgmtCountryTracker', 'allianceDamage', 'mgmtDonations'];
     const targetExpectedPath = noMuTabs.includes(route.tab) ? `/${currentSlug}` : `/${currentSlug}/${muId}`;
     if (`/${currentPath}` !== targetExpectedPath) {
       window.history.replaceState({ tab: route.tab, muId }, '', `${targetExpectedPath}${window.location.search}`);
@@ -473,6 +479,8 @@ export default function App() {
           <ManagementCitizensSection />
         ) : activeTab === 'mgmtCountryTracker' ? (
           <ManagementCountryTrackerSection />
+        ) : activeTab === 'allianceDamage' ? (
+          <AllianceDamageSection />
         ) : activeTab === 'combatArmyInfo' ? (
           <div className="space-y-4">
             <div className="inline-flex flex-wrap gap-2 rounded-xl border border-[#3282B8]/20 bg-[#182329] p-1.5">

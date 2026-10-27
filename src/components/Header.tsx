@@ -13,6 +13,7 @@ import {
   Shield,
   Users,
   Map,
+  Handshake,
   X,
 } from 'lucide-react';
 import { ActiveTab } from '../App';
@@ -55,6 +56,7 @@ const groups: {
     tabs: [
       { id: 'mgmtCitizens', title: 'Vatandaşlar & Hükümet', icon: Users },
       { id: 'mgmtArmies', title: 'Ordu Takibi', icon: Shield },
+      { id: 'allianceDamage', title: 'İttifak Hasarı', icon: Handshake },
     ],
   },
   {

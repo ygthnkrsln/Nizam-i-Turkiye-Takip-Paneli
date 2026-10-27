@@ -362,6 +362,52 @@ async function countryTrackerData(force = false, requestedCountryIds?: string[])
   };
 }
 
+async function allianceDamageData(force = false) {
+  const { raw, home } = await getCountries(force);
+  const homeId = countryId(home);
+  const allianceId = String(home?.allianceId || "");
+  const unionNames = /^(turkiye|türkiye|turkey|azerbaijan|azerbaycan|cameroon|kamerun)$/i;
+  const members = raw.filter((country) =>
+    countryId(country) === homeId ||
+    (allianceId && String(country?.allianceId || "") === allianceId) ||
+    unionNames.test(String(country?.name || "")),
+  );
+  const { snapshots } = await persistCountrySnapshot(raw, new Date());
+  const today = turkeyDate();
+  const todayTime = new Date(`${today}T12:00:00`).getTime();
+  const previousTarget = todayTime - 7 * 86_400_000;
+  const previousSnapshot = [...snapshots]
+    .filter((snapshot) => {
+      const diff = previousTarget - new Date(`${snapshot.date}T12:00:00`).getTime();
+      return diff >= 0 && diff <= 2 * 86_400_000;
+    })
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+  const previousById = new Map<string, any>((previousSnapshot?.countries || []).map((country: AnyRecord): [string, AnyRecord] => [String(country.id), country]));
+  const countries = members.map((country) => {
+    const current = metricCountry(country);
+    return {
+      ...current,
+      previousWeeklyDamage: finite(previousById.get(current.id)?.weeklyDamage),
+      allianceId: String(country?.allianceId || ""),
+    };
+  }).sort((a, b) => (b.weeklyDamage || 0) - (a.weeklyDamage || 0));
+  const previousAvailable = Boolean(previousSnapshot);
+  return {
+    success: true,
+    alliance: { id: allianceId || null, name: String(home?.allianceName || "Turkish Union") },
+    countries,
+    currentTotal: countries.reduce((sum, country) => sum + (country.weeklyDamage || 0), 0),
+    previousTotal: previousAvailable ? countries.reduce((sum, country) => sum + (country.previousWeeklyDamage || 0), 0) : null,
+    previousSnapshotDate: previousSnapshot?.date || null,
+    currentSnapshotDate: today,
+    previousAvailable,
+    fetchedAt: new Date().toISOString(),
+    note: previousAvailable
+      ? "Haftalık hasar, WarEra ülke sıralamasındaki son 7 günlük değerdir. Geçen hafta karşılaştırması 7 gün önceki günlük snapshot ile yapılır."
+      : "Geçen hafta karşılaştırması için en az 5 günlük snapshot geçmişi gerekir; günlük ülke snapshotları mevcut hasar cron'u tarafından kaydedilir.",
+  };
+}
+
 function asCountryMap(rows: any[]) {
   return new Map<string, any>(rows.map((row): [string, any] => [countryId(row), row]));
 }
@@ -848,6 +894,7 @@ async function loadView(view: string, force: boolean, countryFilter = "all", sel
   switch (view) {
     case "citizens": return citizensData(force, countryFilter);
     case "country-tracker": return countryTrackerData(force, selectedCountryIds);
+    case "alliance-damage": return allianceDamageData(force);
     default: throw Object.assign(new Error("Geçersiz yönetim görünümü."), { statusCode: 400 });
   }
 }
@@ -859,7 +906,7 @@ export default async function handler(req: any, res: any) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET") return res.status(405).json({ success: false, error: "Method not allowed" });
   const view = String(req.query?.view || "");
-  const allowed = new Set(["citizens", "country-tracker"]);
+  const allowed = new Set(["citizens", "country-tracker", "alliance-damage"]);
   if (!allowed.has(view)) return res.status(400).json({ success: false, error: "Geçersiz yönetim görünümü." });
   const force = req.query?.refresh === "true";
   const countryFilter = String(req.query?.country || "all");

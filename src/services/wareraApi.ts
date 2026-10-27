@@ -2222,7 +2222,8 @@ export async function fetchManagementTreasury(forceRefresh = false): Promise<Man
 
 export type ManagementIntelligenceView =
   | "citizens"
-  | "country-tracker";
+  | "country-tracker"
+  | "alliance-damage";
 
 export async function fetchManagementIntelligence<T = Record<string, any>>(
   view: ManagementIntelligenceView,
