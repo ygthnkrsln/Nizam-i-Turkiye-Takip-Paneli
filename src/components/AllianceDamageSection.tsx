@@ -5,10 +5,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -36,55 +32,63 @@ type AllianceDamageData = {
   note: string;
 };
 
-const COLORS = ["#f4c76b", "#38bdf8", "#34d399", "#fb7185", "#a78bfa", "#2dd4bf", "#f97316", "#c084fc"];
 const number = (value: number | null | undefined) => Number(value || 0).toLocaleString("tr-TR");
 const date = (value?: string | null) => value ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: "Europe/Istanbul" }).format(new Date(`${value}T12:00:00`)) : "—";
 
-function CountryDamagePie({ countries }: { countries: AllianceCountry[] }) {
-  const total = countries.reduce((sum, country) => sum + Math.max(0, country.weeklyDamage || 0), 0);
+function CountryDamageBarChart({
+  countries,
+  previousWeek = false,
+  snapshotDate,
+}: {
+  countries: AllianceCountry[];
+  previousWeek?: boolean;
+  snapshotDate?: string | null;
+}) {
+  const valueKey = previousWeek ? "previousWeeklyDamage" : "weeklyDamage";
   const chartData = countries
-    .map((country) => ({ ...country, value: Math.max(0, country.weeklyDamage || 0) }))
-    .filter((country) => country.value > 0);
+    .filter((country) => country[valueKey] !== null && country[valueKey] !== undefined)
+    .map((country) => ({ ...country, chartDamage: country[valueKey] || 0 }))
+    .sort((left, right) => right.chartDamage - left.chartDamage);
+  const chartHeight = Math.max(260, chartData.length * 48 + 54);
+  const barColor = previousWeek ? "#f4c76b" : "#2dd4bf";
+  const periodLabel = previousWeek ? "Geçen hafta" : "Bu hafta";
+
   return (
-    <div className="grid items-center gap-6 lg:grid-cols-[minmax(270px,0.9fr)_1.1fr]">
-      <div className="relative mx-auto h-[290px] w-full max-w-[330px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="62%" outerRadius="88%" paddingAngle={chartData.length > 1 ? 3 : 0} stroke="#182329" strokeWidth={3} isAnimationActive>
-              {chartData.map((country) => <Cell key={country.id} fill={COLORS[countries.findIndex((item) => item.id === country.id) % COLORS.length]} />)}
-            </Pie>
-            <Tooltip
-              formatter={(value) => [`${number(Number(value))} hasar`, "Haftalık hasar"]}
-              contentStyle={{ background: "#10191e", border: "1px solid rgba(56,189,248,.25)", borderRadius: 12, color: "#fff", boxShadow: "0 12px 32px rgba(0,0,0,.35)" }}
-              itemStyle={{ color: "#e2e8f0", fontSize: 12 }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#BBE1FA]/50">İttifak hasarı</span>
-          <strong className="mt-1 text-2xl font-black tabular-nums text-white">{total ? `${(total / 1_000_000).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}M` : "—"}</strong>
-          <span className="mt-1 text-[10px] text-[#BBE1FA]/40">son 7 gün</span>
+    <section className="rounded-2xl border border-[#3282B8]/20 bg-[#182329]/90 p-4 sm:p-5">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-bold text-white">{periodLabel} ülke hasarları</h2>
+          <p className="mt-1 text-[11px] text-[#BBE1FA]/50">{snapshotDate ? `Snapshot: ${date(snapshotDate)}` : "Bu dönem için kayıtlı snapshot yok"} · En yüksek hasardan düşüğe</p>
         </div>
+        <span className="rounded-full border px-2.5 py-1 text-[10px] font-bold" style={{ color: barColor, borderColor: `${barColor}55`, backgroundColor: `${barColor}12` }}>{periodLabel}</span>
       </div>
-      <div className="space-y-2">
-        {chartData.map((country) => {
-          const index = countries.findIndex((item) => item.id === country.id);
-          const share = total ? country.value / total * 100 : 0;
-          return <div key={country.id} className="group flex items-center gap-3 rounded-xl border border-white/[0.045] bg-[#141C21]/75 px-3.5 py-3 transition hover:border-white/10 hover:bg-[#141C21]">
-          <span className="h-3 w-3 shrink-0 rounded-full ring-4 ring-white/[0.035]" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold text-white">{country.name}</div>
-            {country.memberCountries?.length ? <div className="mt-0.5 truncate text-[10px] text-[#BBE1FA]/45">{country.memberCountries.join(" · ")}</div> : null}
-          </div>
-          <div className="text-right">
-            <div className="text-sm font-bold tabular-nums text-white">{number(country.value)}</div>
-            <div className="text-[10px] font-semibold tabular-nums text-[#BBE1FA]/50">{share.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%</div>
-          </div>
-        </div>})}
-        {!chartData.length && <p className="rounded-xl border border-white/[0.05] bg-[#141C21]/70 p-4 text-xs text-[#BBE1FA]/50">Grafik için ittifak hasar verisi bulunamadı.</p>}
-        {total > 0 && <p className="pt-1 text-[10px] text-[#BBE1FA]/40">Dilim büyüklüğü ülkelerin son 7 günlük hasar payını gösterir.</p>}
-      </div>
-    </div>
+      {!chartData.length ? (
+        <div className="rounded-xl border border-white/[0.06] bg-[#10191e] px-4 py-8 text-center text-xs text-[#BBE1FA]/55">{previousWeek ? "Geçen haftaya ait ülke snapshotı henüz bulunmuyor." : "İttifak ülke hasar verisi bulunamadı."}</div>
+      ) : (
+        <div className="w-full" style={{ height: chartHeight }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} layout="vertical" margin={{ top: 6, right: 22, bottom: 8, left: 4 }} barCategoryGap="34%">
+              <CartesianGrid stroke="#9fb3c8" strokeOpacity={0.2} strokeDasharray="3 5" horizontal={false} />
+              <XAxis type="number" tickFormatter={(value) => `${(Number(value) / 1_000_000).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}M`} tick={{ fill: "#cbd5e1", fontSize: 10 }} axisLine={{ stroke: "#64748b", strokeOpacity: 0.45 }} tickLine={false} />
+              <YAxis type="category" dataKey="name" width={128} tick={{ fill: "#f1f5f9", fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} />
+              <Tooltip
+                cursor={{ fill: "#ffffff", fillOpacity: 0.07 }}
+                content={({ active, payload }) => {
+                  const country = payload?.[0]?.payload as (AllianceCountry & { chartDamage: number }) | undefined;
+                  if (!active || !country) return null;
+                  return <div className="rounded-xl border border-white/15 bg-[#081116] px-3.5 py-2.5 shadow-2xl">
+                    <div className="text-xs font-bold text-white">{country.name}</div>
+                    {country.memberCountries?.length ? <div className="mt-0.5 text-[10px] text-slate-300">{country.memberCountries.join(" · ")}</div> : null}
+                    <div className="mt-1.5 text-sm font-black tabular-nums" style={{ color: barColor }}>{number(country.chartDamage)} hasar</div>
+                  </div>;
+                }}
+              />
+              <Bar dataKey="chartDamage" name={`${periodLabel} hasarı`} fill={barColor} radius={[0, 6, 6, 0]} maxBarSize={24} activeBar={{ fill: barColor, stroke: "#ffffff", strokeOpacity: 0.45, strokeWidth: 1 }} isAnimationActive />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -122,8 +126,6 @@ export const AllianceDamageSection: React.FC = () => {
     if (data?.previousTotal === null || data?.previousTotal === undefined || data.previousTotal === 0) return null;
     return (data.currentTotal - data.previousTotal) / data.previousTotal * 100;
   }, [data]);
-  const comparisonChartHeight = Math.max(340, (data?.countries.length || 0) * 54);
-
   return <div className="space-y-5">
     <header className="flex flex-col gap-3 border-b border-[#3282B8]/20 pb-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
@@ -145,33 +147,10 @@ export const AllianceDamageSection: React.FC = () => {
         <div className="rounded-xl border border-amber-500/25 bg-amber-950/20 p-4"><div className="text-[10px] font-bold uppercase tracking-wider text-amber-200/70">Turkish Union · Geçen haftaya göre</div><div className="mt-2 flex items-center gap-1.5 text-lg font-black text-white">{change === null ? "Veri bekleniyor" : <>{change >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-300" /> : <TrendingDown className="h-4 w-4 text-rose-300" />}{change > 0 ? "+" : ""}{change.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%</>}</div><div className="mt-1 text-xs text-[#BBE1FA]/55">{data.previousTotal === null ? "Geçmiş snapshot henüz yok" : `${number(data.previousTotal)} · ${date(data.previousSnapshotDate)}`}</div></div>
       </div>
 
-      <section className="rounded-2xl border border-[#3282B8]/20 bg-[#182329]/90 p-4 sm:p-5">
-        <h2 className="mb-4 text-sm font-bold text-white">Haftalık hasar payları</h2>
-        <CountryDamagePie countries={data.countries} />
-      </section>
-
-      <section className="rounded-2xl border border-[#3282B8]/20 bg-[#182329]/90 p-4 sm:p-5">
-        <h2 className="mb-1 text-sm font-bold text-white">Ülkelere göre haftalık karşılaştırma</h2>
-        <p className="mb-4 text-[11px] text-[#BBE1FA]/50">Bu hafta ve {data.previousSnapshotDate ? date(data.previousSnapshotDate) : "geçen hafta snapshotı yok"} karşılaştırması</p>
-        <div className="w-full" style={{ height: comparisonChartHeight }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.countries} layout="vertical" margin={{ top: 4, right: 20, bottom: 4, left: 8 }} barCategoryGap="28%">
-              <CartesianGrid stroke="#94a3b8" strokeOpacity={0.12} strokeDasharray="3 5" horizontal={false} />
-              <XAxis type="number" tickFormatter={(value) => `${(Number(value) / 1_000_000).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}M`} tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="name" width={112} tick={{ fill: "#dbeafe", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip
-                formatter={(value, name) => [`${number(Number(value))} hasar`, String(name)]}
-                contentStyle={{ background: "#10191e", border: "1px solid rgba(56,189,248,.25)", borderRadius: 12, color: "#fff", boxShadow: "0 12px 32px rgba(0,0,0,.35)" }}
-                labelStyle={{ color: "#fff", fontWeight: 700, marginBottom: 6 }}
-                itemStyle={{ color: "#e2e8f0", fontSize: 12 }}
-              />
-              <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 11, paddingTop: 8 }} />
-              <Bar dataKey="weeklyDamage" name="Bu hafta" fill="#38bdf8" radius={[0, 5, 5, 0]} maxBarSize={18} />
-              <Bar dataKey="previousWeeklyDamage" name="Geçen hafta" fill="#64748b" radius={[0, 5, 5, 0]} maxBarSize={18} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
+      <div className="space-y-5">
+        <CountryDamageBarChart countries={data.countries} snapshotDate={data.currentSnapshotDate} />
+        <CountryDamageBarChart countries={data.countries} previousWeek snapshotDate={data.previousSnapshotDate} />
+      </div>
       <p className="rounded-lg border border-[#3282B8]/15 bg-[#141C21] p-3 text-[11px] leading-relaxed text-[#BBE1FA]/55">{data.note} Veriler: {data.fetchedAt ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "short", timeStyle: "short" }).format(new Date(data.fetchedAt)) : "—"}.</p>
     </>}
   </div>;
