@@ -366,6 +366,11 @@ async function allianceDamageData(force = false) {
   const { raw, home } = await getCountries(force);
   const homeId = countryId(home);
   const allianceId = String(home?.allianceId || "");
+  const unionCountryIds = new Set([
+    homeId,
+    "6813b6d546e731854c7ac8d1", // Azerbaijan
+    "6873d0ea1758b40e712b5ef5", // Cameroon
+  ]);
   const unionNames = /^(turkiye|türkiye|turkey|azerbaijan|azerbaycan|cameroon|kamerun)$/i;
   const members = raw.filter((country) =>
     countryId(country) === homeId ||
@@ -383,7 +388,8 @@ async function allianceDamageData(force = false) {
     })
     .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
   const previousById = new Map<string, any>((previousSnapshot?.countries || []).map((country: AnyRecord): [string, AnyRecord] => [String(country.id), country]));
-  const countries = members.map((country) => {
+  const previousAvailable = Boolean(previousSnapshot);
+  const countryMetrics = members.map((country) => {
     const current = metricCountry(country);
     return {
       ...current,
@@ -391,10 +397,26 @@ async function allianceDamageData(force = false) {
       allianceId: String(country?.allianceId || ""),
     };
   }).sort((a, b) => (b.weeklyDamage || 0) - (a.weeklyDamage || 0));
-  const previousAvailable = Boolean(previousSnapshot);
+  const unionMembers = countryMetrics.filter((country) => unionCountryIds.has(country.id) || unionNames.test(country.name));
+  const otherMembers = countryMetrics.filter((country) => !unionMembers.includes(country));
+  const unionCurrent = unionMembers.reduce((sum, country) => sum + (country.weeklyDamage || 0), 0);
+  const unionPreviousAvailable = previousAvailable && unionMembers.every((country) => country.previousWeeklyDamage !== null);
+  const countries = [
+    {
+      id: "turkish-union",
+      name: "Turkish Union",
+      code: "TU",
+      weeklyDamage: unionCurrent,
+      previousWeeklyDamage: unionPreviousAvailable
+        ? unionMembers.reduce((sum, country) => sum + (country.previousWeeklyDamage || 0), 0)
+        : null,
+      memberCountries: unionMembers.map((country) => country.name),
+    },
+    ...otherMembers,
+  ].sort((a, b) => (b.weeklyDamage || 0) - (a.weeklyDamage || 0));
   return {
     success: true,
-    alliance: { id: allianceId || null, name: String(home?.allianceName || "Turkish Union") },
+    alliance: { id: allianceId || null, name: "Turkish Union" },
     countries,
     currentTotal: countries.reduce((sum, country) => sum + (country.weeklyDamage || 0), 0),
     previousTotal: previousAvailable ? countries.reduce((sum, country) => sum + (country.previousWeeklyDamage || 0), 0) : null,

@@ -8,6 +8,7 @@ type AllianceCountry = {
   code: string;
   weeklyDamage: number | null;
   previousWeeklyDamage: number | null;
+  memberCountries?: string[];
 };
 type AllianceDamageData = {
   success: boolean;
@@ -22,37 +23,52 @@ type AllianceDamageData = {
   note: string;
 };
 
-const COLORS = ["#38bdf8", "#34d399", "#fbbf24", "#fb7185", "#a78bfa", "#2dd4bf", "#f97316", "#c084fc"];
+const COLORS = ["#f4c76b", "#38bdf8", "#34d399", "#fb7185", "#a78bfa", "#2dd4bf", "#f97316", "#c084fc"];
 const number = (value: number | null | undefined) => Number(value || 0).toLocaleString("tr-TR");
 const date = (value?: string | null) => value ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeZone: "Europe/Istanbul" }).format(new Date(`${value}T12:00:00`)) : "—";
 
 function CountryDamagePie({ countries }: { countries: AllianceCountry[] }) {
   const total = countries.reduce((sum, country) => sum + Math.max(0, country.weeklyDamage || 0), 0);
-  let cursor = 0;
-  const gradient = countries.map((country, index) => {
-    const share = total ? Math.max(0, country.weeklyDamage || 0) / total * 100 : 0;
-    const start = cursor;
-    cursor += share;
-    return `${COLORS[index % COLORS.length]} ${start}% ${cursor}%`;
-  }).join(", ");
+  const radius = 78;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  const segments = countries.map((country, index) => {
+    const value = Math.max(0, country.weeklyDamage || 0);
+    const length = total ? (value / total) * circumference : 0;
+    const segment = { country, index, value, share: total ? value / total * 100 : 0, length: Math.max(0, length - 3), offset };
+    offset += length;
+    return segment;
+  }).filter((segment) => segment.value > 0);
   return (
-    <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
-      <div className="relative h-44 w-44 shrink-0 rounded-full border border-white/10" style={{ background: total ? `conic-gradient(${gradient})` : "#26343b" }}>
-        <div className="absolute inset-8 flex flex-col items-center justify-center rounded-full bg-[#162026] text-center">
-          <span className="text-[10px] uppercase tracking-wider text-[#BBE1FA]/55">İttifak hasarı</span>
-          <strong className="mt-1 text-lg text-white">{total ? `${(total / 1_000_000).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}M` : "—"}</strong>
-        </div>
+    <div className="grid items-center gap-7 lg:grid-cols-[minmax(230px,0.8fr)_1.2fr]">
+      <div className="relative mx-auto w-full max-w-[260px]">
+        <svg viewBox="0 0 220 220" className="w-full overflow-visible drop-shadow-[0_12px_28px_rgba(0,0,0,0.32)]" role="img" aria-label="İttifak haftalık hasar dağılımı">
+          <circle cx="110" cy="110" r={radius} fill="none" stroke="#26343b" strokeWidth="30" />
+          {segments.map(({ country, index, value, share, length, offset: segmentOffset }) => (
+            <circle key={country.id} cx="110" cy="110" r={radius} fill="none" stroke={COLORS[index % COLORS.length]} strokeWidth="30" strokeLinecap="round" strokeDasharray={`${length} ${circumference - length}`} strokeDashoffset={-segmentOffset} transform="rotate(-90 110 110)" className="transition-all duration-700 hover:opacity-75">
+              <title>{`${country.name}: ${number(value)} hasar (%${share.toLocaleString("tr-TR", { maximumFractionDigits: 1 })})`}</title>
+            </circle>
+          ))}
+          <circle cx="110" cy="110" r="57" fill="#162026" stroke="#ffffff" strokeOpacity=".06" />
+          <text x="110" y="101" textAnchor="middle" fill="#BBE1FA" fillOpacity=".62" fontSize="10" fontWeight="700" letterSpacing="1.2">TOPLAM HASAR</text>
+          <text x="110" y="127" textAnchor="middle" fill="#ffffff" fontSize="22" fontWeight="800">{total ? `${(total / 1_000_000).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}M` : "—"}</text>
+        </svg>
+        <div className="pointer-events-none absolute inset-0 rounded-full border border-white/[0.035]" />
       </div>
-      <div className="grid w-full gap-2 sm:grid-cols-2">
-        {countries.map((country, index) => {
-          const share = total ? (country.weeklyDamage || 0) / total * 100 : 0;
-          return <div key={country.id} className="flex min-w-0 items-center gap-2 rounded-lg bg-[#141C21] px-3 py-2">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-            <span className="min-w-0 flex-1 truncate text-xs text-[#BBE1FA]/75">{country.name}</span>
-            <span className="text-xs font-bold text-white">{share.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%</span>
-          </div>;
-        })}
-        {!countries.length && <p className="text-xs text-[#BBE1FA]/50">İttifak ülkesi verisi bulunamadı.</p>}
+      <div className="space-y-2">
+        {segments.map(({ country, index, value, share }) => <div key={country.id} className="group flex items-center gap-3 rounded-xl border border-white/[0.045] bg-[#141C21]/75 px-3.5 py-3 transition hover:border-white/10 hover:bg-[#141C21]">
+          <span className="h-3 w-3 shrink-0 rounded-full ring-4 ring-white/[0.035]" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-white">{country.name}</div>
+            {country.memberCountries?.length ? <div className="mt-0.5 truncate text-[10px] text-[#BBE1FA]/45">{country.memberCountries.join(" · ")}</div> : null}
+          </div>
+          <div className="text-right">
+            <div className="text-sm font-bold tabular-nums text-white">{number(value)}</div>
+            <div className="text-[10px] font-semibold tabular-nums text-[#BBE1FA]/50">{share.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%</div>
+          </div>
+        </div>)}
+        {!segments.length && <p className="rounded-xl border border-white/[0.05] bg-[#141C21]/70 p-4 text-xs text-[#BBE1FA]/50">Grafik için ittifak hasar verisi bulunamadı.</p>}
+        {total > 0 && <p className="pt-1 text-[10px] text-[#BBE1FA]/40">Dilim büyüklüğü ülkelerin son 7 günlük hasar payını gösterir.</p>}
       </div>
     </div>
   );
@@ -116,7 +132,7 @@ export const AllianceDamageSection: React.FC = () => {
       </div>
 
       <section className="rounded-2xl border border-[#3282B8]/20 bg-[#182329]/90 p-4 sm:p-5">
-        <h2 className="mb-4 text-sm font-bold text-white">Hasarın ülkelere dağılımı · Pie chart</h2>
+        <h2 className="mb-4 text-sm font-bold text-white">Haftalık hasar payları</h2>
         <CountryDamagePie countries={data.countries} />
       </section>
 
