@@ -250,7 +250,7 @@ export const DonationCalculationModal: React.FC<DonationCalculationModalProps> =
                       <tr>
                         <th className="px-3 py-2.5">Fabrika & Ürün</th>
                         <th className="px-2.5 py-2.5 text-right">Piyasa Fiyatı</th>
-                        <th className="px-2.5 py-2.5">Dönüşüm / Reçete</th>
+                        <th className="px-2.5 py-2.5">Motor Dönüşüm / Reçete</th>
                         <th className="px-2 py-2.5 text-center">Motor</th>
                         <th className="px-2.5 py-2.5 text-right">Motor Üretim (24s)</th>
                         <th className="px-2.5 py-2.5 text-right">Motor Net</th>
@@ -268,9 +268,8 @@ export const DonationCalculationModal: React.FC<DonationCalculationModalProps> =
                         const trName = ITEM_NAMES_TR[c.itemCode] || c.itemCode;
                         const dailyCost = c.dailyWage + c.dailyManagerCost;
                         const autoItems = c.dailyAutoItemsProduced ?? (c.dailyAutoProduction / (c.conversion?.prodRequired || 1));
-                        const workerItems = c.dailyWorkerItemsProduced ?? (c.dailyWorkerProduction / (c.conversion?.prodRequired || 1));
                         const autoMatCost = c.dailyAutoMaterialCost ?? 0;
-                        const workerMatCost = c.dailyWorkerMaterialCost ?? 0;
+                        const workerItems = c.dailyWorkerItemsProduced ?? c.dailyWorkerProduction;
 
                         return (
                           <tr key={c.id} className="hover:bg-emerald-950/20">
@@ -324,8 +323,7 @@ export const DonationCalculationModal: React.FC<DonationCalculationModalProps> =
                                     {workerItems.toFixed(1)} adet
                                   </div>
                                   <div className="text-[9px] text-[#BBE1FA]/45">
-                                    {c.dailyWorkerProduction.toFixed(1)} prod
-                                    {workerMatCost > 0 && ` · -${workerMatCost.toFixed(1)}G mat.`}
+                                    {c.dailyWorkerProduction.toFixed(1)} üretim / gün
                                   </div>
                                 </div>
                               ) : (
@@ -337,7 +335,7 @@ export const DonationCalculationModal: React.FC<DonationCalculationModalProps> =
                                 <div>
                                   <div>-{dailyCost.toFixed(1)} G</div>
                                   <div className="text-[9px] text-rose-400/60">
-                                    M:{c.dailyWage.toFixed(1)} G
+                                    M:{c.dailyWage.toFixed(1)} · Y:{c.dailyManagerCost.toFixed(1)} G
                                   </div>
                                 </div>
                               ) : (
@@ -438,8 +436,8 @@ export const DonationCalculationModal: React.FC<DonationCalculationModalProps> =
                     <ul className="space-y-0.5 text-[#BBE1FA]/65">
                       <li>• Steak: 20 prod + 1 farm animal = 1 steak</li>
                       <li>• Cooked Fish: 40 prod + 1 fish = 1 cooked fish</li>
-                      <li>• Oil: 1 prod = 1 oil</li>
-                      <li>• Oil barrel: 1 prod + 1 oil = 1 oil barrel</li>
+                      <li>• Oil: 1 prod + 1 petroleum = 1 oil</li>
+                      <li>• Petroleum: 1 prod = 1 petroleum</li>
                       <li>• Wood: 1 prod = 1 wood</li>
                       <li>• Paper: 1 prod + 1 wood = 1 paper</li>
                       <li>• Iron: 1 prod = 1 iron</li>
@@ -452,10 +450,10 @@ export const DonationCalculationModal: React.FC<DonationCalculationModalProps> =
 
                 <ul className="list-disc list-inside space-y-1 text-[11px] text-[#BBE1FA]/70">
                   <li>
-                    <strong>Net Üretim & Hammadde Maliyeti:</strong> Üretilen eşya adedi = Üretim / Reçete Prod Değeri. Harcanan girdi hammadde maliyeti (hammadde piyasa fiyatı üzerinden) brüt gelirden düşülerek net kazanç hesaplanır.
+                    <strong>Motor Net Geliri:</strong> Üretilen eşya adedi = motor üretimi / reçete prod değeri. Kullanılan girdi hammaddelerinin piyasa maliyeti, brüt gelirden düşülür.
                   </li>
                   <li>
-                    <strong>Çalışan Net Geliri:</strong> (Çalışan Net Satış Geliri) – (24 Saatlik Maaş + Yönetici Masrafı).
+                    <strong>Çalışan Net Geliri:</strong> Her estimate için (production × 24 × estimate.itemCode piyasa fiyatı) hesaplanır; günlük maaş ve yönetici masrafı (wage × 24 + managerCost × 24) toplam gelirden düşülür.
                   </li>
                   <li>
                     <strong>Bağış Kriteri (Yalnızca 30+ Seviye):</strong> 20k altı servet: %0 (Muaf); 20k–30k arası servet: %20; 30k ve üzeri servet: %25 oranı toplam günlük şirket gelirine (Motor + Çalışan) uygulanır.

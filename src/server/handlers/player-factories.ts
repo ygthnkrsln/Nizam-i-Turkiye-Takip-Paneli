@@ -17,6 +17,14 @@ export interface ItemConversionRecipe {
   label: string;
 }
 
+interface EmployeeEstimate {
+  production?: number;
+  wage?: number;
+  wageCost?: number;
+  managerCost?: number;
+  itemCode?: string;
+}
+
 /**
  * 20 Exact WarEra Conversion Recipes:
  * Lead üretimi: 1 prod = 1 lead
@@ -31,8 +39,8 @@ export interface ItemConversionRecipe {
  * Bread üretimi: 10 prod + 10 grain = 1 bread
  * Steak üretimi: 20 prod + 1 farm animal = 1 steak
  * Cooked Fish üretimi: 40 prod + 1 fish = 1 cooked fish
- * Oil üretimi: 1 prod = 1 oil
- * Oil barrel üretimi: 1 prod + 1 oil = 1 oil barrel
+ * Oil üretimi: 1 prod + 1 petroleum = 1 oil
+ * Petroleum üretimi: 1 prod = 1 petroleum
  * Wood üretimi: 1 prod = 1 wood
  * Paper üretimi: 1 prod + 1 wood = 1 paper
  * Iron üretimi: 1 prod = 1 iron
@@ -54,8 +62,8 @@ export const ITEM_CONVERSIONS: Record<string, ItemConversionRecipe> = {
   bread: { prodRequired: 10, inputItem: "grain", inputQty: 10, label: "10 prod + 10 grain = 1 bread" },
   steak: { prodRequired: 20, inputItem: "livestock", inputQty: 1, label: "20 prod + 1 farm animal = 1 steak" },
   cookedFish: { prodRequired: 40, inputItem: "fish", inputQty: 1, label: "40 prod + 1 fish = 1 cooked fish" },
-  oil: { prodRequired: 1, inputItem: null, inputQty: 0, label: "1 prod = 1 oil" },
-  petroleum: { prodRequired: 1, inputItem: "oil", inputQty: 1, label: "1 prod + 1 oil = 1 oil barrel" },
+  oil: { prodRequired: 1, inputItem: "petroleum", inputQty: 1, label: "1 prod + 1 petroleum = 1 oil" },
+  petroleum: { prodRequired: 1, inputItem: null, inputQty: 0, label: "1 prod = 1 petroleum" },
   wood: { prodRequired: 1, inputItem: null, inputQty: 0, label: "1 prod = 1 wood" },
   paper: { prodRequired: 1, inputItem: "wood", inputQty: 1, label: "1 prod + 1 wood = 1 paper" },
   iron: { prodRequired: 1, inputItem: null, inputQty: 0, label: "1 prod = 1 iron" },
@@ -71,6 +79,32 @@ export function getItemConversion(itemCode: string): ItemConversionRecipe {
   return norm
     ? ITEM_CONVERSIONS[norm]
     : { prodRequired: 1, inputItem: null, inputQty: 0, label: `1 prod = 1 ${itemCode}` };
+}
+
+function getEmployeeEstimates(data: any): EmployeeEstimate[] {
+  const estimates: EmployeeEstimate[] = [];
+  const visit = (value: any, inheritedItemCode?: string) => {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => visit(entry, inheritedItemCode));
+      return;
+    }
+
+    if (!value || typeof value !== "object") return;
+    if (value.estimate && typeof value.estimate === "object") {
+      visit(value.estimate, value.itemCode ?? inheritedItemCode);
+      return;
+    }
+
+    if ("production" in value || "wage" in value || "managerCost" in value || "itemCode" in value) {
+      estimates.push({ ...value, itemCode: value.itemCode ?? inheritedItemCode });
+      return;
+    }
+
+    Object.values(value).forEach((entry) => visit(entry, value.itemCode ?? inheritedItemCode));
+  };
+
+  visit(data?.json ?? data);
+  return estimates;
 }
 
 const FALLBACK_PRICES: Record<string, number> = {
@@ -181,7 +215,7 @@ export async function fetchMarketPrices(userToken?: string): Promise<Record<stri
   const url = `${BASE_URL}/itemTrading.getPrices?input=${encodeURIComponent(JSON.stringify({}))}`;
   const res = await fetchWarEraSafe(url, undefined, userToken);
   if (res.ok && res.data) {
-    const prices = res.data?.result?.data || {};
+    const prices = res.data?.result?.data?.json ?? res.data?.result?.data ?? {};
     if (Object.keys(prices).length > 0) {
       cachedPrices = { prices, timestamp: Date.now() };
       return prices;
@@ -491,26 +525,33 @@ export async function calculatePlayerCompanyRevenue(
       }
     }
 
-    // Step 7, 8, 9: Employee calculations with Conversion
-    const empProduction = Number(estData?.production || 0);
-    const empWage = Number(estData?.wage ?? estData?.wageCost ?? 0);
-    const empManagerCost = Number(estData?.managerCost || 0);
-    const empItemCode = estData?.itemCode || itemCode;
-    const empConv = getItemConversion(empItemCode);
-    const empItemPrice = prices[empItemCode] ?? itemPrice;
-    const empInputPrice = empConv.inputItem
-      ? (prices[empConv.inputItem] ?? FALLBACK_PRICES[empConv.inputItem] ?? 0)
-      : 0;
+    // Step 7, 8, 9: Match each employee estimate to its item price and calculate its daily net.
+    const employeeEstimates = getEmployeeEstimates(estData);
+    const empProduction = employeeEstimates.reduce(
+      (total, estimate) => total + Number(estimate?.production ?? 0),
+      0,
+    );
+    const empWage = employeeEstimates.reduce(
+      (total, estimate) => total + Number(estimate?.wage ?? estimate?.wageCost ?? 0),
+      0,
+    );
+    const empManagerCost = employeeEstimates.reduce(
+      (total, estimate) => total + Number(estimate?.managerCost ?? 0),
+      0,
+    );
 
-    const dailyWorkerProduction = empProduction * 24; // Raw worker prod points
-    const dailyWorkerItemsProduced = empConv.prodRequired > 0 ? dailyWorkerProduction / empConv.prodRequired : 0;
-    const dailyWorkerGross = dailyWorkerItemsProduced * empItemPrice;
-    const dailyWorkerMaterialCost = dailyWorkerItemsProduced * empConv.inputQty * empInputPrice;
-    const dailyWorkerNetRev = dailyWorkerGross - dailyWorkerMaterialCost;
-
+    const dailyWorkerProduction = empProduction * 24;
+    const dailyWorkerItemsProduced = dailyWorkerProduction;
+    const dailyWorkerMaterialCost = 0;
     const dailyWage = empWage * 24;
     const dailyManagerCost = empManagerCost * 24;
-    const dailyWorkerIncome = dailyWorkerNetRev - (dailyWage + dailyManagerCost);
+    const dailyWorkerGross = employeeEstimates.reduce((total, estimate) => {
+      const estimateItemCode = estimate?.itemCode || itemCode;
+      const estimateItemPrice =
+        prices[estimateItemCode] ?? FALLBACK_PRICES[estimateItemCode] ?? itemPrice;
+      return total + Number(estimate?.production ?? 0) * 24 * estimateItemPrice;
+    }, 0);
+    const dailyWorkerIncome = dailyWorkerGross - (dailyWage + dailyManagerCost);
     const companyTotalIncome = dailyAutoIncome + dailyWorkerIncome;
 
     if (isActive) {
