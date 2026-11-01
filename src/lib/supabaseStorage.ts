@@ -83,6 +83,8 @@ export interface DailySnapshotRecord {
         donationTargetSnapshot?: {
           target: number;
           revenue: number | null;
+          autoIncome?: number | null;
+          workerIncome?: number | null;
           rate: number;
           eligible: boolean;
           playerMode: "economy" | "combat";

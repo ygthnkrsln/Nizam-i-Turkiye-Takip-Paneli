@@ -169,6 +169,8 @@ export async function snapshotAllArmies(
           ...common,
           target: 0,
           revenue: null,
+          autoIncome: null,
+          workerIncome: null,
           source: "policy" as const,
         };
       }
@@ -197,6 +199,8 @@ export async function snapshotAllArmies(
           ...common,
           target: calculation.dailyDonationTarget,
           revenue: calculation.totalDailyRevenue,
+          autoIncome: calculation.totalAutoIncome,
+          workerIncome: calculation.totalWorkerIncome,
           rate: calculation.donationRate,
           eligible: calculation.isEligible,
           playerMode: calculation.playerMode,
@@ -213,6 +217,8 @@ export async function snapshotAllArmies(
           ...common,
           target: Math.round(level * (wealth >= 30000 ? 2 : 1.5)),
           revenue: null,
+          autoIncome: null,
+          workerIncome: null,
           source: "fallback" as const,
         };
       }

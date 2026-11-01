@@ -2186,6 +2186,8 @@ export interface ManagementMemberItem {
   donationTargetsByDate?: Record<string, {
     target: number;
     revenue: number | null;
+    autoIncome?: number | null;
+    workerIncome?: number | null;
     rate: number;
     eligible: boolean;
     playerMode: "economy" | "combat";
@@ -2376,7 +2378,7 @@ export async function fetchManagementOverview(
     timeZone: "Europe/Istanbul",
   }).format(new Date());
   const effectiveDate = date || today;
-  const cacheKey = `${includeDonations ? "full_v17" : "armies_v17"}:${effectiveDate}`;
+  const cacheKey = `${includeDonations ? "full_v18" : "armies_v18"}:${effectiveDate}`;
   const cacheTtlMs =
     effectiveDate === today
       ? MANAGEMENT_TODAY_CACHE_TTL_MS

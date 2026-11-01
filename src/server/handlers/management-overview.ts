@@ -390,6 +390,8 @@ async function processSingleArmy(
         const lvl = Number(u.leveling?.level || u.level || 1);
         const w = Number(u.rankings?.userWealth?.value || u.wealth || 0);
         const userId = u._id || u.id;
+        if (donationTargetsByUserDate[userId]?.[effectiveDate]) return false;
+        if (effectiveDate !== currentGameDate) return false;
         const mode = donationTargetsByUserDate[userId]?.[effectiveDate]?.playerMode ??
           playerModesByUserDate[userId]?.[effectiveDate] ??
           (effectiveDate === currentGameDate
@@ -444,8 +446,15 @@ async function processSingleArmy(
       const { isEconomy, playerMode, ecoSkillPoints, totalSkillPoints } =
         calculatePlayerSkillMode(u);
       const playerModeByDate = playerModesByUserDate[uid] || {};
-      const donationTargetsByDate = donationTargetsByUserDate[uid] || {};
-      const savedDonationTarget = donationTargetsByDate[effectiveDate];
+      const allDonationTargetsByDate = donationTargetsByUserDate[uid] || {};
+      const savedDonationTarget = allDonationTargetsByDate[effectiveDate];
+      const donationTargetsByDate = Object.fromEntries(
+        donationHistoryDates.flatMap((date) =>
+          allDonationTargetsByDate[date]
+            ? [[date, allDonationTargetsByDate[date]]]
+            : [],
+        ),
+      );
       const isEffectiveEconomy = savedDonationTarget?.playerMode
         ? savedDonationTarget.playerMode === "economy"
         : playerModeByDate[effectiveDate]
@@ -569,9 +578,9 @@ async function processSingleArmy(
         donationsByDate,
         remainingDonation,
         status,
-        autoIncome: calc?.totalAutoIncome ?? 0,
-        workerIncome: calc?.totalWorkerIncome ?? 0,
-        totalDailyRevenue: calc?.totalDailyRevenue ?? 0,
+        autoIncome: savedDonationTarget?.autoIncome ?? calc?.totalAutoIncome ?? 0,
+        workerIncome: savedDonationTarget?.workerIncome ?? calc?.totalWorkerIncome ?? 0,
+        totalDailyRevenue: savedDonationTarget?.revenue ?? calc?.totalDailyRevenue ?? 0,
         donationRate,
         factoryCalculation: calc || undefined,
       };
@@ -704,7 +713,7 @@ export default async function handler(req: any, res: any) {
     effectiveDate === todayDateStr ? 30 * 1000 : CACHE_TTL_MS;
 
   const donationHistoryDates = getDonationHistoryDates(effectiveDate);
-  const cacheKey = `mgmt_overview_v18_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v19_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < cacheTtlMs) {
     return res.status(200).json(cached.data);
