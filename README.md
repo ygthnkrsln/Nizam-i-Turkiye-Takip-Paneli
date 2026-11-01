@@ -2,6 +2,8 @@
 
 WarEra topluluğu için geliştirilen TürkEra Takip Paneli; ordu, oyuncu, ekonomi ve bağış verilerini tek bir arayüzde sunar. Veriler WarEra API'sinden alınır; günlük hasar, oyuncu modu ve bağış hedefi snapshot'ları Supabase'te saklanabilir.
 
+> Geliştiriciler ve yapay zekâ asistanları için özellik-dosya eşlemesi ve veri akışları [PROJECT_MAP.md](./PROJECT_MAP.md) dosyasındadır. Depodaki [AGENTS.md](./AGENTS.md), çalışmaya ilgili dosyalardan başlamayı tarif eder.
+
 ## Özellikler
 
 - **Bağış Takibi:** Takip edilen birlik üyelerinin günlük ve haftalık bağış hedeflerini, gerçekleşen ödemelerini ve eksik/fazla tutarlarını gösterir. Hedefler günlük snapshot'tan hesaplanır; gün içindeki gelir değişiklikleri geçmiş hedefleri değiştirmez.
