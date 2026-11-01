@@ -31,7 +31,9 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const snapshot = await snapshotAllArmies();
+    const snapshot = await snapshotAllArmies({
+      captureDonationTargets: req.method === "GET",
+    });
     let countrySnapshot: any = null;
     try {
       countrySnapshot = await recordCountryTrackerSnapshot();

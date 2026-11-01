@@ -413,9 +413,10 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
       const manualMode = storedClass && storedClass !== "auto" ? storedClass : null;
       const isEconomyOnDate = (date: string) => {
         if (manualMode) return manualMode === "eco";
-        if (date === today) return member.playerMode === "economy";
-        const recordedMode = member.playerModeByDate?.[date];
+        const recordedMode = member.donationTargetsByDate?.[date]?.playerMode ??
+          member.playerModeByDate?.[date];
         if (recordedMode) return recordedMode === "economy";
+        if (date === today) return member.playerMode === "economy";
         return date > today && member.playerMode === "economy";
       };
       const isEcoMode = isEconomyOnDate(today);
@@ -433,20 +434,37 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
       const workerIncome = calc?.totalWorkerIncome ?? member.workerIncome ?? 0;
       const totalDailyRevenue = calc?.totalDailyRevenue ?? member.totalDailyRevenue ?? (autoIncome + workerIncome);
       const rateForDate = (date: string) => {
+        const snapshot = member.donationTargetsByDate?.[date];
+        const level = snapshot?.level ?? member.level;
+        const wealth = snapshot?.wealth ?? member.wealth;
         if (
           !isEconomyOnDate(date) ||
-          member.level < rules.minLevel ||
-          member.wealth < rules.wealthThresholdMid ||
+          level < rules.minLevel ||
+          wealth < rules.wealthThresholdMid ||
           excluded
         ) return 0;
-        return member.wealth <= rules.wealthThresholdRich ? rules.rateMid : rules.rateRich;
+        return wealth <= rules.wealthThresholdRich ? rules.rateMid : rules.rateRich;
       };
       const targetForDate = (date: string) => {
         const dateRate = rateForDate(date);
         if (dateRate <= 0) return 0;
+        const snapshot = member.donationTargetsByDate?.[date];
+        if (snapshot && !manualMode) {
+          if (snapshot.revenue !== null && Number.isFinite(Number(snapshot.revenue))) {
+            return Math.round(Number(snapshot.revenue) * dateRate);
+          }
+          if (snapshot.eligible && snapshot.rate > 0) {
+            return Math.round(snapshot.target * dateRate / snapshot.rate);
+          }
+          const level = snapshot.level ?? member.level;
+          const wealth = snapshot.wealth ?? member.wealth;
+          return Math.round(level * (wealth >= rules.wealthThresholdRich ? 2 : 1.5));
+        }
         if (calc) return Math.round(totalDailyRevenue * dateRate);
-        if (date === today && member.targetDonation) return member.targetDonation;
-        return Math.round(member.level * (member.wealth >= rules.wealthThresholdRich ? 2 : 1.5));
+        if (date === today && member.targetDonation !== undefined) return member.targetDonation;
+        const snapshotLevel = snapshot?.level ?? member.level;
+        const snapshotWealth = snapshot?.wealth ?? member.wealth;
+        return Math.round(snapshotLevel * (snapshotWealth >= rules.wealthThresholdRich ? 2 : 1.5));
       };
       const rate = rateForDate(today);
 
@@ -508,6 +526,8 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
       const paidThisWeek = paidFor(dates, "total");
       const countryThisWeek = paidFor(dates, "country");
       const muThisWeek = paidFor(dates, "mu");
+      const todaySnapshot = member.donationTargetsByDate?.[today];
+      const todayLevel = todaySnapshot?.level ?? member.level;
 
       const memberStatus = excluded
         ? "Hariç tutuldu"
@@ -516,7 +536,9 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         : !isEcoMode
         ? "Savaş modu — muaf"
         : dailyTarget === 0
-        ? (member.level < rules.minLevel
+        ? (todaySnapshot?.eligible
+            ? "Bağış hedefi 0 G"
+            : todayLevel < rules.minLevel
             ? `Seviye ${rules.minLevel} altı — muaf`
             : "20k altı servet — muaf")
         : "Güncel";
@@ -1237,7 +1259,17 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
 
                         {/* Günlük Bağış Hedefi */}
                         <td className="px-2 py-2 text-right font-black text-emerald-200">
-                          {row.dailyTarget ? money(row.dailyTarget) : "—"}
+                          <span
+                            title={row.donationTargetsByDate?.[today]
+                              ? `${row.donationTargetsByDate[today].source === "fallback"
+                                  ? "Şirket hesabı alınamadı; kayıtlı seviye/servet hedefi kullanıldı."
+                                  : row.donationTargetsByDate[today].source === "companies"
+                                    ? "02:55'teki şirket gelirine göre sabitlendi."
+                                    : "02:55'teki mod, seviye ve servet bilgisine göre sabitlendi."} ${new Date(row.donationTargetsByDate[today].capturedAt).toLocaleTimeString("tr-TR", { timeZone: "Europe/Istanbul" })}`
+                              : undefined}
+                          >
+                            {row.dailyTarget ? money(row.dailyTarget) : "—"}
+                          </span>
                         </td>
 
                         {/* Günlük Hücreler */}

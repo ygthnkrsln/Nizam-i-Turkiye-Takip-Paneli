@@ -2183,6 +2183,17 @@ export interface ManagementMemberItem {
   wealth: number;
   playerMode: "economy" | "combat";
   playerModeByDate?: Record<string, "economy" | "combat">;
+  donationTargetsByDate?: Record<string, {
+    target: number;
+    revenue: number | null;
+    rate: number;
+    eligible: boolean;
+    playerMode: "economy" | "combat";
+    level: number;
+    wealth: number;
+    source: "companies" | "fallback" | "policy";
+    capturedAt: string;
+  }>;
   isFighter: boolean;
   potentialDamage: number;
   isEconomy?: boolean;

@@ -80,6 +80,17 @@ export interface DailySnapshotRecord {
         isEconomy?: boolean;
         ecoSkillPoints?: number;
         totalSkillPoints?: number;
+        donationTargetSnapshot?: {
+          target: number;
+          revenue: number | null;
+          rate: number;
+          eligible: boolean;
+          playerMode: "economy" | "combat";
+          level: number;
+          wealth: number;
+          source: "companies" | "fallback" | "policy";
+          capturedAt: string;
+        };
       }>;
     }
   >;

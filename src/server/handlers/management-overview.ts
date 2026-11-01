@@ -173,10 +173,37 @@ function collectPlayerModesByDate(
   return modesByUser;
 }
 
+function collectDonationTargetsByDate(
+  snapshots: Record<string, any>,
+): Record<string, Record<string, any>> {
+  const targetsByUser: Record<string, Record<string, any>> = {};
+  for (const [snapshotDate, snapshot] of Object.entries(snapshots)) {
+    const timestamp = Number(snapshot?.timestamp);
+    const gameDate = Number.isFinite(timestamp) && timestamp > 0
+      ? new Date(timestamp - GAME_DAY_RESET_MS).toISOString().slice(0, 10)
+      : snapshotDate;
+
+    for (const army of Object.values(snapshot?.armies || {}) as any[]) {
+      for (const [userId, member] of Object.entries(army?.members || {}) as [string, any][]) {
+        const target = member?.donationTargetSnapshot;
+        if (
+          !target ||
+          !Number.isFinite(Number(target.target)) ||
+          (target.playerMode !== "economy" && target.playerMode !== "combat")
+        ) continue;
+        targetsByUser[userId] ||= {};
+        targetsByUser[userId][gameDate] = target;
+      }
+    }
+  }
+  return targetsByUser;
+}
+
 async function processSingleArmy(
   army: { id: string; name: string; avatarUrl: string },
   snapshots: Record<string, any>,
   playerModesByUserDate: Record<string, Record<string, PlayerMode>>,
+  donationTargetsByUserDate: Record<string, Record<string, any>>,
   effectiveDate: string,
   currentGameDate: string,
   donationHistoryDates: string[],
@@ -363,9 +390,11 @@ async function processSingleArmy(
         const lvl = Number(u.leveling?.level || u.level || 1);
         const w = Number(u.rankings?.userWealth?.value || u.wealth || 0);
         const userId = u._id || u.id;
-        const mode = effectiveDate === currentGameDate
-          ? calculatePlayerSkillMode(u).playerMode
-          : playerModesByUserDate[userId]?.[effectiveDate] ?? "combat";
+        const mode = donationTargetsByUserDate[userId]?.[effectiveDate]?.playerMode ??
+          playerModesByUserDate[userId]?.[effectiveDate] ??
+          (effectiveDate === currentGameDate
+            ? calculatePlayerSkillMode(u).playerMode
+            : "combat");
         const isEconomy = mode === "economy";
         return lvl >= 30 && w >= 20000 && isEconomy;
       });
@@ -415,9 +444,13 @@ async function processSingleArmy(
       const { isEconomy, playerMode, ecoSkillPoints, totalSkillPoints } =
         calculatePlayerSkillMode(u);
       const playerModeByDate = playerModesByUserDate[uid] || {};
-      const isEffectiveEconomy = effectiveDate === currentGameDate
-        ? isEconomy
-        : playerModeByDate[effectiveDate] === "economy";
+      const donationTargetsByDate = donationTargetsByUserDate[uid] || {};
+      const savedDonationTarget = donationTargetsByDate[effectiveDate];
+      const isEffectiveEconomy = savedDonationTarget?.playerMode
+        ? savedDonationTarget.playerMode === "economy"
+        : playerModeByDate[effectiveDate]
+          ? playerModeByDate[effectiveDate] === "economy"
+          : effectiveDate === currentGameDate && isEconomy;
       const isFighter = isCombatBuild(u);
       const potentialDamage = calculatePotentialDamage(
         level,
@@ -437,19 +470,25 @@ async function processSingleArmy(
       // - 20k - 30k arası servet bağış oranı: %20
       // - 30k+ arası servet bağış oranı: %25
       const calc = companyCalcsMap.get(uid);
-      let donationRate = 0;
-      if (isEffectiveEconomy && level >= 30) {
+      let donationRate = savedDonationTarget
+        ? Number(savedDonationTarget.rate) || 0
+        : 0;
+      if (!savedDonationTarget && isEffectiveEconomy && level >= 30) {
         if (wealth < 20000) donationRate = 0;
         else if (wealth <= 30000) donationRate = 0.20;
         else donationRate = 0.25;
       }
 
-      const isEligible = isEffectiveEconomy && level >= 30 && wealth >= 20000 && donationRate > 0;
+      const isEligible = savedDonationTarget
+        ? Boolean(savedDonationTarget.eligible)
+        : isEffectiveEconomy && level >= 30 && wealth >= 20000 && donationRate > 0;
       const multiplier = donationRate;
 
-      const targetDonation = isEligible && calc
-        ? Math.round((calc.totalDailyRevenue || 0) * donationRate)
-        : (isEligible ? Math.round(level * (wealth >= 30000 ? 2.0 : 1.5)) : 0);
+      const targetDonation = savedDonationTarget
+        ? Number(savedDonationTarget.target)
+        : isEligible && calc
+          ? Math.round((calc.totalDailyRevenue || 0) * donationRate)
+          : (isEligible ? Math.round(level * (wealth >= 30000 ? 2.0 : 1.5)) : 0);
 
       if (isEligible && targetDonation > 0) {
         targetDonationSum += targetDonation;
@@ -497,6 +536,7 @@ async function processSingleArmy(
         wealth,
         playerMode,
         playerModeByDate,
+        donationTargetsByDate,
         isFighter,
         potentialDamage,
         isEconomy,
@@ -664,7 +704,7 @@ export default async function handler(req: any, res: any) {
     effectiveDate === todayDateStr ? 30 * 1000 : CACHE_TTL_MS;
 
   const donationHistoryDates = getDonationHistoryDates(effectiveDate);
-  const cacheKey = `mgmt_overview_v17_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v18_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < cacheTtlMs) {
     return res.status(200).json(cached.data);
@@ -685,6 +725,7 @@ export default async function handler(req: any, res: any) {
     // 1. Read stored baseline snapshot
     const snapshots = await readSnapshotsWithSupabase();
     const playerModesByUserDate = collectPlayerModesByDate(snapshots);
+    const donationTargetsByUserDate = collectDonationTargetsByDate(snapshots);
     const dates = Object.keys(snapshots).sort();
     const baselineDate =
       dates.length > 0 ? dates[dates.length - 1] : "2026-10-03";
@@ -696,6 +737,7 @@ export default async function handler(req: any, res: any) {
         army,
         snapshots,
         playerModesByUserDate,
+        donationTargetsByUserDate,
         effectiveDate,
         todayDateStr,
         donationHistoryDates,
