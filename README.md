@@ -103,6 +103,7 @@ Cron, takip edilen orduların üyelerini ve günlük verileri alır, oyuncu baş
 
 - `GET /api/management-overview` — ordu ve bağış takibi verileri
 - `GET /api/player-factories?userId=<id>` — oyuncu fabrika/gelir hesabı
+- `POST /api/player-factories` — oyuncu fabrika/gelir hesaplarını toplu ve paralel yükleme (`{ "userIds": ["..."] }`)
 - `GET /api/daily-damage-snapshots` — saklanan günlük snapshot'lar
 - `GET /api/cron/record-daily-damage` — zamanlanmış snapshot işlemi
 

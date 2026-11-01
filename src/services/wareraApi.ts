@@ -2175,6 +2175,38 @@ export async function fetchPlayerCompanyCalculation(
   return res.json();
 }
 
+export async function fetchPlayerCompanyCalculations(
+  userIds: string[],
+  signal?: AbortSignal,
+): Promise<{
+  calculations: Record<string, PlayerCompanyCalculationResponse>;
+  errors: Record<string, string>;
+}> {
+  const customKey = getUserApiKey();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (customKey) headers["x-user-api-key"] = customKey;
+
+  const res = await fetch("/api/player-factories", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ userIds }),
+    signal,
+  });
+  let payload: any;
+  try {
+    payload = await res.json();
+  } catch {
+    throw new Error(`Toplu şirket hesaplaması alınamadı (${res.status})`);
+  }
+  if (!res.ok || payload?.success !== true) {
+    throw new Error(payload?.error || `Toplu şirket hesaplaması alınamadı (${res.status})`);
+  }
+  return {
+    calculations: payload.calculations || {},
+    errors: payload.errors || {},
+  };
+}
+
 export interface ManagementMemberItem {
   userId: string;
   username: string;

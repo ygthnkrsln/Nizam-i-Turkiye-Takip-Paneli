@@ -25,6 +25,7 @@ import {
   fetchManagementOverview,
   fetchTrackedPlayerDirectory,
   fetchPlayerCompanyCalculation,
+  fetchPlayerCompanyCalculations,
   ManagementMemberItem,
   ManagementOverviewResponse,
   PlayerCompanyCalculationResponse,
@@ -198,6 +199,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
   const activeRequest = useRef<AbortController | null>(null);
+  const activeCompanyCalculationsRequest = useRef<AbortController | null>(null);
 
   const [rules, setRules] = useState<DonationRules>(() => readStorage(RULES_KEY, DEFAULT_RULES));
   const [excludedIds, setExcludedIds] = useState<string[]>(() => {
@@ -336,6 +338,46 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
   }, [weekStart]);
 
   useEffect(() => {
+    if (!data) return;
+
+    activeCompanyCalculationsRequest.current?.abort();
+    const controller = new AbortController();
+    activeCompanyCalculationsRequest.current = controller;
+    const calculationsInResponse = new Set(
+      data.armies.flatMap((army) =>
+        army.members
+          .filter((member) => member.factoryCalculation)
+          .map((member) => member.userId),
+      ),
+    );
+    const userIds = Array.from(new Set<string>(
+      data.armies
+        .filter((army) => army.dataAvailable !== false)
+        .flatMap((army) => army.members.map((member) => member.userId)),
+    )).filter((userId) =>
+      !companyCalcs[userId] && !calculationsInResponse.has(userId),
+    );
+    if (userIds.length === 0) return () => controller.abort();
+
+    void fetchPlayerCompanyCalculations(userIds, controller.signal)
+      .then(({ calculations, errors }) => {
+        if (controller.signal.aborted) return;
+        setCompanyCalcs((previous) => ({ ...previous, ...calculations }));
+        const failedCount = Object.keys(errors).length;
+        if (failedCount > 0) {
+          console.warn(`Şirket gelirleri ${failedCount} oyuncu için hesaplanamadı.`);
+        }
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          console.warn("Toplu şirket gelirleri yüklenemedi:", error);
+        }
+      });
+
+    return () => controller.abort();
+  }, [data]);
+
+  useEffect(() => {
     window.localStorage.setItem(RULES_KEY, JSON.stringify(rules));
     window.localStorage.setItem(EXCLUDED_KEY, JSON.stringify(excludedIds));
     window.localStorage.setItem(CLASSES_KEY, JSON.stringify(manualClasses));
@@ -372,12 +414,12 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
       // - 30k+ arası servet bağış oranı: %25
       const calc = companyCalcs[member.userId] || member.factoryCalculation;
       const currentTargetSnapshot = member.donationTargetsByDate?.[today];
-      const autoIncome = currentTargetSnapshot?.autoIncome ??
-        member.autoIncome ?? calc?.totalAutoIncome ?? 0;
-      const workerIncome = currentTargetSnapshot?.workerIncome ??
-        member.workerIncome ?? calc?.totalWorkerIncome ?? 0;
-      const totalDailyRevenue = currentTargetSnapshot?.revenue ??
-        member.totalDailyRevenue ?? calc?.totalDailyRevenue ?? (autoIncome + workerIncome);
+      const autoIncome = calc?.totalAutoIncome ??
+        currentTargetSnapshot?.autoIncome ?? member.autoIncome ?? 0;
+      const workerIncome = calc?.totalWorkerIncome ??
+        currentTargetSnapshot?.workerIncome ?? member.workerIncome ?? 0;
+      const totalDailyRevenue = calc?.totalDailyRevenue ??
+        currentTargetSnapshot?.revenue ?? member.totalDailyRevenue ?? (autoIncome + workerIncome);
       const rateForDate = (date: string) => {
         const snapshot = member.donationTargetsByDate?.[date];
         const level = snapshot?.level ?? member.level;

@@ -143,6 +143,23 @@ const calculationCache = new Map<string, { data: any; timestamp: number }>();
 const companyDetailsCache = new Map<string, { data: any; timestamp: number }>();
 const employeeEstimateCache = new Map<string, { data: any; timestamp: number }>();
 const userCompanyIdsCache = new Map<string, { items: string[]; timestamp: number }>();
+let nextApiTokenIndex = 0;
+
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<void>,
+): Promise<void> {
+  let nextIndex = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex++;
+        await mapper(items[index]);
+      }
+    }),
+  );
+}
 
 /**
  * Safe fetch wrapper that handles HTTP 429 rate limits, token rotations, and network timeouts
@@ -156,10 +173,14 @@ async function fetchWarEraSafe(
 ): Promise<{ ok: boolean; status: number; data?: any }> {
   const serverTokens = getWarEraTokens();
   const validTokens = serverTokens.filter((t) => t && !t.includes("token_1") && !t.includes("token_2"));
-  const tokens = userToken ? [userToken, ...validTokens] : validTokens;
+  const tokens = Array.from(new Set([
+    ...(userToken ? [userToken] : []),
+    ...validTokens,
+  ]));
 
   let attempt = 0;
   const maxAttempts = Math.max(retries + 1, tokens.length || 1);
+  const firstTokenIndex = tokens.length > 0 ? nextApiTokenIndex++ % tokens.length : 0;
 
   while (attempt < maxAttempts) {
     const headers: Record<string, string> = {
@@ -168,7 +189,7 @@ async function fetchWarEraSafe(
     };
 
     if (tokens.length > 0) {
-      const token = tokens[attempt % tokens.length];
+      const token = tokens[(firstTokenIndex + attempt) % tokens.length];
       if (token) headers["X-API-Key"] = token;
     }
 
@@ -669,7 +690,7 @@ export async function calculatePlayerCompanyRevenue(
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-User-Api-Key");
 
   if (req.method === "OPTIONS") {
@@ -682,6 +703,39 @@ export default async function handler(req: any, res: any) {
   const userToken = (req.headers["x-user-api-key"] as string) || (req.query?.apiKey as string);
 
   try {
+    if (req.method === "POST") {
+      const requestedIds = req.body?.userIds;
+      if (!Array.isArray(requestedIds)) {
+        return res.status(400).json({ success: false, error: "userIds dizisi gereklidir" });
+      }
+      const userIds = Array.from(new Set<string>(
+        requestedIds
+          .filter((id: unknown): id is string => typeof id === "string")
+          .map((id: string) => id.trim())
+          .filter((id: string) => id.length > 0 && id.length <= 100),
+      ));
+      if (userIds.length === 0 || userIds.length > 300) {
+        return res.status(400).json({
+          success: false,
+          error: "Toplu hesaplama isteği 1-300 benzersiz oyuncu içermelidir",
+        });
+      }
+
+      const calculations: Record<string, PlayerCalculationResult> = {};
+      const errors: Record<string, string> = {};
+      const tokenCount = Math.max(1, getWarEraTokens().length || (userToken ? 1 : 0));
+      const concurrency = Math.min(12, Math.max(2, tokenCount * 2));
+      await mapWithConcurrency(userIds, concurrency, async (id) => {
+        try {
+          calculations[id] = await calculatePlayerCompanyRevenue(id, userToken, forceRefresh);
+        } catch (error) {
+          errors[id] = error instanceof Error ? error.message : "Hesaplama alınamadı";
+        }
+      });
+
+      return res.status(200).json({ success: true, calculations, errors });
+    }
+
     if (userId) {
       const calculation = await calculatePlayerCompanyRevenue(userId, userToken, forceRefresh);
       return res.json({
@@ -701,13 +755,14 @@ export default async function handler(req: any, res: any) {
       const members: string[] = muRes.data?.result?.data?.members || [];
       const calculations: Record<string, PlayerCalculationResult> = {};
 
-      for (const mId of members) {
+      const tokenCount = Math.max(1, getWarEraTokens().length || (userToken ? 1 : 0));
+      await mapWithConcurrency(members, Math.min(12, Math.max(2, tokenCount * 2)), async (mId) => {
         try {
           calculations[mId] = await calculatePlayerCompanyRevenue(mId, userToken, forceRefresh);
         } catch {
           // Safe continue
         }
-      }
+      });
 
       return res.json({
         success: true,
