@@ -524,16 +524,32 @@ export async function calculatePlayerCompanyRevenue(
     );
 
     const dailyWorkerProduction = empProduction * 24;
-    const dailyWorkerItemsProduced = dailyWorkerProduction;
-    const dailyWorkerMaterialCost = 0;
     const dailyWage = empWage * 24;
     const dailyManagerCost = empManagerCost * 24;
-    const dailyWorkerGross = employeeEstimates.reduce((total, estimate) => {
+    const workerRevenue = employeeEstimates.reduce((total, estimate) => {
       const estimateItemCode = estimate?.itemCode || itemCode;
+      const estimateConversion = getItemConversion(estimateItemCode);
       const estimateItemPrice =
         prices[estimateItemCode] ?? FALLBACK_PRICES[estimateItemCode] ?? itemPrice;
-      return total + Number(estimate?.production ?? 0) * 24 * estimateItemPrice;
-    }, 0);
+      const inputPrice = estimateConversion.inputItem
+        ? prices[estimateConversion.inputItem] ??
+          FALLBACK_PRICES[estimateConversion.inputItem] ??
+          0
+        : 0;
+      const dailyProduction = Number(estimate?.production ?? 0) * 24;
+      const dailyItemsProduced = estimateConversion.prodRequired > 0
+        ? dailyProduction / estimateConversion.prodRequired
+        : 0;
+      return {
+        itemsProduced: total.itemsProduced + dailyItemsProduced,
+        materialCost: total.materialCost +
+          dailyItemsProduced * estimateConversion.inputQty * inputPrice,
+        gross: total.gross + dailyItemsProduced * estimateItemPrice,
+      };
+    }, { itemsProduced: 0, materialCost: 0, gross: 0 });
+    const dailyWorkerItemsProduced = workerRevenue.itemsProduced;
+    const dailyWorkerMaterialCost = workerRevenue.materialCost;
+    const dailyWorkerGross = workerRevenue.gross;
     const dailyWorkerIncome = dailyWorkerGross - (dailyWage + dailyManagerCost);
     const companyTotalIncome = dailyAutoIncome + dailyWorkerIncome;
 

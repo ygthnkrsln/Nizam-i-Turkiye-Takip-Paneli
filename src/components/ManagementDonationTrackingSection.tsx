@@ -77,6 +77,8 @@ type DonationRow = ManagementMemberItem & {
   totalDailyRevenue: number;
   donationRate: number;
   donationRateLabel: string;
+  calculationPending: boolean;
+  calculationError?: string;
 };
 
 type DonationDisplayItem = NonNullable<ManagementMemberItem["latestDonations"]>[number] & {
@@ -229,6 +231,9 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
 
   // Company revenue calculations state
   const [companyCalcs, setCompanyCalcs] = useState<Record<string, PlayerCompanyCalculationResponse>>({});
+  const [calculatingUserIds, setCalculatingUserIds] = useState<Set<string>>(new Set());
+  const [calculationErrors, setCalculationErrors] = useState<Record<string, string>>({});
+  const requestedCalculationIds = useRef(new Set<string>());
   const [activeCalculationModalData, setActiveCalculationModalData] = useState<PlayerCompanyCalculationResponse | null>(null);
   const [isCalculatingModal, setIsCalculatingModal] = useState(false);
   const [calculationModalError, setCalculationModalError] = useState<string | null>(null);
@@ -334,6 +339,60 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
     loadData(false);
     return () => activeRequest.current?.abort();
   }, [weekStart]);
+
+  useEffect(() => {
+    if (!data) return;
+    const userIds = Array.from(new Set<string>(
+      data.armies.flatMap((army) => army.members.map((member) => member.userId)),
+    ));
+    const pendingIds = userIds.filter((userId) => {
+      if (requestedCalculationIds.current.has(userId)) return false;
+      const alreadyLoaded = companyCalcs[userId] ||
+        data.armies.some((army) => army.members.some(
+          (member) => member.userId === userId && member.factoryCalculation,
+        ));
+      if (alreadyLoaded) {
+        requestedCalculationIds.current.add(userId);
+        return false;
+      }
+      requestedCalculationIds.current.add(userId);
+      return true;
+    });
+
+    if (!pendingIds.length) return;
+    setCalculatingUserIds((previous) => new Set([...previous, ...pendingIds]));
+
+    let nextIndex = 0;
+    const loadNextCalculation = async () => {
+      while (nextIndex < pendingIds.length) {
+        const userId = pendingIds[nextIndex++];
+        try {
+          const calculation = await fetchPlayerCompanyCalculation(userId);
+          setCompanyCalcs((previous) => ({ ...previous, [userId]: calculation }));
+          setCalculationErrors((previous) => {
+            const next = { ...previous };
+            delete next[userId];
+            return next;
+          });
+        } catch (error) {
+          setCalculationErrors((previous) => ({
+            ...previous,
+            [userId]: error instanceof Error ? error.message : "Şirket hesabı alınamadı",
+          }));
+        } finally {
+          setCalculatingUserIds((previous) => {
+            const next = new Set(previous);
+            next.delete(userId);
+            return next;
+          });
+        }
+      }
+    };
+
+    void Promise.all(
+      Array.from({ length: Math.min(3, pendingIds.length) }, loadNextCalculation),
+    );
+  }, [data]);
 
   useEffect(() => {
     window.localStorage.setItem(RULES_KEY, JSON.stringify(rules));
@@ -489,9 +548,11 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         totalDailyRevenue,
         donationRate: rate,
         donationRateLabel: rateLabel,
+        calculationPending: calculatingUserIds.has(member.userId),
+        calculationError: calculationErrors[member.userId],
       };
     }));
-  }, [data, dates, previousDates, visibleThrough, today, rules, excludedIds, manualClasses, companyCalcs]);
+  }, [data, dates, previousDates, visibleThrough, today, rules, excludedIds, manualClasses, companyCalcs, calculatingUserIds, calculationErrors]);
 
   const totals = useMemo(() => {
     const sum = (key: keyof DonationRow) => rows.reduce((total, row) => total + (Number(row[key]) || 0), 0);
@@ -1141,13 +1202,31 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                         </td>
 
                         {/* Otomatik Motor Geliri */}
-                        <td className="px-2 py-2 text-right text-cyan-300 font-medium">
-                          {row.autoIncome > 0 ? `+${Math.round(row.autoIncome).toLocaleString("tr-TR")} G` : "—"}
+                        <td
+                          className={`px-2 py-2 text-right font-medium ${row.calculationError ? "text-rose-300" : "text-cyan-300"}`}
+                          title={row.calculationError}
+                        >
+                          {row.calculationPending
+                            ? "Hesaplanıyor…"
+                            : row.calculationError
+                            ? "Hata"
+                            : row.autoIncome > 0
+                            ? `+${Math.round(row.autoIncome).toLocaleString("tr-TR")} G`
+                            : "—"}
                         </td>
 
                         {/* Çalışan Geliri */}
-                        <td className="px-2 py-2 text-right text-emerald-300 font-medium">
-                          {row.workerIncome > 0 ? `+${Math.round(row.workerIncome).toLocaleString("tr-TR")} G` : "—"}
+                        <td
+                          className={`px-2 py-2 text-right font-medium ${row.calculationError || row.workerIncome < 0 ? "text-rose-300" : "text-emerald-300"}`}
+                          title={row.calculationError}
+                        >
+                          {row.calculationPending
+                            ? "Hesaplanıyor…"
+                            : row.calculationError
+                            ? "Hata"
+                            : row.workerIncome !== 0
+                            ? `${row.workerIncome > 0 ? "+" : ""}${Math.round(row.workerIncome).toLocaleString("tr-TR")} G`
+                            : "—"}
                         </td>
 
                         {/* Bağış Oranı */}
