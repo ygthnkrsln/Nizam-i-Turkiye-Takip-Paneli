@@ -550,7 +550,8 @@ export async function calculatePlayerCompanyRevenue(
     const dailyWorkerItemsProduced = workerRevenue.itemsProduced;
     const dailyWorkerMaterialCost = workerRevenue.materialCost;
     const dailyWorkerGross = workerRevenue.gross;
-    const dailyWorkerIncome = dailyWorkerGross - (dailyWage + dailyManagerCost);
+    const dailyWorkerIncome =
+      dailyWorkerGross - dailyWorkerMaterialCost - dailyWage - dailyManagerCost;
     const companyTotalIncome = dailyAutoIncome + dailyWorkerIncome;
 
     if (isActive) {

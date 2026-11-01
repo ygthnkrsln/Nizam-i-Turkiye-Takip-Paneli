@@ -460,7 +460,7 @@ export const DonationCalculationModal: React.FC<DonationCalculationModalProps> =
                     <strong>Motor Net Geliri:</strong> Üretilen eşya adedi = motor üretimi / reçete prod değeri. Kullanılan girdi hammaddelerinin piyasa maliyeti, brüt gelirden düşülür.
                   </li>
                   <li>
-                    <strong>Çalışan Net Geliri:</strong> Her estimate için 24 saatlik üretim, ürün reçetesindeki prod miktarına bölünerek ürün adedine çevrilir; ürün satış geliri ve reçete girdisi maliyeti hesaplanır. Günlük maaş ve yönetici masrafı (wage × 24 + managerCost × 24) net gelirden düşülür.
+                    <strong>Çalışan Net Geliri:</strong> Her estimate için 24 saatlik üretim, ürün reçetesindeki prod miktarına bölünerek ürün adedine çevrilir; ürün satış gelirinden reçete girdisi maliyeti, günlük maaş ve yönetici masrafı (wage × 24 + managerCost × 24) düşülür.
                   </li>
                   <li>
                     <strong>Bağış Kriteri (Yalnızca 30+ Seviye):</strong> 20k altı servet: %0 (Muaf); 20k–30k arası servet: %20; 30k ve üzeri servet: %25 oranı toplam günlük şirket gelirine (Motor + Çalışan) uygulanır.
