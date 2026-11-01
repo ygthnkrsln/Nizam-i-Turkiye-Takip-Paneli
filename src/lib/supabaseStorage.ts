@@ -71,7 +71,16 @@ export interface DailySnapshotRecord {
       muId: string;
       armyTotalWeeklyDamage: number;
       memberCount: number;
-      members: Record<string, { username: string; weeklyDamage: number; wealth?: number; dailyDamage?: number }>;
+      members: Record<string, {
+        username: string;
+        weeklyDamage: number;
+        wealth?: number;
+        dailyDamage?: number;
+        playerMode?: "economy" | "combat";
+        isEconomy?: boolean;
+        ecoSkillPoints?: number;
+        totalSkillPoints?: number;
+      }>;
     }
   >;
   created_at?: string;

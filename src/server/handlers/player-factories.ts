@@ -3,6 +3,7 @@
 // Features tRPC batching, multi-layer caching, exponential backoff, and robust rate-limit protection
 
 import { getNextWarEraToken, getWarEraTokens } from "../../lib/wareraTokens.js";
+import { calculatePlayerSkillMode } from "../../lib/playerMode.js";
 
 const BASE_URL = "https://api2.warera.io/trpc";
 const CALCULATION_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache per user calculation
@@ -248,6 +249,7 @@ export interface SingleCompanyCalculation {
   dailyWage: number;
   dailyManagerCost: number;
   dailyWorkerIncome: number;
+  workerEstimateError?: string;
   companyTotalIncome: number;
   isActive: boolean;
   storageLevel: number;
@@ -308,32 +310,7 @@ export async function calculatePlayerCompanyRevenue(
   const level = Number(userProfile?.leveling?.level || userProfile?.level || 1);
   const wealth = Number(userProfile?.rankings?.userWealth?.value || userProfile?.wealth || 0);
 
-  // Oyuncu Modu Hesaplama: Beceri dağılımına göre ekonomi vs savaş modu
-  const ecoSkillNames = [
-    "entrepreneurship",
-    "energy",
-    "stamina",
-    "production",
-    "companies",
-    "management",
-  ];
-  let ecoSkillPoints = 0;
-  if (userProfile?.skills) {
-    for (const sName of ecoSkillNames) {
-      const sk = userProfile.skills[sName];
-      if (sk && Number(sk.level || 0) > 0) {
-        const lvl = Number(sk.level);
-        ecoSkillPoints += (lvl * (lvl + 1)) / 2;
-      }
-    }
-  }
-  const totalSkillPoints = Number(
-    userProfile?.leveling?.spentSkillPoints ?? userProfile?.leveling?.totalSkillPoints ?? 0,
-  );
-  const effectiveTotalSP =
-    totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
-  const isEconomy = ecoSkillPoints > effectiveTotalSP / 2;
-  const playerMode: "economy" | "combat" = isEconomy ? "economy" : "combat";
+  const { isEconomy, playerMode } = calculatePlayerSkillMode(userProfile);
 
   // 2. Determine company limit from companies skill
   const companiesSkill = userProfile?.skills?.companies;
@@ -511,22 +488,28 @@ export async function calculatePlayerCompanyRevenue(
 
     // Step 6: Fetch employee estimate safely if active
     let estData: any = null;
+    let workerEstimateError: string | undefined;
     if (isActive) {
       const cachedEst = employeeEstimateCache.get(cid);
       if (!forceRefresh && cachedEst && Date.now() - cachedEst.timestamp < ESTIMATE_CACHE_TTL_MS) {
         estData = cachedEst.data;
-      } else if (userToken) {
+      } else {
         const estUrl = `${BASE_URL}/employee.getCompanyEstimate?input=${encodeURIComponent(JSON.stringify({ companyId: cid }))}`;
         const estRes = await fetchWarEraSafe(estUrl, undefined, userToken);
         if (estRes.ok && estRes.data) {
           estData = estRes.data?.result?.data;
           employeeEstimateCache.set(cid, { data: estData, timestamp: Date.now() });
+        } else {
+          workerEstimateError = `Çalışan tahmini alınamadı (HTTP ${estRes.status}).`;
         }
       }
     }
 
     // Step 7, 8, 9: Match each employee estimate to its item price and calculate its daily net.
     const employeeEstimates = getEmployeeEstimates(estData);
+    if (isActive && estData && employeeEstimates.length === 0) {
+      workerEstimateError = "API yanıtında çalışan estimate verisi bulunamadı.";
+    }
     const empProduction = employeeEstimates.reduce(
       (total, estimate) => total + Number(estimate?.production ?? 0),
       0,
@@ -582,6 +565,7 @@ export async function calculatePlayerCompanyRevenue(
       dailyWage,
       dailyManagerCost,
       dailyWorkerIncome,
+      workerEstimateError,
       companyTotalIncome,
       isActive,
       storageLevel,

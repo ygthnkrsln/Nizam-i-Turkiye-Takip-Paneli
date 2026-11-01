@@ -17,6 +17,7 @@ import {
 } from "../../lib/dailyDamage.js";
 import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
 import { calculatePotentialDamage, isCombatBuild } from "../../lib/potentialDamage.js";
+import { calculatePlayerSkillMode, PlayerMode } from "../../lib/playerMode.js";
 import { calculatePlayerCompanyRevenue } from "./player-factories.js";
 
 export const PRESET_8_ARMIES = TRACKED_ARMIES;
@@ -147,54 +148,37 @@ async function fetchWarEra(
   throw new Error("WarEra API isteği tamamlanamadı");
 }
 
-// Beceriye dayalı yaklaşım (Ülke İstatistikleri ile birebir aynı formül):
-// ecoSkillNames: 'entrepreneurship', 'energy', 'production', 'companies', 'management'
-// Her beceri seviyesi L için harcanan puan: (L * (L + 1)) / 2
-// Toplam beceri puanı: leveling.spentSkillPoints ?? leveling.totalSkillPoints
-// ecoSkillPoints > (totalSkillPoints / 2) ise EKONOMİ modu, aksi halde SAVAŞ modu!
-function calculatePlayerSkillMode(u: any): {
-  isEconomy: boolean;
-  playerMode: "economy" | "combat";
-  ecoSkillPoints: number;
-  totalSkillPoints: number;
-} {
-  const ecoSkillNames = [
-    "entrepreneurship",
-    "energy",
-    "stamina",
-    "production",
-    "companies",
-    "management",
-  ];
-  let ecoSkillPoints = 0;
-  if (u?.skills) {
-    for (const sName of ecoSkillNames) {
-      const sk = u.skills[sName];
-      if (sk && Number(sk.level || 0) > 0) {
-        const lvl = Number(sk.level);
-        ecoSkillPoints += (lvl * (lvl + 1)) / 2;
+function collectPlayerModesByDate(
+  snapshots: Record<string, any>,
+): Record<string, Record<string, PlayerMode>> {
+  const modesByUser: Record<string, Record<string, PlayerMode>> = {};
+  for (const [snapshotDate, snapshot] of Object.entries(snapshots)) {
+    const timestamp = Number(snapshot?.timestamp);
+    const gameDate = Number.isFinite(timestamp) && timestamp > 0
+      ? new Date(timestamp - GAME_DAY_RESET_MS).toISOString().slice(0, 10)
+      : snapshotDate;
+
+    for (const army of Object.values(snapshot?.armies || {}) as any[]) {
+      for (const [userId, member] of Object.entries(army?.members || {}) as [string, any][]) {
+        const mode = member?.playerMode ??
+          (typeof member?.isEconomy === "boolean"
+            ? member.isEconomy ? "economy" : "combat"
+            : null);
+        if (mode !== "economy" && mode !== "combat") continue;
+        modesByUser[userId] ||= {};
+        modesByUser[userId][gameDate] = mode;
       }
     }
   }
-  const totalSkillPoints = Number(
-    u?.leveling?.spentSkillPoints ?? u?.leveling?.totalSkillPoints ?? 0,
-  );
-  const effectiveTotalSP =
-    totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
-  const isEconomy = ecoSkillPoints > effectiveTotalSP / 2;
-
-  return {
-    isEconomy,
-    playerMode: isEconomy ? "economy" : "combat",
-    ecoSkillPoints,
-    totalSkillPoints: effectiveTotalSP,
-  };
+  return modesByUser;
 }
 
 async function processSingleArmy(
   army: { id: string; name: string; avatarUrl: string },
   snapshots: Record<string, any>,
+  playerModesByUserDate: Record<string, Record<string, PlayerMode>>,
   effectiveDate: string,
+  currentGameDate: string,
   donationHistoryDates: string[],
   includeDonations: boolean,
   userApiKey = "",
@@ -378,7 +362,11 @@ async function processSingleArmy(
       const eligibleUsers = rawUsers.filter((u) => {
         const lvl = Number(u.leveling?.level || u.level || 1);
         const w = Number(u.rankings?.userWealth?.value || u.wealth || 0);
-        const { isEconomy } = calculatePlayerSkillMode(u);
+        const userId = u._id || u.id;
+        const mode = effectiveDate === currentGameDate
+          ? calculatePlayerSkillMode(u).playerMode
+          : playerModesByUserDate[userId]?.[effectiveDate] ?? "combat";
+        const isEconomy = mode === "economy";
         return lvl >= 30 && w >= 20000 && isEconomy;
       });
 
@@ -426,6 +414,10 @@ async function processSingleArmy(
       // Oyuncu Modu
       const { isEconomy, playerMode, ecoSkillPoints, totalSkillPoints } =
         calculatePlayerSkillMode(u);
+      const playerModeByDate = playerModesByUserDate[uid] || {};
+      const isEffectiveEconomy = effectiveDate === currentGameDate
+        ? isEconomy
+        : playerModeByDate[effectiveDate] === "economy";
       const isFighter = isCombatBuild(u);
       const potentialDamage = calculatePotentialDamage(
         level,
@@ -446,13 +438,13 @@ async function processSingleArmy(
       // - 30k+ arası servet bağış oranı: %25
       const calc = companyCalcsMap.get(uid);
       let donationRate = 0;
-      if (isEconomy && level >= 30) {
+      if (isEffectiveEconomy && level >= 30) {
         if (wealth < 20000) donationRate = 0;
         else if (wealth <= 30000) donationRate = 0.20;
         else donationRate = 0.25;
       }
 
-      const isEligible = isEconomy && level >= 30 && wealth >= 20000 && donationRate > 0;
+      const isEligible = isEffectiveEconomy && level >= 30 && wealth >= 20000 && donationRate > 0;
       const multiplier = donationRate;
 
       const targetDonation = isEligible && calc
@@ -478,7 +470,7 @@ async function processSingleArmy(
       let status: "completed" | "partial" | "pending" | "exempt" = "exempt";
       let exemptReason: "combat_mode" | "low_level" | null = null;
       if (!isEligible) {
-        if (!isEconomy) {
+        if (!isEffectiveEconomy) {
           exemptReason = "combat_mode";
         } else if (level < 30) {
           exemptReason = "low_level";
@@ -504,6 +496,7 @@ async function processSingleArmy(
         level,
         wealth,
         playerMode,
+        playerModeByDate,
         isFighter,
         potentialDamage,
         isEconomy,
@@ -649,7 +642,7 @@ export default async function handler(req: any, res: any) {
     effectiveDate === todayDateStr ? 30 * 1000 : CACHE_TTL_MS;
 
   const donationHistoryDates = getDonationHistoryDates(effectiveDate);
-  const cacheKey = `mgmt_overview_v15_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v16_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < cacheTtlMs) {
     return res.status(200).json(cached.data);
@@ -669,6 +662,7 @@ export default async function handler(req: any, res: any) {
   try {
     // 1. Read stored baseline snapshot
     const snapshots = await readSnapshotsWithSupabase();
+    const playerModesByUserDate = collectPlayerModesByDate(snapshots);
     const dates = Object.keys(snapshots).sort();
     const baselineDate =
       dates.length > 0 ? dates[dates.length - 1] : "2026-10-03";
@@ -676,7 +670,16 @@ export default async function handler(req: any, res: any) {
     const armyOverviews = await mapWithConcurrency(
       PRESET_8_ARMIES,
       4,
-      (army) => processSingleArmy(army, snapshots, effectiveDate, donationHistoryDates, includeDonations, userApiKey),
+      (army) => processSingleArmy(
+        army,
+        snapshots,
+        playerModesByUserDate,
+        effectiveDate,
+        todayDateStr,
+        donationHistoryDates,
+        includeDonations,
+        userApiKey,
+      ),
     );
 
     // Alliance Aggregates

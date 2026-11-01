@@ -327,7 +327,12 @@ export const DonationCalculationModal: React.FC<DonationCalculationModalProps> =
                                   </div>
                                 </div>
                               ) : (
-                                <span className="text-[#BBE1FA]/40">—</span>
+                                <span
+                                  className={c.workerEstimateError ? "text-rose-300" : "text-[#BBE1FA]/40"}
+                                  title={c.workerEstimateError}
+                                >
+                                  {c.workerEstimateError || "—"}
+                                </span>
                               )}
                             </td>
                             <td className="px-2.5 py-2.5 text-right text-rose-300 whitespace-nowrap">

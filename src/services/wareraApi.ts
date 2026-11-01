@@ -2121,6 +2121,7 @@ export interface CompanyCalculationItem {
   dailyWage: number;
   dailyManagerCost: number;
   dailyWorkerIncome: number;
+  workerEstimateError?: string;
   companyTotalIncome: number;
   isActive: boolean;
   storageLevel: number;
@@ -2181,6 +2182,7 @@ export interface ManagementMemberItem {
   level: number;
   wealth: number;
   playerMode: "economy" | "combat";
+  playerModeByDate?: Record<string, "economy" | "combat">;
   isFighter: boolean;
   potentialDamage: number;
   isEconomy?: boolean;

@@ -10,6 +10,7 @@ import {
 } from "../../lib/supabaseStorage.js";
 import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
 import { calculateDailyDamageFromSnapshot } from "../../lib/dailyDamage.js";
+import { calculatePlayerSkillMode } from "../../lib/playerMode.js";
 export { isSupabaseConnected };
 
 const PRESET_MILITARY_UNITS = TRACKED_ARMIES;
@@ -141,7 +142,16 @@ export async function snapshotAllArmies() {
         chunks.push(members.slice(i, i + 10));
       }
 
-      const memberDamages: Record<string, { username: string; weeklyDamage: number; wealth?: number; dailyDamage?: number }> = {};
+      const memberDamages: Record<string, {
+        username: string;
+        weeklyDamage: number;
+        wealth?: number;
+        dailyDamage?: number;
+        playerMode?: "economy" | "combat";
+        isEconomy?: boolean;
+        ecoSkillPoints?: number;
+        totalSkillPoints?: number;
+      }> = {};
 
       await Promise.all(
         chunks.map(async (chunk) => {
@@ -159,10 +169,15 @@ export async function snapshotAllArmies() {
                 for (const item of uJson) {
                   const u = item?.result?.data?.json || item?.result?.data;
                   if (u?._id) {
+                    const mode = calculatePlayerSkillMode(u);
                     memberDamages[u._id] = {
                       username: u.username || "Bilinmeyen Asker",
                       weeklyDamage: u.rankings?.weeklyUserDamages?.value || 0,
                       wealth: Number(u.rankings?.userWealth?.value ?? u.wealth ?? 0),
+                      playerMode: mode.playerMode,
+                      isEconomy: mode.isEconomy,
+                      ecoSkillPoints: mode.ecoSkillPoints,
+                      totalSkillPoints: mode.totalSkillPoints,
                       dailyDamage: previousSnapshot?.armies?.[mu.id]?.members?.[u._id]
                         ? calculateDailyDamageFromSnapshot(
                             Number(u.rankings?.weeklyUserDamages?.value || 0),

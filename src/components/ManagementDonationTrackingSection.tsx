@@ -347,16 +347,20 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
   const isCurrentWeek = weekStart === currentGameWeekStart();
   const visibleThrough = isCurrentWeek ? today : dates[6];
   const visibleDates = dates.filter((date) => date <= visibleThrough);
-  const activeWeekDays = dates.filter((date) => !rules.startDate || date >= rules.startDate).length;
-
   const rows = useMemo<DonationRow[]>(() => {
     if (!data) return [];
     return data.armies.flatMap((army) => army.members.map((member) => {
       const storedClass = manualClasses[member.userId];
-      const donationClass: "eco" | "fighter" = storedClass && storedClass !== "auto"
-        ? storedClass
-        : member.playerMode === "economy" ? "eco" : "fighter";
-      const isEcoMode = donationClass === "eco";
+      const manualMode = storedClass && storedClass !== "auto" ? storedClass : null;
+      const isEconomyOnDate = (date: string) => {
+        if (manualMode) return manualMode === "eco";
+        if (date === today) return member.playerMode === "economy";
+        const recordedMode = member.playerModeByDate?.[date];
+        if (recordedMode) return recordedMode === "economy";
+        return date > today && member.playerMode === "economy";
+      };
+      const isEcoMode = isEconomyOnDate(today);
+      const donationClass: "eco" | "fighter" = isEcoMode ? "eco" : "fighter";
       const excluded = excludedIds.includes(member.userId);
 
       // Yeni Kural:
@@ -366,11 +370,26 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
       // - 20k - 30k arası servet bağış oranı: %20
       // - 30k+ arası servet bağış oranı: %25
       const calc = companyCalcs[member.userId] || member.factoryCalculation;
-      const rate = !isEcoMode || member.level < rules.minLevel || member.wealth < rules.wealthThresholdMid
-        ? 0
-        : member.wealth <= rules.wealthThresholdRich
-        ? rules.rateMid
-        : rules.rateRich;
+      const autoIncome = calc?.totalAutoIncome ?? member.autoIncome ?? 0;
+      const workerIncome = calc?.totalWorkerIncome ?? member.workerIncome ?? 0;
+      const totalDailyRevenue = calc?.totalDailyRevenue ?? member.totalDailyRevenue ?? (autoIncome + workerIncome);
+      const rateForDate = (date: string) => {
+        if (
+          !isEconomyOnDate(date) ||
+          member.level < rules.minLevel ||
+          member.wealth < rules.wealthThresholdMid ||
+          excluded
+        ) return 0;
+        return member.wealth <= rules.wealthThresholdRich ? rules.rateMid : rules.rateRich;
+      };
+      const targetForDate = (date: string) => {
+        const dateRate = rateForDate(date);
+        if (dateRate <= 0) return 0;
+        if (calc) return Math.round(totalDailyRevenue * dateRate);
+        if (date === today && member.targetDonation) return member.targetDonation;
+        return Math.round(member.level * (member.wealth >= rules.wealthThresholdRich ? 2 : 1.5));
+      };
+      const rate = rateForDate(today);
 
       const rateLabel = !isEcoMode
         ? "%0 (Savaş)"
@@ -379,18 +398,16 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         : rate === rules.rateMid
         ? "%20"
         : "%25";
-      const isEligible = isEcoMode && member.level >= rules.minLevel && member.wealth >= rules.wealthThresholdMid && !excluded && rate > 0;
-
-      const autoIncome = calc?.totalAutoIncome ?? member.autoIncome ?? 0;
-      const workerIncome = calc?.totalWorkerIncome ?? member.workerIncome ?? 0;
-      const totalDailyRevenue = calc?.totalDailyRevenue ?? member.totalDailyRevenue ?? (autoIncome + workerIncome);
+      const isEligible = rate > 0;
 
       const dailyTarget = isEligible
-        ? (calc ? Math.round(totalDailyRevenue * rate) : (member.targetDonation || 0))
+        ? targetForDate(today)
         : 0;
 
-      const previousActiveDays = previousDates.filter((date) => !rules.startDate || date >= rules.startDate).length;
-      const previousTarget = dailyTarget * previousActiveDays;
+      const previousTarget = previousDates.reduce(
+        (sum, date) => sum + ((!rules.startDate || date >= rules.startDate) ? targetForDate(date) : 0),
+        0,
+      );
       const previousPaid = previousDates.reduce((sum, date) => sum + (member.donationsByDate?.[date]?.total || 0), 0);
       const carryIn = isEligible ? Math.max(0, previousPaid - previousTarget) : 0;
       let carry = carryIn;
@@ -400,16 +417,17 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         const payment = { country: Number(raw.country) || 0, mu: Number(raw.mu) || 0, total: Number(raw.total) || 0 };
         let state = "free";
         const dayActive = !rules.startDate || date >= rules.startDate;
+        const dayTarget = dayActive ? targetForDate(date) : 0;
         if (!dayActive) state = payment.total ? "extra" : "pre";
-        else if (!isEligible) state = payment.total ? "extra" : "free";
+        else if (dayTarget <= 0) state = payment.total ? "extra" : "free";
         else if (date > visibleThrough) state = "future";
         else {
           const available = carry + payment.total;
-          if (payment.total >= dailyTarget) state = "ok";
-          else if (available >= dailyTarget) state = "covered";
+          if (payment.total >= dayTarget) state = "ok";
+          else if (available >= dayTarget) state = "covered";
           else if (date === today) state = payment.total ? "partial" : "today";
           else state = payment.total ? "partial" : "missed";
-          carry = Math.max(0, available - dailyTarget);
+          carry = Math.max(0, available - dayTarget);
         }
         return { ...payment, state, carry: Math.max(0, carry) };
       });
@@ -419,9 +437,12 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         return sum + (cell ? amountFor(cell, view) : 0);
       }, 0);
 
-      const dueDays = dates.filter((date) => date <= visibleThrough && (!rules.startDate || date >= rules.startDate)).length;
-      const weeklyTarget = dailyTarget * activeWeekDays;
-      const dueToDate = dailyTarget * dueDays;
+      const dueDates = dates.filter((date) => date <= visibleThrough && (!rules.startDate || date >= rules.startDate));
+      const weeklyTarget = dates.reduce(
+        (sum, date) => sum + ((!rules.startDate || date >= rules.startDate) ? targetForDate(date) : 0),
+        0,
+      );
+      const dueToDate = dueDates.reduce((sum, date) => sum + targetForDate(date), 0);
       const paidToDate = paidFor(visibleDates, "total");
       const countryToDate = paidFor(visibleDates, "country");
       const muToDate = paidFor(visibleDates, "mu");
@@ -431,14 +452,14 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
 
       const memberStatus = excluded
         ? "Hariç tutuldu"
+        : Math.max(0, dueToDate - paidToDate - carryIn) > 0
+        ? "Eksik ödeme"
         : !isEcoMode
         ? "Savaş modu — muaf"
         : dailyTarget === 0
         ? (member.level < rules.minLevel
             ? `Seviye ${rules.minLevel} altı — muaf`
             : "20k altı servet — muaf")
-        : Math.max(0, dueToDate - paidToDate - carryIn) > 0
-        ? "Eksik ödeme"
         : "Güncel";
 
       return {
@@ -470,7 +491,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         donationRateLabel: rateLabel,
       };
     }));
-  }, [data, dates, previousDates, visibleThrough, today, rules, excludedIds, manualClasses, activeWeekDays, companyCalcs]);
+  }, [data, dates, previousDates, visibleThrough, today, rules, excludedIds, manualClasses, companyCalcs]);
 
   const totals = useMemo(() => {
     const sum = (key: keyof DonationRow) => rows.reduce((total, row) => total + (Number(row[key]) || 0), 0);
