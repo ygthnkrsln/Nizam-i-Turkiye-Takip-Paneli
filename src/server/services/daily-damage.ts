@@ -1,5 +1,5 @@
 ﻿// Vercel Serverless Function / Cron Job: GET /api/cron/record-daily-damage
-// Runs daily at 02:55 to snapshot weekly damage for all 8 armies and their members.
+// Runs daily at 02:55 to snapshot weekly damage for all tracked armies and their members.
 
 import fs from "fs";
 import path from "path";

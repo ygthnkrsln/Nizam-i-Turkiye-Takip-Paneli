@@ -40,7 +40,7 @@ export default async function handler(req: any, res: any) {
     }
     return res.status(200).json({
       success: true,
-      message: "02:55 Günlük Hasar Snapshot başarıyla tamamlandı (8 Ordu).",
+      message: `02:55 Günlük Hasar Snapshot başarıyla tamamlandı (${Object.keys(snapshot.armies).length} Ordu).`,
       date: snapshot.date,
       armiesCount: Object.keys(snapshot.armies).length,
       supabaseSaved: snapshot.supabaseSaved,

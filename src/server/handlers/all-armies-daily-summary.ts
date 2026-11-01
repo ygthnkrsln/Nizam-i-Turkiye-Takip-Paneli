@@ -1,6 +1,6 @@
 import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
 // Vercel Serverless Function: GET /api/all-armies-daily-summary
-// Aggregates today's live damage across all 8 major Turkish armies and ranks them 1 to 8
+// Aggregates today's live damage across all tracked Turkish armies and ranks them.
 
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
 import {
@@ -11,7 +11,7 @@ import {
 } from "../../lib/dailyDamage.js";
 import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
 
-export const PRESET_8_ARMIES = TRACKED_ARMIES;
+export const PRESET_TRACKED_ARMIES = TRACKED_ARMIES;
 
 let summaryCache: { data: any; timestamp: number } | null = null;
 const CACHE_TTL_MS = 20 * 1000; // 20 seconds fresh cache
@@ -56,9 +56,9 @@ export default async function handler(req: any, res: any) {
     const baselineDate =
       dates.length > 0 ? dates[dates.length - 1] : "2026-10-03";
 
-    // 2. Fetch live data for all 8 armies in parallel
+    // 2. Fetch live data for all tracked armies in parallel
     const armyResults = await Promise.all(
-      PRESET_8_ARMIES.map(async (army) => {
+      PRESET_TRACKED_ARMIES.map(async (army) => {
         const { baselineArmy, baselineMembers: armyBaseline } =
           findBaselineForCurrentCycle(snapshots, army.id);
         try {
@@ -181,7 +181,7 @@ export default async function handler(req: any, res: any) {
       }),
     );
 
-    // 3. Sort all 8 armies by todayDamage descending (or weeklyDamage as secondary sort)
+    // 3. Sort all tracked armies by todayDamage descending (or weeklyDamage as secondary sort)
     armyResults.sort((a, b) => {
       if (b.todayDamage !== a.todayDamage) {
         return b.todayDamage - a.todayDamage;

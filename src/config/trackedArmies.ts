@@ -45,6 +45,11 @@ export const TRACKED_ARMIES: TrackedArmy[] = [
     name: "BEASTs",
     avatarUrl: "https://media.warera.io/avatars/mu/mu-6902269a560184d196a6fba8-1787571170299-iczr3flz.jpg",
   },
+  {
+    id: "6ae773baae7fe70f909542cc",
+    name: "Ahis of Turkic Tribe",
+    avatarUrl: "https://media.warera.io/avatars/mu/mu-6ae773baae7fe70f909542cc-1793553687461-01xcvmzs.png",
+  },
 ];
 
 export const TRACKED_ARMY_IDS = TRACKED_ARMIES.map((army) => army.id);

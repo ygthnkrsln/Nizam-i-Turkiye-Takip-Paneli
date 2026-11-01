@@ -423,13 +423,13 @@ export const DailyDamageTelemetrySection: React.FC<
             </span>
           </h1>
 
-          {/* 8 Ordu Seçici Dropdown */}
+          {/* Ordu Seçici Dropdown */}
           <div className="relative">
             <select
               value={muId}
               onChange={(e) => onMuIdChange(e.target.value)}
               className="px-3 py-1.5 rounded-xl bg-[#141C21] border border-rose-500/40 text-xs font-bold text-rose-200 hover:border-rose-400 focus:outline-none focus:border-rose-400 cursor-pointer shadow-md transition-colors"
-              title="Aktif orduyu değiştirin (8 Ordu)"
+              title={`Aktif orduyu değiştirin (${PRESET_MILITARY_UNITS.length} Ordu)`}
             >
               {PRESET_MILITARY_UNITS.map((u) => (
                 <option

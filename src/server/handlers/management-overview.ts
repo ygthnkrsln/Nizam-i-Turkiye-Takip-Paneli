@@ -1,7 +1,7 @@
 import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
 // Vercel Serverless Function: GET /api/management-overview
 // Serves Management Mode:
-// 1. "Ordu Takibi": Live health & hunger bar percentages + today's damage across all 8 armies
+// 1. "Ordu Takibi": Live health & hunger bar percentages + today's damage across all tracked armies
 // 2. "Bağış Takibi": Target donation (Lv>=30: 1.5x if wealth<30k, 2.0x if wealth>=30k) + actual donations on selected date
 
 import { getNextWarEraToken, getWarEraTokens } from "../../lib/wareraTokens.js";
@@ -20,7 +20,7 @@ import { calculatePotentialDamage, isCombatBuild } from "../../lib/potentialDama
 import { calculatePlayerSkillMode, PlayerMode } from "../../lib/playerMode.js";
 import { calculatePlayerCompanyRevenue } from "./player-factories.js";
 
-export const PRESET_8_ARMIES = TRACKED_ARMIES;
+export const PRESET_TRACKED_ARMIES = TRACKED_ARMIES;
 const GAME_DAY_RESET_MS = 3 * 60 * 60 * 1000;
 const DONATION_COUNTRIES: Record<string, { name: string; code: string }> = {
   "683ddd2c24b5a2e114af15b5": { name: "Birleşik Arap Emirlikleri", code: "AE" },
@@ -668,7 +668,7 @@ export default async function handler(req: any, res: any) {
       dates.length > 0 ? dates[dates.length - 1] : "2026-10-03";
     // Distribute each parallel request across the configured API keys.
     const armyOverviews = await mapWithConcurrency(
-      PRESET_8_ARMIES,
+      PRESET_TRACKED_ARMIES,
       4,
       (army) => processSingleArmy(
         army,

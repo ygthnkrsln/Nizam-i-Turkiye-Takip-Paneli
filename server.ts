@@ -2160,7 +2160,7 @@ app.all("/api/cron/record-daily-damage", async (req, res) => {
     }
     return res.json({
       success: true,
-      message: "02:55 Günlük Hasar Snapshot başarıyla tamamlandı (8 Ordu).",
+      message: `02:55 Günlük Hasar Snapshot başarıyla tamamlandı (${Object.keys(snapshot.armies).length} Ordu).`,
       date: snapshot.date,
       armiesCount: Object.keys(snapshot.armies).length,
       countrySnapshot,
@@ -2198,7 +2198,7 @@ app.get("/api/daily-damage-snapshots", async (req, res) => {
   });
 });
 
-// API Route: All 8 armies daily damage summary & ranking
+// API Route: All tracked armies daily damage summary & ranking
 app.get("/api/all-armies-daily-summary", async (req, res) => {
   try {
     const { default: handler } =

@@ -100,13 +100,13 @@ export const ManagementArmyTrackingSection: React.FC<
             </h1>
             <span
               className="text-amber-400 hover:text-amber-300 cursor-pointer text-sm"
-              title="8 ordunun anlık can, açlık doluluk oranları ve günlük toplam hasar tablosu"
+              title="Takip edilen orduların anlık can, açlık doluluk oranları ve günlük toplam hasar tablosu"
             >
               <Info className="w-4 h-4" />
             </span>
           </div>
           <p className="text-xs text-[#BBE1FA]/70 mt-1">
-            8 Türk ordusunun anlık toplam can ve açlık barı doluluk oranları ile
+            Türk ordularının anlık toplam can ve açlık barı doluluk oranları ile
             02:55 TSİ bazlı günlük hasarları
           </p>
         </div>
@@ -153,7 +153,7 @@ export const ManagementArmyTrackingSection: React.FC<
               </span>
             </div>
             <span className="text-xs font-bold px-2 py-0.5 rounded bg-rose-950/60 text-rose-300 border border-rose-500/30">
-              8 Ordu
+              {data?.armies?.length ?? 0} Ordu
             </span>
           </div>
 
