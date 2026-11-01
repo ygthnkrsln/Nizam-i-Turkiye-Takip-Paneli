@@ -2212,6 +2212,8 @@ export interface ManagementArmyItem {
   muId: string;
   name: string;
   avatarUrl: string;
+  dataAvailable?: boolean;
+  dataError?: string;
   memberCount: number;
   health: { current: number; max: number; percentage: number };
   hunger: { current: number; max: number; percentage: number };
@@ -2334,17 +2336,16 @@ const managementOverviewClientCache = new Map<
 const MANAGEMENT_OVERVIEW_CACHE_LIMIT = 8;
 const MANAGEMENT_TODAY_CACHE_TTL_MS = 30 * 1000;
 const MANAGEMENT_HISTORY_CACHE_TTL_MS = 3 * 60 * 1000;
-const MANAGEMENT_REQUIRED_MU_ID = "693d20605669127e9d45f9b8";
-
 function managementOverviewIncludesRequiredArmies(
   response: ManagementOverviewResponse | null | undefined,
 ): response is ManagementOverviewResponse {
   const armyIds = response?.armies?.map((army) => army.muId) ?? [];
+  const expectedArmyIds = TRACKED_ARMIES.map((army) => army.id);
   return Boolean(
     response?.success &&
-    armyIds.length === 8 &&
-    new Set(armyIds).size === 8 &&
-    armyIds.includes(MANAGEMENT_REQUIRED_MU_ID),
+    armyIds.length === expectedArmyIds.length &&
+    new Set(armyIds).size === expectedArmyIds.length &&
+    expectedArmyIds.every((id) => armyIds.includes(id)),
   );
 }
 
@@ -2364,7 +2365,7 @@ export async function fetchManagementOverview(
     timeZone: "Europe/Istanbul",
   }).format(new Date());
   const effectiveDate = date || today;
-  const cacheKey = `${includeDonations ? "full_v15" : "armies_v15"}:${effectiveDate}`;
+  const cacheKey = `${includeDonations ? "full_v17" : "armies_v17"}:${effectiveDate}`;
   const cacheTtlMs =
     effectiveDate === today
       ? MANAGEMENT_TODAY_CACHE_TTL_MS

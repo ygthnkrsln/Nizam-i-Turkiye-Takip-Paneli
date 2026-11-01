@@ -579,6 +579,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
     const poolCarryIn = Math.max(0, previousPaid - previousQuota);
     return {
       ...army,
+      dataAvailable: army.dataAvailable !== false,
       quota: armyRows.reduce((sum, row) => sum + row.weeklyTarget, 0),
       toDate: armyRows.reduce((sum, row) => sum + row.dueToDate, 0),
       paid: armyRows.reduce((sum, row) => sum + row.paidThisWeek, 0) + poolCarryIn,
@@ -1020,7 +1021,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                   <CartesianGrid stroke="#9fb3c8" strokeOpacity={0.18} strokeDasharray="3 5" horizontal={false} />
                   <XAxis type="number" tickFormatter={(value) => `${(Number(value) / 1000).toLocaleString("tr-TR", { maximumFractionDigits: 0 })}K`} tick={{ fill: "#cbd5e1", fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="name" width={136} tick={{ fill: "#f1f5f9", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <Tooltip formatter={(value, name) => [`${money(Number(value))}`, String(name)]} contentStyle={{ background: "#0b1419", border: "1px solid rgba(52,211,153,.35)", borderRadius: 10, color: "#fff" }} labelStyle={{ color: "#fff", fontWeight: 700 }} />
+                  <Tooltip formatter={(value, name, item) => [item.payload?.dataAvailable === false ? "—" : money(Number(value)), String(name)]} contentStyle={{ background: "#0b1419", border: "1px solid rgba(52,211,153,.35)", borderRadius: 10, color: "#fff" }} labelStyle={{ color: "#fff", fontWeight: 700 }} />
                   <Legend wrapperStyle={{ color: "#dbeafe", fontSize: 11 }} />
                   <Bar dataKey="quota" name="Haftalık hedef" fill="#34d399" radius={[0, 5, 5, 0]} maxBarSize={16} />
                   <Bar dataKey="paid" name="Ödenen + devir" fill="#f4c76b" radius={[0, 5, 5, 0]} maxBarSize={16} />
@@ -1055,7 +1056,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                 <tbody className="divide-y divide-emerald-500/10">
                   {armyTotals.map((army) => {
                     const selected = armyFilter === army.muId;
-                    const pct = army.quota ? Math.min(100, (army.paid / army.quota) * 100) : 100;
+                    const pct = army.dataAvailable && army.quota ? Math.min(100, (army.paid / army.quota) * 100) : 0;
                     return (
                       <tr
                         key={army.muId}
@@ -1064,17 +1065,17 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                       >
                         <td className="px-4 py-3 font-bold text-white">
                           {army.name}
-                          <span className="ml-2 text-[10px] font-normal text-[#BBE1FA]/40">{army.memberCount} üye</span>
+                          <span className="ml-2 text-[10px] font-normal text-[#BBE1FA]/40">{army.dataAvailable ? `${army.memberCount} üye` : "Veri yok"}</span>
                         </td>
-                        <td className="px-4 py-3 text-center text-emerald-200">{army.eligible}</td>
-                        <td className="px-4 py-3 text-right">{money(army.quota)}</td>
-                        <td className="px-4 py-3 text-right text-emerald-300">{money(army.paid)}</td>
-                        <td className="px-4 py-3 text-right text-rose-300">{money(army.unpaid)}</td>
+                        <td className="px-4 py-3 text-center text-emerald-200">{army.dataAvailable ? army.eligible : "—"}</td>
+                        <td className="px-4 py-3 text-right">{army.dataAvailable ? money(army.quota) : "—"}</td>
+                        <td className="px-4 py-3 text-right text-emerald-300">{army.dataAvailable ? money(army.paid) : "—"}</td>
+                        <td className="px-4 py-3 text-right text-rose-300">{army.dataAvailable ? money(army.unpaid) : "—"}</td>
                         <td className="min-w-36 px-4 py-3">
                           <div className="h-1.5 rounded-full bg-[#10171b]">
-                            <div className="h-full rounded-full bg-emerald-400" style={{ width: `${pct}%` }} />
+                            {army.dataAvailable && <div className="h-full rounded-full bg-emerald-400" style={{ width: `${pct}%` }} />}
                           </div>
-                          <div className="mt-1 text-[10px] text-[#BBE1FA]/45">%{Math.round(pct)}</div>
+                          <div className="mt-1 text-[10px] text-[#BBE1FA]/45">{army.dataAvailable ? `%${Math.round(pct)}` : "—"}</div>
                         </td>
                       </tr>
                     );

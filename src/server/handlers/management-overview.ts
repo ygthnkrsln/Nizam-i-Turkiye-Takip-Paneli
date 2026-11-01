@@ -560,6 +560,7 @@ async function processSingleArmy(
       muId: army.id,
       name: army.name,
       avatarUrl: army.avatarUrl,
+      dataAvailable: true,
       memberCount: memberIds.length || memberStats.length,
       health: {
         current: Number(totalHealthCurrent.toFixed(1)),
@@ -590,8 +591,29 @@ async function processSingleArmy(
 
     return result;
   } catch (err: any) {
-    console.error(`Error processing army ${army.id}:`, err);
-    throw err;
+    console.warn(`Could not load management data for army ${army.name} (${army.id}):`, err);
+    return {
+      muId: army.id,
+      name: army.name,
+      avatarUrl: army.avatarUrl,
+      dataAvailable: false,
+      dataError: err instanceof Error ? err.message : "Birlik verisi alınamadı",
+      memberCount: 0,
+      health: { current: 0, max: 0, percentage: 0 },
+      hunger: { current: 0, max: 0, percentage: 0 },
+      todayDamage: 0,
+      potentialDamage: 0,
+      weeklyDamage: 0,
+      donations: {
+        targetDonation: 0,
+        collectedDonation: 0,
+        remainingDonation: 0,
+        completionPercentage: 0,
+        eligibleMemberCount: 0,
+        completedMemberCount: 0,
+      },
+      members: [],
+    };
   }
 }
 
@@ -642,7 +664,7 @@ export default async function handler(req: any, res: any) {
     effectiveDate === todayDateStr ? 30 * 1000 : CACHE_TTL_MS;
 
   const donationHistoryDates = getDonationHistoryDates(effectiveDate);
-  const cacheKey = `mgmt_overview_v16_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v17_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < cacheTtlMs) {
     return res.status(200).json(cached.data);

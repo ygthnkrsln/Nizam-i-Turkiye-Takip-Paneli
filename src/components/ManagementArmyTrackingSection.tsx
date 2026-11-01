@@ -282,7 +282,7 @@ export const ManagementArmyTrackingSection: React.FC<
               <CartesianGrid stroke="#9fb3c8" strokeOpacity={0.18} strokeDasharray="3 5" horizontal={false} />
               <XAxis type="number" tickFormatter={(value) => formatDmg(Number(value))} tick={{ fill: "#cbd5e1", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis type="category" dataKey="name" width={138} tick={{ fill: "#f1f5f9", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={(value, name) => [`${formatDmg(Number(value))} hasar`, String(name)]} contentStyle={{ background: "#0b1419", border: "1px solid rgba(56,189,248,.35)", borderRadius: 10, color: "#fff" }} labelStyle={{ color: "#fff", fontWeight: 700 }} />
+              <Tooltip formatter={(value, name, item) => [item.payload?.dataAvailable === false ? "—" : `${formatDmg(Number(value))} hasar`, String(name)]} contentStyle={{ background: "#0b1419", border: "1px solid rgba(56,189,248,.35)", borderRadius: 10, color: "#fff" }} labelStyle={{ color: "#fff", fontWeight: 700 }} />
               <Legend wrapperStyle={{ color: "#dbeafe", fontSize: 11 }} />
               <Bar dataKey="todayDamage" name="Bugünkü hasar" fill="#38bdf8" radius={[0, 5, 5, 0]} maxBarSize={16} />
               <Bar dataKey="potentialDamage" name="Potansiyel hasar" fill="#a78bfa" radius={[0, 5, 5, 0]} maxBarSize={16} />
@@ -291,13 +291,13 @@ export const ManagementArmyTrackingSection: React.FC<
         </div>
       </section>
 
-      {/* 3. 8 ORDU CANLI TABLOSU */}
+      {/* 3. TAKİP EDİLEN ORDULARIN CANLI TABLOSU */}
       <div className="rounded-xl bg-[#182329] border border-amber-500/25 overflow-hidden shadow-xl">
         <div className="p-3.5 bg-[#141C21] border-b border-amber-500/20 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Award className="w-4 h-4 text-amber-400" />
             <span className="font-bold text-xs uppercase tracking-wider text-amber-200">
-              8 ORDU HARBE HAZIRLIK & CANLI HASAR LİSTESİ
+              ORDU HARBE HAZIRLIK & CANLI HASAR LİSTESİ
             </span>
           </div>
           <span className="text-[11px] text-[#BBE1FA]/60">
@@ -323,6 +323,29 @@ export const ManagementArmyTrackingSection: React.FC<
             </thead>
             <tbody className="divide-y divide-[#3282B8]/15">
               {sortedArmies.map((army, idx) => {
+                if (army.dataAvailable === false) {
+                  return (
+                    <tr key={army.muId} className="text-[#BBE1FA]/50">
+                      <td className="py-3.5 px-4 text-center">—</td>
+                      <td className="py-3.5 px-4 font-bold text-white">{army.name}</td>
+                      <td className="py-3.5 px-4 text-center" title={army.dataError}>—</td>
+                      <td className="py-3.5 px-4 text-center" title={army.dataError}>—</td>
+                      <td className="py-3.5 px-4 text-center" title={army.dataError}>—</td>
+                      <td className="py-3.5 px-4 text-right" title={army.dataError}>—</td>
+                      <td className="py-3.5 px-4 text-right" title={army.dataError}>—</td>
+                      <td className="py-3.5 px-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleGoToArmyDamage(army.muId)}
+                          className="text-amber-200 hover:text-white"
+                          title="Bu ordunun hasar detay sayfasına git"
+                        >
+                          Detay
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                }
                 const healthColor =
                   army.health.percentage >= 75
                     ? "text-emerald-400"
