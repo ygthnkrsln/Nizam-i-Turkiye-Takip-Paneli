@@ -17,6 +17,7 @@ import {
 } from "../../lib/dailyDamage.js";
 import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
 import { calculatePotentialDamage, isCombatBuild } from "../../lib/potentialDamage.js";
+import { calculatePlayerCompanyRevenue } from "./player-factories.js";
 
 export const PRESET_8_ARMIES = TRACKED_ARMIES;
 const GAME_DAY_RESET_MS = 3 * 60 * 60 * 1000;
@@ -371,6 +372,27 @@ async function processSingleArmy(
     let eligibleCount = 0;
     let completedCount = 0;
 
+    // Pre-calculate company revenues for eligible members (level >= 30, wealth >= 20000, and economy mode)
+    const companyCalcsMap = new Map<string, any>();
+    if (includeDonations) {
+      const eligibleUsers = rawUsers.filter((u) => {
+        const lvl = Number(u.leveling?.level || u.level || 1);
+        const w = Number(u.rankings?.userWealth?.value || u.wealth || 0);
+        const { isEconomy } = calculatePlayerSkillMode(u);
+        return lvl >= 30 && w >= 20000 && isEconomy;
+      });
+
+      await mapWithConcurrency(eligibleUsers, 2, async (u) => {
+        const uid = u._id || u.id;
+        try {
+          const calc = await calculatePlayerCompanyRevenue(uid, userApiKey, false, u);
+          if (calc) companyCalcsMap.set(uid, calc);
+        } catch {
+          // silently continue
+        }
+      });
+    }
+
     const memberStats = rawUsers.map((u) => {
       const uid = u._id || u.id;
       const username = u.username || "Asker";
@@ -401,7 +423,7 @@ async function processSingleArmy(
       const level = Number(u.leveling?.level || u.level || 1);
       const wealth = Number(u.rankings?.userWealth?.value || u.wealth || 1000);
 
-      // Oyuncu Modu (Ülke İstatistikleri ile birebir aynı beceriye dayalı yaklaşım)
+      // Oyuncu Modu
       const { isEconomy, playerMode, ecoSkillPoints, totalSkillPoints } =
         calculatePlayerSkillMode(u);
       const isFighter = isCombatBuild(u);
@@ -417,21 +439,27 @@ async function processSingleArmy(
       );
       armyPotentialDamage += potentialDamage;
 
-      // Kural:
-      // Bağış yapacak oyuncular:
-      // 1. 30 seviye ve üzeri olmalı (level >= 30)
-      // 2. EKONOMİ MODUNDA olmalı (isEconomy === true, yani ecoSkillPoints > totalSkillPoints / 2)
-      // - Servet < 30k: seviyenin 1.5 katı
-      // - Servet >= 30k: seviyenin 2.0 katı
-      // Savaş modundaki oyuncular veya 30 seviye altı: muaf (0)
-      const isEligible = level >= 30 && isEconomy;
-      let multiplier = 0;
-      if (isEligible) {
-        multiplier = wealth >= 30000 ? 2.0 : 1.5;
+      // Kural (Yeni Sistem):
+      // Sadece 30+ seviye, 20k+ servet ve EKONOMİ modundaki oyuncular bağış atacak:
+      // - 20k- servet bağış oranı: %0
+      // - 20k - 30k arası servet bağış oranı: %20
+      // - 30k+ arası servet bağış oranı: %25
+      const calc = companyCalcsMap.get(uid);
+      let donationRate = 0;
+      if (isEconomy && level >= 30) {
+        if (wealth < 20000) donationRate = 0;
+        else if (wealth <= 30000) donationRate = 0.20;
+        else donationRate = 0.25;
       }
 
-      const targetDonation = isEligible ? Math.round(level * multiplier) : 0;
-      if (isEligible) {
+      const isEligible = isEconomy && level >= 30 && wealth >= 20000 && donationRate > 0;
+      const multiplier = donationRate;
+
+      const targetDonation = isEligible && calc
+        ? Math.round((calc.totalDailyRevenue || 0) * donationRate)
+        : (isEligible ? Math.round(level * (wealth >= 30000 ? 2.0 : 1.5)) : 0);
+
+      if (isEligible && targetDonation > 0) {
         targetDonationSum += targetDonation;
         eligibleCount++;
       }
@@ -450,10 +478,12 @@ async function processSingleArmy(
       let status: "completed" | "partial" | "pending" | "exempt" = "exempt";
       let exemptReason: "combat_mode" | "low_level" | null = null;
       if (!isEligible) {
-        if (playerMode === "combat") {
+        if (!isEconomy) {
           exemptReason = "combat_mode";
-        } else {
+        } else if (level < 30) {
           exemptReason = "low_level";
+        } else {
+          exemptReason = "combat_mode";
         }
       } else {
         if (collectedDonation >= targetDonation && targetDonation > 0)
@@ -506,6 +536,11 @@ async function processSingleArmy(
         donationsByDate,
         remainingDonation,
         status,
+        autoIncome: calc?.totalAutoIncome ?? 0,
+        workerIncome: calc?.totalWorkerIncome ?? 0,
+        totalDailyRevenue: calc?.totalDailyRevenue ?? 0,
+        donationRate,
+        factoryCalculation: calc || undefined,
       };
     });
 

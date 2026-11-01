@@ -3,7 +3,7 @@
  * Reads tokens strictly from environment variables (.env / process.env).
  */
 import dotenv from "dotenv";
-dotenv.config();
+dotenv.config({ override: true });
 
 export function getWarEraTokens(): string[] {
   const raw = [

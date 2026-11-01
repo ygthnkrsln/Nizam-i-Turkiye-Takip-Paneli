@@ -9,6 +9,9 @@
   "functions": {
     "api/management-overview.ts": {
       "maxDuration": 60
+    },
+    "api/player-factories.ts": {
+      "maxDuration": 60
     }
   },
   "rewrites": [

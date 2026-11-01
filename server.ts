@@ -19,8 +19,9 @@ import { COUNTRY_STATS_ARMIES } from "./src/config/countryStatsArmies.js";
 import { getTrpcData } from "./src/utils/wareraTransactions.js";
 import economyDonationsHandler from "./src/server/handlers/economy-donations.js";
 import { recordCountryTrackerSnapshot } from "./src/server/handlers/management-intelligence.js";
+import playerFactoriesHandler from "./src/server/handlers/player-factories.js";
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const app = express();
 const PORT = 3000;
@@ -772,24 +773,8 @@ app.get("/api/mu-data", async (req, res) => {
 
 app.post("/api/mu-data", economyDonationsHandler);
 
-// API Route: Fetch individual player factories on demand
-app.get("/api/player-factories", async (req, res) => {
-  const userId = req.query.userId as string;
-  if (!userId) {
-    return res
-      .status(400)
-      .json({ success: false, error: "userId is required" });
-  }
-  try {
-    const data = await fetchUserCompanies(userId);
-    return res.json({ success: true, userId, ...data });
-  } catch (err: any) {
-    return res.status(500).json({
-      success: false,
-      error: err.message || "Failed fetching player factories",
-    });
-  }
-});
+// API Route: Fetch individual player factories and company revenue calculation
+app.get("/api/player-factories", playerFactoriesHandler);
 
 // API Route: Fetch country-wide statistics across the 8 tracked military units
 const COUNTRY_STATS_CACHE_KEY = "warera_country_stats_8_armies_v6";
@@ -2235,6 +2220,11 @@ app.get("/api/management-overview", async (req, res) => {
     console.error("Error in /api/management-overview:", err);
     return res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// API Route: Player Active Companies & Factory Calculations
+app.all("/api/player-factories", (req, res) => {
+  return playerFactoriesHandler(req, res);
 });
 
 // Secure WarEra Proxy endpoint: executes upstream queries server-side without exposing API tokens to the client

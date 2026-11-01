@@ -2098,6 +2098,82 @@ export async function fetchAllArmiesDailySummary(
   return res.json();
 }
 
+export interface CompanyCalculationItem {
+  id: string;
+  name: string;
+  itemCode: string;
+  itemPrice: number;
+  autoLevel: number;
+  dailyAutoProduction: number;
+  dailyAutoItemsProduced?: number;
+  dailyAutoMaterialCost?: number;
+  dailyAutoIncome: number;
+  workerEstimate: {
+    production: number;
+    wage: number;
+    managerCost: number;
+    toolboxes?: number;
+    cap?: number;
+  };
+  dailyWorkerProduction: number;
+  dailyWorkerItemsProduced?: number;
+  dailyWorkerMaterialCost?: number;
+  dailyWage: number;
+  dailyManagerCost: number;
+  dailyWorkerIncome: number;
+  companyTotalIncome: number;
+  isActive: boolean;
+  storageLevel: number;
+  breakRoomLevel: number;
+  production: number;
+  conversion?: {
+    prodRequired: number;
+    inputItem: string | null;
+    inputQty: number;
+    label: string;
+    inputItemPrice?: number;
+  };
+}
+
+export interface PlayerCompanyCalculationResponse {
+  success: boolean;
+  userId: string;
+  username: string;
+  level: number;
+  wealth: number;
+  factoryLimit: number;
+  totalOwnedFactories: number;
+  activeFactoryCount: number;
+  companies: CompanyCalculationItem[];
+  activeCompanies: CompanyCalculationItem[];
+  passiveCompanies: CompanyCalculationItem[];
+  totalAutoIncome: number;
+  totalWorkerIncome: number;
+  totalDailyRevenue: number;
+  isEligible: boolean;
+  donationRate: number;
+  donationRateLabel: string;
+  dailyDonationTarget: number;
+  statusReason: string;
+  timestamp: number;
+}
+
+export async function fetchPlayerCompanyCalculation(
+  userId: string,
+  forceRefresh = false,
+): Promise<PlayerCompanyCalculationResponse> {
+  const customKey = getUserApiKey();
+  const headers: Record<string, string> = {};
+  if (customKey) headers["x-user-api-key"] = customKey;
+
+  const url = `/api/player-factories?userId=${encodeURIComponent(userId)}${forceRefresh ? "&refresh=true" : ""}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(`Oyuncu şirket hesaplaması alınamadı (${res.status})`);
+  }
+  return res.json();
+}
+
 export interface ManagementMemberItem {
   userId: string;
   username: string;
@@ -2123,6 +2199,11 @@ export interface ManagementMemberItem {
   donationsByDate?: Record<string, { country: number; mu: number; total: number }>;
   remainingDonation: number;
   status: "completed" | "partial" | "pending" | "exempt";
+  autoIncome?: number;
+  workerIncome?: number;
+  totalDailyRevenue?: number;
+  donationRate?: number;
+  factoryCalculation?: PlayerCompanyCalculationResponse;
 }
 
 export interface ManagementArmyItem {
