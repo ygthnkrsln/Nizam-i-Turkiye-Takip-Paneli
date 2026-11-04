@@ -25,7 +25,10 @@ import {
   DailyDamageSnapshotsResponse,
   PRESET_MILITARY_UNITS,
 } from "../types";
-import { calculateDailyDamageFromSnapshot } from "../lib/dailyDamage";
+import {
+  calculateDailyDamageFromSnapshot,
+  getSnapshotPlayers,
+} from "../lib/dailyDamage";
 import {
   fetchCombatTelemetry,
   getCachedCombatTelemetry,
@@ -198,7 +201,7 @@ export const DailyDamageTelemetrySection: React.FC<
     if (dates.length > 0) {
       const targetDate =
         data.dailyDamageInfo?.baselineDate || dates[dates.length - 1];
-      baselineMembers = snapshots[targetDate]?.armies?.[muId]?.members || {};
+      baselineMembers = getSnapshotPlayers(snapshots[targetDate]);
     }
 
     return data.members.map((m) => {

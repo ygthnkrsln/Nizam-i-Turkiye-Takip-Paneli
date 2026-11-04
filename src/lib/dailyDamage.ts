@@ -5,6 +5,60 @@ export interface DailyDamageBaseline {
   targetResetDate: string;
 }
 
+export function getSnapshotArmyMemberIds(
+  snapshot: any,
+  muId: string,
+): string[] {
+  const army = snapshot?.armies?.[muId];
+  if (Array.isArray(army?.memberIds)) return army.memberIds;
+  if (army?.members && typeof army.members === "object") {
+    return Object.keys(army.members);
+  }
+  return Object.entries(snapshot?.players || {})
+    .filter(([, player]: [string, any]) => player?.armyIds?.includes(muId))
+    .map(([userId]) => userId);
+}
+
+export function getSnapshotArmyMembers(
+  snapshot: any,
+  muId: string,
+): Record<string, any> {
+  const legacyMembers = snapshot?.armies?.[muId]?.members;
+  const players = snapshot?.players || {};
+  const resolvedPlayers = Object.fromEntries(
+    getSnapshotArmyMemberIds(snapshot, muId)
+      .filter((userId) => players[userId])
+      .map((userId) => [userId, players[userId]]),
+  );
+  return {
+    ...(legacyMembers && typeof legacyMembers === "object" ? legacyMembers : {}),
+    ...resolvedPlayers,
+  };
+}
+
+export function getSnapshotPlayer(
+  snapshot: any,
+  userId: string,
+): any | undefined {
+  if (snapshot?.players?.[userId]) return snapshot.players[userId];
+  for (const army of Object.values(snapshot?.armies || {}) as any[]) {
+    if (army?.members?.[userId]) return army.members[userId];
+  }
+  return undefined;
+}
+
+export function getSnapshotPlayers(snapshot: any): Record<string, any> {
+  const players = { ...(snapshot?.players || {}) };
+  for (const army of Object.values(snapshot?.armies || {}) as any[]) {
+    if (army?.members && typeof army.members === "object") {
+      for (const [userId, player] of Object.entries(army.members)) {
+        players[userId] ||= player;
+      }
+    }
+  }
+  return players;
+}
+
 /** Read the canonical live weekly-damage value from WarEra profile shapes. */
 export function getCurrentWeeklyDamage(user: any): number {
   const value = Number(
@@ -93,7 +147,9 @@ export function findBaselineForCurrentCycle(
   return {
     baselineDate,
     baselineArmy,
-    baselineMembers: baselineArmy?.members || {},
+    baselineMembers: baselineDate
+      ? getSnapshotPlayers(snapshots[baselineDate])
+      : {},
     targetResetDate,
   };
 }

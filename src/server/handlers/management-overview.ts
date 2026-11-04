@@ -14,6 +14,7 @@ import {
   findBaselineForCurrentCycle,
   getCurrentWeeklyDamage,
   getMilitaryUnitWeeklyDamage,
+  getSnapshotPlayers,
 } from "../../lib/dailyDamage.js";
 import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
 import { calculatePotentialDamage, isCombatBuild } from "../../lib/potentialDamage.js";
@@ -158,16 +159,14 @@ function collectPlayerModesByDate(
       ? new Date(timestamp - GAME_DAY_RESET_MS).toISOString().slice(0, 10)
       : snapshotDate;
 
-    for (const army of Object.values(snapshot?.armies || {}) as any[]) {
-      for (const [userId, member] of Object.entries(army?.members || {}) as [string, any][]) {
-        const mode = member?.playerMode ??
-          (typeof member?.isEconomy === "boolean"
-            ? member.isEconomy ? "economy" : "combat"
-            : null);
-        if (mode !== "economy" && mode !== "combat") continue;
-        modesByUser[userId] ||= {};
-        modesByUser[userId][gameDate] = mode;
-      }
+    for (const [userId, player] of Object.entries(getSnapshotPlayers(snapshot)) as [string, any][]) {
+      const mode = player?.playerMode ??
+        (typeof player?.isEconomy === "boolean"
+          ? player.isEconomy ? "economy" : "combat"
+          : null);
+      if (mode !== "economy" && mode !== "combat") continue;
+      modesByUser[userId] ||= {};
+      modesByUser[userId][gameDate] = mode;
     }
   }
   return modesByUser;
@@ -183,17 +182,15 @@ function collectDonationTargetsByDate(
       ? new Date(timestamp - GAME_DAY_RESET_MS).toISOString().slice(0, 10)
       : snapshotDate;
 
-    for (const army of Object.values(snapshot?.armies || {}) as any[]) {
-      for (const [userId, member] of Object.entries(army?.members || {}) as [string, any][]) {
-        const target = member?.donationTargetSnapshot;
-        if (
-          !target ||
-          !Number.isFinite(Number(target.target)) ||
-          (target.playerMode !== "economy" && target.playerMode !== "combat")
-        ) continue;
-        targetsByUser[userId] ||= {};
-        targetsByUser[userId][gameDate] = target;
-      }
+    for (const [userId, player] of Object.entries(getSnapshotPlayers(snapshot)) as [string, any][]) {
+      const target = player?.donationTargetSnapshot;
+      if (
+        !target ||
+        !Number.isFinite(Number(target.target)) ||
+        (target.playerMode !== "economy" && target.playerMode !== "combat")
+      ) continue;
+      targetsByUser[userId] ||= {};
+      targetsByUser[userId][gameDate] = target;
     }
   }
   return targetsByUser;

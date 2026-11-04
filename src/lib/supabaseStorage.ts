@@ -64,6 +64,30 @@ export interface DailySnapshotRecord {
   date: string;
   timestamp: number;
   iso?: string;
+  players?: Record<string, {
+    username: string;
+    weeklyDamage: number;
+    wealth?: number;
+    dailyDamage?: number;
+    playerMode?: "economy" | "combat";
+    isEconomy?: boolean;
+    ecoSkillPoints?: number;
+    totalSkillPoints?: number;
+    armyIds: string[];
+    donationTargetSnapshot?: {
+      target: number;
+      revenue: number | null;
+      autoIncome?: number | null;
+      workerIncome?: number | null;
+      rate: number;
+      eligible: boolean;
+      playerMode: "economy" | "combat";
+      level: number;
+      wealth: number;
+      source: "companies" | "fallback" | "policy";
+      capturedAt: string;
+    };
+  }>;
   armies: Record<
     string,
     {
@@ -71,6 +95,7 @@ export interface DailySnapshotRecord {
       muId: string;
       armyTotalWeeklyDamage: number;
       memberCount: number;
+      memberIds?: string[];
       members: Record<string, {
         username: string;
         weeklyDamage: number;
@@ -121,7 +146,10 @@ export async function saveSnapshotToSupabase(
     const payload = {
       date: snapshot.date,
       timestamp: snapshot.timestamp,
-      armies: snapshot.armies,
+      armies: {
+        ...snapshot.armies,
+        __players: snapshot.players || {},
+      },
       iso: snapshot.iso || new Date(snapshot.timestamp).toISOString(),
     };
 
@@ -182,6 +210,9 @@ export async function fetchSnapshotsFromSupabase(
     const store: Record<string, DailySnapshotRecord> = {};
     for (const row of [...data].reverse()) {
       if (row.date && row.armies) {
+        const armies =
+          typeof row.armies === "string" ? JSON.parse(row.armies) : row.armies;
+        const { __players: embeddedPlayers = {}, ...armyRecords } = armies || {};
         store[row.date] = {
           date: row.date,
           timestamp:
@@ -189,10 +220,8 @@ export async function fetchSnapshotsFromSupabase(
               ? row.timestamp
               : Number(row.timestamp),
           iso: row.iso || row.created_at,
-          armies:
-            typeof row.armies === "string"
-              ? JSON.parse(row.armies)
-              : row.armies,
+          players: embeddedPlayers,
+          armies: armyRecords,
         };
       }
     }

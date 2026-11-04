@@ -24,8 +24,8 @@ This document is a navigation index for coding assistants and contributors. It d
 
 1. `src/components/ManagementDonationTrackingSection.tsx` requests the management overview through `src/services/wareraApi.ts`.
 2. `src/server/handlers/management-overview.ts` fetches tracked-unit membership, user profiles and donations; it combines current data with daily snapshots and aggregates the overview.
-3. `src/server/services/daily-damage.ts` records per-member daily snapshots. The scheduled Vercel entry point `api/cron/record-daily-damage.ts` requests donation-target capture; targets, rates, player mode, income, level and wealth are stored with the daily member snapshot.
-4. `src/lib/supabaseStorage.ts` reads/upserts the `daily_snapshots` record in Supabase and enforces the 30-day retention policy.
+3. `src/server/services/daily-damage.ts` records one player-keyed profile for every player seen in tracked armies during the 30-day window, plus each day's tracked-army membership. The scheduled Vercel entry point `api/cron/record-daily-damage.ts` requests donation-target capture; targets, rates, player mode, income, level and wealth are stored with each player snapshot.
+4. `src/lib/supabaseStorage.ts` stores player snapshots inside the existing `daily_snapshots.armies` JSONB payload (under `__players`) to avoid a database migration, normalizes them on read, and enforces the 30-day retention policy.
 5. The donation page uses date-specific targets for historical weekly totals. Detailed company calculations are loaded through the bulk `POST /api/player-factories` path; the individual calculation modal uses the single-player path.
 6. `src/server/handlers/player-factories.ts` calculates automated-engine and employee income, applying item conversion recipes and input-material costs.
 
@@ -34,7 +34,7 @@ The canonical tracked unit list is `src/config/trackedArmies.ts`; server and cli
 ### Daily damage and player mode
 
 - Cron route: `api/cron/record-daily-damage.ts` → `src/server/services/daily-damage.ts`.
-- Shared snapshots: `src/lib/supabaseStorage.ts`; calculations and weekly baselines: `src/lib/dailyDamage.ts`.
+- Shared snapshots: player profiles are keyed once per user while daily army membership is stored separately; `src/lib/supabaseStorage.ts` handles backward-compatible persistence and `src/lib/dailyDamage.ts` resolves legacy and current snapshot shapes.
 - Economy/combat mode classification: `src/lib/playerMode.ts`; consumers include the snapshot service and management handlers.
 - Snapshot dates are retained for 30 days. Check the `Europe/Istanbul` game-day offset/reset logic before changing date calculations.
 - Local Express routes are separately defined in `server.ts`; when changing cron/snapshot behavior, compare the local route with the Vercel API route.

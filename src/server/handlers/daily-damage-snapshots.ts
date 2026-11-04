@@ -7,6 +7,11 @@ import {
   snapshotAllArmies,
 } from "../services/daily-damage.js";
 import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
+import {
+  getSnapshotArmyMemberIds,
+  getSnapshotArmyMembers,
+  getSnapshotPlayer,
+} from "../../lib/dailyDamage.js";
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -25,7 +30,9 @@ export default async function handler(req: any, res: any) {
     const todayArmies = store[today]?.armies || {};
     const incompleteTrackedArmy = TRACKED_ARMIES.some((army) => {
       const snapshot = todayArmies[army.id];
-      return !snapshot || Object.keys(snapshot.members || {}).length < Number(snapshot.memberCount || 0);
+      return !snapshot ||
+        getSnapshotArmyMemberIds(store[today], army.id).length <
+          Number(snapshot.memberCount || 0);
     });
     if (!store[today] || incompleteTrackedArmy) {
       try {
@@ -38,9 +45,9 @@ export default async function handler(req: any, res: any) {
 
     const directory = new Map<string, { userId: string; username: string; armyNames: Set<string> }>();
     const latestDate = Object.keys(store).sort().at(-1) || null;
-    const snapshotArmies = latestDate ? store[latestDate]?.armies || {} : {};
+    const latestSnapshot = latestDate ? store[latestDate] : undefined;
     for (const army of TRACKED_ARMIES) {
-      const members = snapshotArmies[army.id]?.members || {};
+      const members = getSnapshotArmyMembers(latestSnapshot, army.id);
       for (const [userId, member] of Object.entries(members) as [string, { username?: string }][]) {
         const entry = directory.get(userId) || { userId, username: "", armyNames: new Set<string>() };
         if (member.username) entry.username = member.username;
@@ -73,7 +80,8 @@ export default async function handler(req: any, res: any) {
   if (userId && muId) {
     const historyDates = dates.slice(-30);
     const history = historyDates.map((date) => {
-      const member = store[date]?.armies?.[muId]?.members?.[userId];
+      const member = getSnapshotPlayer(store[date], userId) ??
+        store[date]?.armies?.[muId]?.members?.[userId];
       return {
         date,
         wealth: typeof member?.wealth === "number" ? member.wealth : undefined,

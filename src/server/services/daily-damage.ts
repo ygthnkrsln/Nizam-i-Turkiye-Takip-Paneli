@@ -9,14 +9,17 @@ import {
   isSupabaseConnected,
 } from "../../lib/supabaseStorage.js";
 import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
-import { calculateDailyDamageFromSnapshot } from "../../lib/dailyDamage.js";
+import {
+  calculateDailyDamageFromSnapshot,
+  getSnapshotArmyMemberIds,
+  getSnapshotPlayer,
+} from "../../lib/dailyDamage.js";
 import { calculatePlayerSkillMode } from "../../lib/playerMode.js";
 import { calculatePlayerCompanyRevenue } from "../handlers/player-factories.js";
 import type { DailySnapshotRecord } from "../../lib/supabaseStorage.js";
 export { isSupabaseConnected };
 
 const PRESET_MILITARY_UNITS = TRACKED_ARMIES;
-const GAME_DAY_RESET_MS = 3 * 60 * 60 * 1000;
 
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -235,134 +238,173 @@ export async function snapshotAllArmies(
       date: dateStr,
       timestamp,
       iso: now.toISOString(),
+      players: {},
       armies: {},
     };
   }
 
-  for (const mu of PRESET_MILITARY_UNITS) {
-    try {
-      const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: mu.id }))}`;
-      const muRes = await fetchWarEra(muUrl);
-      if (!muRes.ok) continue;
-      const muJson = await muRes.json();
-      const muData = muJson?.result?.data?.json || muJson?.result?.data;
-      if (!muData) continue;
-
-      const members: string[] = muData.members || [];
-      // Batch fetch users
-      const chunks: string[][] = [];
-      for (let i = 0; i < members.length; i += 10) {
-        chunks.push(members.slice(i, i + 10));
-      }
-
-      const memberDamages: Record<string, {
-        username: string;
-        weeklyDamage: number;
-        wealth?: number;
-        dailyDamage?: number;
-        playerMode?: "economy" | "combat";
-        isEconomy?: boolean;
-        ecoSkillPoints?: number;
-        totalSkillPoints?: number;
-        donationTargetSnapshot?: NonNullable<
-          DailySnapshotRecord["armies"][string]["members"][string]["donationTargetSnapshot"]
-        >;
-      }> = {};
-
-      const profileBatches = await mapWithConcurrency(chunks, 2, async (chunk) => {
-        try {
-          const endpoints = chunk.map(() => "user.getUserById").join(",");
-          const batchInput: Record<string, { userId: string }> = {};
-          chunk.forEach((id, idx) => {
-            batchInput[idx.toString()] = { userId: id };
-          });
-          const batchUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
-          const uRes = await fetchWarEra(batchUrl);
-          if (!uRes.ok) throw new Error(`Üye profilleri alınamadı (${uRes.status})`);
-          const uJson = await uRes.json();
-          if (!Array.isArray(uJson) || uJson.length !== chunk.length) {
-            throw new Error("Üye profili yanıtı eksik");
-          }
-          const users = uJson.map((item: any) =>
-            item?.result?.data?.json || item?.result?.data,
-          );
-          if (users.some((user: any) => !user?._id && !user?.id)) {
-            throw new Error("Üye profili yanıtında kullanıcı kimliği eksik");
-          }
-          return users;
-        } catch (error) {
-          console.warn(`Could not snapshot member profiles for MU ${mu.name}:`, error);
-          return [];
-        }
-      });
-      const users = profileBatches.flat();
-      const userSnapshots = await mapWithConcurrency(users, 2, async (user) => {
-        const userId = user._id || user.id;
-        const existingMember = currentStore[dateStr]?.armies?.[mu.id]?.members?.[userId];
-        const existingDonationTarget = existingMember?.donationTargetSnapshot;
-        const liveMode = calculatePlayerSkillMode(user);
-        const mode = !captureDonationTargets && existingMember?.playerMode
-          ? {
-              isEconomy: existingMember.isEconomy ?? existingMember.playerMode === "economy",
-              playerMode: existingMember.playerMode,
-              ecoSkillPoints: existingMember.ecoSkillPoints ?? liveMode.ecoSkillPoints,
-              totalSkillPoints: existingMember.totalSkillPoints ?? liveMode.totalSkillPoints,
-            }
-          : existingDonationTarget
-            ? {
-                isEconomy: existingDonationTarget.playerMode === "economy",
-                playerMode: existingDonationTarget.playerMode,
-                ecoSkillPoints: liveMode.ecoSkillPoints,
-                totalSkillPoints: liveMode.totalSkillPoints,
-              }
-            : liveMode;
+  const armySnapshots = await mapWithConcurrency(
+    PRESET_MILITARY_UNITS,
+    4,
+    async (mu) => {
+      try {
+        const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: mu.id }))}`;
+        const muRes = await fetchWarEra(muUrl);
+        if (!muRes.ok) throw new Error(`Army request failed (${muRes.status})`);
+        const muJson = await muRes.json();
+        const muData = muJson?.result?.data?.json || muJson?.result?.data;
+        if (!muData) throw new Error("Army response is empty");
+        const memberIds: string[] = Array.from(new Set<string>(
+          Array.isArray(muData.members) ? muData.members : [],
+        ));
         return {
-          userId,
-          mode,
-          donationTargetSnapshot: existingDonationTarget ??
-            (captureDonationTargets ? await getDonationTargetSnapshot(user) : undefined),
+          id: mu.id,
+          name: mu.name,
+          memberIds,
         };
-      });
-      const snapshotsByUser = new Map(userSnapshots.map((item) => [item.userId, item]));
-      for (const user of users) {
-        const userId = user._id || user.id;
-        const item = snapshotsByUser.get(userId);
-        if (!item) continue;
-        memberDamages[userId] = {
-          username: user.username || "Bilinmeyen Asker",
-          weeklyDamage: user.rankings?.weeklyUserDamages?.value || 0,
-          wealth: Number(user.rankings?.userWealth?.value ?? user.wealth ?? 0),
-          playerMode: item.mode.playerMode,
-          isEconomy: item.mode.isEconomy,
-          ecoSkillPoints: item.mode.ecoSkillPoints,
-          totalSkillPoints: item.mode.totalSkillPoints,
-          ...(item.donationTargetSnapshot
-            ? { donationTargetSnapshot: item.donationTargetSnapshot }
-            : {}),
-          dailyDamage: previousSnapshot?.armies?.[mu.id]?.members?.[userId]
-            ? calculateDailyDamageFromSnapshot(
-                Number(user.rankings?.weeklyUserDamages?.value || 0),
-                Number(previousSnapshot.armies[mu.id].members[userId].weeklyDamage || 0),
-              )
-            : undefined,
-        };
+      } catch (error) {
+        console.error(`Error reading tracked MU ${mu.name}:`, error);
+        return null;
       }
+    },
+  );
 
-      const armyTotalWeekly = Object.values(memberDamages).reduce(
-        (total, member) => total + member.weeklyDamage,
-        0,
-      );
-
-      currentStore[dateStr].armies[mu.id] = {
-        name: mu.name,
-        muId: mu.id,
-        armyTotalWeeklyDamage: armyTotalWeekly,
-        memberCount: members.length,
-        members: memberDamages,
-      };
-    } catch (e) {
-      console.error(`Error snapshotting MU ${mu.name}:`, e);
+  const validArmySnapshots = armySnapshots.filter(
+    (army): army is NonNullable<typeof army> => army !== null,
+  );
+  const currentArmyIdsByUser = new Map<string, string[]>();
+  for (const army of validArmySnapshots) {
+    for (const userId of army.memberIds) {
+      const armyIds = currentArmyIdsByUser.get(userId) || [];
+      armyIds.push(army.id);
+      currentArmyIdsByUser.set(userId, armyIds);
     }
+  }
+
+  const cutoffDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" })
+    .format(now.getTime() - 29 * 24 * 60 * 60 * 1000);
+  const recentlyTrackedUserIds = new Set<string>(currentArmyIdsByUser.keys());
+  for (const [snapshotDate, snapshot] of Object.entries(currentStore)) {
+    if (snapshotDate < cutoffDate || snapshotDate > dateStr) continue;
+    for (const army of PRESET_MILITARY_UNITS) {
+      getSnapshotArmyMemberIds(snapshot, army.id).forEach((userId) =>
+        recentlyTrackedUserIds.add(userId),
+      );
+    }
+  }
+
+  const userIds = Array.from(recentlyTrackedUserIds);
+  const userChunks: string[][] = [];
+  for (let i = 0; i < userIds.length; i += 10) {
+    userChunks.push(userIds.slice(i, i + 10));
+  }
+  const profileBatches = await mapWithConcurrency(userChunks, 4, async (chunk) => {
+    try {
+      const endpoints = chunk.map(() => "user.getUserById").join(",");
+      const batchInput: Record<string, { userId: string }> = {};
+      chunk.forEach((userId, index) => {
+        batchInput[String(index)] = { userId };
+      });
+      const batchUrl = `https://api2.warera.io/trpc/${endpoints}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
+      const response = await fetchWarEra(batchUrl);
+      if (!response.ok) throw new Error(`User batch request failed (${response.status})`);
+      const payload = await response.json();
+      if (!Array.isArray(payload)) throw new Error("User batch response is invalid");
+      return payload
+        .map((item: any) => item?.result?.data?.json || item?.result?.data)
+        .filter((user: any) => (user?._id || user?.id) && recentlyTrackedUserIds.has(user._id || user.id));
+    } catch (error) {
+      console.warn("Could not fetch a batch of tracked player profiles:", error);
+      return [];
+    }
+  });
+
+  const usersById = new Map<string, any>();
+  for (const user of profileBatches.flat()) {
+    usersById.set(user._id || user.id, user);
+  }
+
+  const previousPlayers = new Map<string, any>();
+  for (const userId of userIds) {
+    const previousPlayer = getSnapshotPlayer(previousSnapshot, userId);
+    if (previousPlayer) previousPlayers.set(userId, previousPlayer);
+  }
+
+  const playerEntries = await mapWithConcurrency(
+    Array.from(usersById.entries()),
+    2,
+    async ([userId, user]) => {
+      const existingToday = getSnapshotPlayer(currentStore[dateStr], userId);
+      const previousPlayer = previousPlayers.get(userId);
+      const liveMode = calculatePlayerSkillMode(user);
+      const existingTarget = existingToday?.donationTargetSnapshot;
+      const mode = captureDonationTargets
+        ? existingTarget
+          ? {
+              isEconomy: existingTarget.playerMode === "economy",
+              playerMode: existingTarget.playerMode,
+              ecoSkillPoints: liveMode.ecoSkillPoints,
+              totalSkillPoints: liveMode.totalSkillPoints,
+            }
+          : liveMode
+        : existingToday?.playerMode
+          ? {
+              isEconomy: existingToday.isEconomy ?? existingToday.playerMode === "economy",
+              playerMode: existingToday.playerMode,
+              ecoSkillPoints: existingToday.ecoSkillPoints ?? liveMode.ecoSkillPoints,
+              totalSkillPoints: existingToday.totalSkillPoints ?? liveMode.totalSkillPoints,
+            }
+          : liveMode;
+      const donationTargetSnapshot = existingTarget ??
+        (captureDonationTargets ? await getDonationTargetSnapshot(user) : undefined);
+      const weeklyDamage = Number(user.rankings?.weeklyUserDamages?.value || 0);
+
+      return [userId, {
+        username: user.username || existingToday?.username || previousPlayer?.username || "Bilinmeyen Asker",
+        weeklyDamage,
+        wealth: Number(user.rankings?.userWealth?.value ?? user.wealth ?? 0),
+        dailyDamage: previousPlayer
+          ? calculateDailyDamageFromSnapshot(
+              weeklyDamage,
+              Number(previousPlayer.weeklyDamage || 0),
+            )
+          : undefined,
+        playerMode: mode.playerMode,
+        isEconomy: mode.isEconomy,
+        ecoSkillPoints: mode.ecoSkillPoints,
+        totalSkillPoints: mode.totalSkillPoints,
+        armyIds: currentArmyIdsByUser.get(userId) || [],
+        ...(donationTargetSnapshot ? { donationTargetSnapshot } : {}),
+      }] as const;
+    },
+  );
+
+  const players: NonNullable<DailySnapshotRecord["players"]> = {
+    ...currentStore[dateStr].players,
+  };
+  for (const [userId, player] of playerEntries) players[userId] = player;
+  for (const [userId, player] of Object.entries(players)) {
+    if (recentlyTrackedUserIds.has(userId)) {
+      player.armyIds = currentArmyIdsByUser.get(userId) || [];
+    } else {
+      delete players[userId];
+    }
+  }
+  currentStore[dateStr].players = players;
+
+  for (const army of validArmySnapshots) {
+    const armyWeeklyDamage = army.memberIds.reduce(
+      (total, userId) => total + Number(players[userId]?.weeklyDamage || 0),
+      0,
+    );
+    currentStore[dateStr].armies[army.id] = {
+      name: army.name,
+      muId: army.id,
+      armyTotalWeeklyDamage: armyWeeklyDamage,
+      memberCount: army.memberIds.length,
+      memberIds: army.memberIds,
+      members: {},
+    };
   }
 
   const retainedDates = Object.keys(currentStore).sort().slice(-30);
