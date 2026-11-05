@@ -2213,6 +2213,8 @@ export interface ManagementMemberItem {
   role: string;
   level: number;
   wealth: number;
+  lastActive: string | null;
+  isActive: boolean;
   playerMode: "economy" | "combat";
   playerModeByDate?: Record<string, "economy" | "combat">;
   donationTargetsByDate?: Record<string, {
@@ -2234,7 +2236,7 @@ export interface ManagementMemberItem {
   ecoSkillPoints?: number;
   totalSkillPoints?: number;
   latestDonations?: DonationItem[];
-  exemptReason?: "combat_mode" | "low_level" | null;
+  exemptReason?: "inactive" | "combat_mode" | "low_level" | null;
   health: { current: number; max: number; percentage: number };
   hunger: { current: number; max: number; percentage: number };
   todayDamage: number;

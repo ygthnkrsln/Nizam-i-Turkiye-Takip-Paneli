@@ -353,7 +353,11 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
     const userIds = Array.from(new Set<string>(
       data.armies
         .filter((army) => army.dataAvailable !== false)
-        .flatMap((army) => army.members.map((member) => member.userId)),
+        .flatMap((army) =>
+          army.members
+            .filter((member) => member.isActive)
+            .map((member) => member.userId),
+        ),
     )).filter((userId) =>
       !companyCalcs[userId] && !calculationsInResponse.has(userId),
     );
@@ -425,6 +429,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         const level = snapshot?.level ?? member.level;
         const wealth = snapshot?.wealth ?? member.wealth;
         if (
+          !member.isActive ||
           !isEconomyOnDate(date) ||
           level < rules.minLevel ||
           wealth < rules.wealthThresholdMid ||
@@ -516,7 +521,9 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
       const todaySnapshot = member.donationTargetsByDate?.[today];
       const todayLevel = todaySnapshot?.level ?? member.level;
 
-      const memberStatus = excluded
+      const memberStatus = !member.isActive
+        ? "Pasif — bağış yükümlülüğü yok"
+        : excluded
         ? "Hariç tutuldu"
         : Math.max(0, dueToDate - paidToDate - carryIn) > 0
         ? "Eksik ödeme"
@@ -605,6 +612,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
     if (memberFilter === "fighter" && row.donationClass !== "fighter") return false;
     if (memberFilter === "below" && row.level >= rules.minLevel) return false;
     if (memberFilter === "excluded" && !row.excluded) return false;
+    if (memberFilter === "inactive" && row.isActive) return false;
     return true;
   }).sort((a, b) => b.unpaid - a.unpaid || b.level - a.level), [rows, armyFilter, search, memberFilter, rules.minLevel]);
 
@@ -668,7 +676,8 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
       const paymentLabels: Record<PaymentView, string> = { total: "Toplam", country: "Ulke", mu: "Birlik" };
       const memberFilterLabels: Record<string, string> = {
         owing: "Eksik odeyenler", paid: "Guncel olanlar", eco: "Ekonomi modu",
-        fighter: "Savas modu", below: "Seviye alti", excluded: "Haric tutulanlar", all: "Herkes",
+        fighter: "Savas modu", below: "Seviye alti", excluded: "Haric tutulanlar",
+        inactive: "Pasif oyuncular", all: "Herkes",
       };
       const selectedArmy = armyFilter === "all" ? "Tum birlikler" : data.armies.find((army) => army.muId === armyFilter)?.name || "Secili birlik";
       const activeFilters = [selectedArmy, memberFilterLabels[memberFilter] || "Herkes"];
@@ -1132,6 +1141,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                   <option value="fighter">Savaş modu</option>
                   <option value="below">Seviye altı</option>
                   <option value="excluded">Hariç tutulanlar</option>
+                  <option value="inactive">Pasif oyuncular</option>
                   <option value="all">Herkes</option>
                 </select>
                 <div className="inline-flex rounded-lg border border-emerald-500/20 bg-[#182329] p-0.5 text-[10px]">
@@ -1181,12 +1191,24 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                       <tr
                         key={`${row.muId}-${row.userId}`}
                         className={`hover:bg-emerald-950/20 transition-colors ${
+                          !row.isActive ? "opacity-60" : ""
+                        } ${
                           isRowSelected ? "bg-emerald-950/40 ring-1 ring-emerald-400/50" : ""
                         }`}
                       >
                         <td className="sticky left-0 z-10 bg-[#182329] px-3 py-2">
                           <div className="font-bold text-white flex items-center gap-1.5">
                             <span>{row.username}</span>
+                            {!row.isActive && (
+                              <span
+                                title={row.lastActive
+                                  ? `Son aktiflik: ${new Date(row.lastActive).toLocaleString("tr-TR")}`
+                                  : "Son aktiflik bilgisi bulunamadı"}
+                                className="rounded border border-slate-500/30 bg-slate-700/40 px-1 py-0.5 text-[8px] font-medium text-slate-300"
+                              >
+                                Pasif
+                              </span>
+                            )}
                             {isRowSelected && (
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
                             )}

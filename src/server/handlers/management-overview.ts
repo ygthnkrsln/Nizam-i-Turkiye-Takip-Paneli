@@ -23,6 +23,7 @@ import { calculatePlayerCompanyRevenue } from "./player-factories.js";
 
 export const PRESET_TRACKED_ARMIES = TRACKED_ARMIES;
 const GAME_DAY_RESET_MS = 3 * 60 * 60 * 1000;
+const PLAYER_ACTIVE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const DONATION_COUNTRIES: Record<string, { name: string; code: string }> = {
   "683ddd2c24b5a2e114af15b5": { name: "Birleşik Arap Emirlikleri", code: "AE" },
   "6813b6d446e731854c7ac7eb": { name: "Türkiye", code: "TR" },
@@ -92,6 +93,22 @@ function upstreamError(response: Response, message: string) {
     statusCode: response.status,
     retryAfter: response.headers.get("Retry-After"),
   });
+}
+
+function getPlayerActivity(user: any, now = Date.now()) {
+  const rawLastActive = user?.dates?.lastConnectionAt;
+  const timestamp = rawLastActive ? new Date(rawLastActive).getTime() : Number.NaN;
+  const isActive =
+    Number.isFinite(timestamp) &&
+    timestamp <= now &&
+    now - timestamp <= PLAYER_ACTIVE_WINDOW_MS;
+
+  return {
+    lastActive: Number.isFinite(timestamp)
+      ? new Date(timestamp).toISOString()
+      : null,
+    isActive,
+  };
 }
 
 async function fetchWarEra(
@@ -384,6 +401,7 @@ async function processSingleArmy(
     const companyCalcsMap = new Map<string, any>();
     if (includeDonations) {
       const eligibleUsers = rawUsers.filter((u) => {
+        if (!getPlayerActivity(u).isActive) return false;
         const lvl = Number(u.leveling?.level || u.level || 1);
         const w = Number(u.rankings?.userWealth?.value || u.wealth || 0);
         const userId = u._id || u.id;
@@ -412,6 +430,7 @@ async function processSingleArmy(
     const memberStats = rawUsers.map((u) => {
       const uid = u._id || u.id;
       const username = u.username || "Asker";
+      const { lastActive, isActive } = getPlayerActivity(u);
 
       // Health & Hunger
       const hCurrent = Number(
@@ -476,25 +495,29 @@ async function processSingleArmy(
       // - 20k - 30k arası servet bağış oranı: %20
       // - 30k+ arası servet bağış oranı: %25
       const calc = companyCalcsMap.get(uid);
-      let donationRate = savedDonationTarget
+      let donationRate = !isActive
+        ? 0
+        : savedDonationTarget
         ? Number(savedDonationTarget.rate) || 0
         : 0;
-      if (!savedDonationTarget && isEffectiveEconomy && level >= 30) {
+      if (isActive && !savedDonationTarget && isEffectiveEconomy && level >= 30) {
         if (wealth < 20000) donationRate = 0;
         else if (wealth <= 30000) donationRate = 0.20;
         else donationRate = 0.25;
       }
 
-      const isEligible = savedDonationTarget
+      const isEligible = isActive && (savedDonationTarget
         ? Boolean(savedDonationTarget.eligible)
-        : isEffectiveEconomy && level >= 30 && wealth >= 20000 && donationRate > 0;
+        : isEffectiveEconomy && level >= 30 && wealth >= 20000 && donationRate > 0);
       const multiplier = donationRate;
 
-      const targetDonation = savedDonationTarget
-        ? Number(savedDonationTarget.target)
-        : isEligible && calc
-          ? Math.round((calc.totalDailyRevenue || 0) * donationRate)
-          : (isEligible ? Math.round(level * (wealth >= 30000 ? 2.0 : 1.5)) : 0);
+      const targetDonation = !isEligible
+        ? 0
+        : savedDonationTarget
+          ? Number(savedDonationTarget.target)
+          : calc
+            ? Math.round((calc.totalDailyRevenue || 0) * donationRate)
+            : Math.round(level * (wealth >= 30000 ? 2.0 : 1.5));
 
       if (isEligible && targetDonation > 0) {
         targetDonationSum += targetDonation;
@@ -513,9 +536,11 @@ async function processSingleArmy(
       }
 
       let status: "completed" | "partial" | "pending" | "exempt" = "exempt";
-      let exemptReason: "combat_mode" | "low_level" | null = null;
+      let exemptReason: "inactive" | "combat_mode" | "low_level" | null = null;
       if (!isEligible) {
-        if (!isEffectiveEconomy) {
+        if (!isActive) {
+          exemptReason = "inactive";
+        } else if (!isEffectiveEconomy) {
           exemptReason = "combat_mode";
         } else if (level < 30) {
           exemptReason = "low_level";
@@ -540,6 +565,8 @@ async function processSingleArmy(
         role,
         level,
         wealth,
+        lastActive,
+        isActive,
         playerMode,
         playerModeByDate,
         donationTargetsByDate,
