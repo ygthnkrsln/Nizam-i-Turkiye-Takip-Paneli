@@ -427,11 +427,12 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
       const rateForDate = (date: string) => {
         const snapshot = member.donationTargetsByDate?.[date];
         const level = snapshot?.level ?? member.level;
+        const prestigeLevel = snapshot?.prestigeLevel ?? member.prestigeLevel;
         const wealth = snapshot?.wealth ?? member.wealth;
         if (
           !member.isActive ||
           !isEconomyOnDate(date) ||
-          level < rules.minLevel ||
+          (level < rules.minLevel && prestigeLevel <= 0) ||
           wealth < rules.wealthThresholdMid ||
           excluded
         ) return 0;
@@ -532,7 +533,8 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         : dailyTarget === 0
         ? (todaySnapshot?.eligible
             ? "Bağış hedefi 0 G"
-            : todayLevel < rules.minLevel
+            : todayLevel < rules.minLevel &&
+              (todaySnapshot?.prestigeLevel ?? member.prestigeLevel) <= 0
             ? `Seviye ${rules.minLevel} altı — muaf`
             : "20k altı servet — muaf")
         : "Güncel";
@@ -610,7 +612,10 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
     if (memberFilter === "paid" && (row.dailyTarget <= 0 || row.unpaid > 0)) return false;
     if (memberFilter === "eco" && row.donationClass !== "eco") return false;
     if (memberFilter === "fighter" && row.donationClass !== "fighter") return false;
-    if (memberFilter === "below" && row.level >= rules.minLevel) return false;
+    if (
+      memberFilter === "below" &&
+      (row.level >= rules.minLevel || row.prestigeLevel > 0)
+    ) return false;
     if (memberFilter === "excluded" && !row.excluded) return false;
     if (memberFilter === "inactive" && row.isActive) return false;
     return true;
@@ -1215,7 +1220,12 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                           </div>
                           <div className="text-[9px] text-[#BBE1FA]/40">{row.armyName} · {row.role}</div>
                         </td>
-                        <td className="px-2 py-2 text-center text-emerald-200">{row.level}</td>
+                        <td className="px-2 py-2 text-center text-emerald-200">
+                          {row.level}
+                          {row.prestigeLevel > 0 && (
+                            <span className="ml-1 text-[9px] text-amber-300">P{row.prestigeLevel}</span>
+                          )}
+                        </td>
                         <td className="px-2 py-2 text-right text-[#BBE1FA]/65">
                           ${Math.round(row.wealth).toLocaleString("tr-TR")}
                         </td>

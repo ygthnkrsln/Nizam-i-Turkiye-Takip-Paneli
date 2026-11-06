@@ -283,6 +283,7 @@ export interface PlayerCalculationResult {
   userId: string;
   username: string;
   level: number;
+  prestigeLevel: number;
   wealth: number;
   playerMode: "economy" | "combat";
   isEconomy: boolean;
@@ -329,6 +330,8 @@ export async function calculatePlayerCompanyRevenue(
 
   const username = userProfile?.username || `Oyuncu_${userId.slice(-5)}`;
   const level = Number(userProfile?.leveling?.level || userProfile?.level || 1);
+  const prestigeLevel = Number(userProfile?.leveling?.prestigeLevel || 0);
+  const meetsLevelRequirement = level >= 30 || prestigeLevel > 0;
   const wealth = Number(userProfile?.rankings?.userWealth?.value || userProfile?.wealth || 0);
 
   const { isEconomy, playerMode } = calculatePlayerSkillMode(userProfile);
@@ -366,6 +369,7 @@ export async function calculatePlayerCompanyRevenue(
       userId,
       username,
       level,
+      prestigeLevel,
       wealth,
       playerMode,
       isEconomy,
@@ -384,7 +388,7 @@ export async function calculatePlayerCompanyRevenue(
       dailyDonationTarget: 0,
       statusReason: !isEconomy
         ? "Savaşçı modu — Muaf"
-        : level < 30
+        : !meetsLevelRequirement
         ? "Seviye 30 altı (Muaf)"
         : wealth < 20000
         ? "20k altı servet (Muaf)"
@@ -636,11 +640,11 @@ export async function calculatePlayerCompanyRevenue(
     donationRateLabel = "%0 (Savaş)";
     isEligible = false;
     statusReason = "Savaşçı modu — Muaf";
-  } else if (level < 30) {
+  } else if (!meetsLevelRequirement) {
     donationRate = 0;
     donationRateLabel = "%0";
     isEligible = false;
-    statusReason = `Seviye ${level} (< 30) — Muaf`;
+    statusReason = `Seviye ${level}, prestij ${prestigeLevel} (< 30) — Muaf`;
   } else if (wealth < 20000) {
     donationRate = 0;
     donationRateLabel = "%0";
@@ -664,6 +668,7 @@ export async function calculatePlayerCompanyRevenue(
     userId,
     username,
     level,
+    prestigeLevel,
     wealth,
     playerMode,
     isEconomy,

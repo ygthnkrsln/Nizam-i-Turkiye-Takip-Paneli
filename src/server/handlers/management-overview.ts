@@ -403,9 +403,16 @@ async function processSingleArmy(
       const eligibleUsers = rawUsers.filter((u) => {
         if (!getPlayerActivity(u).isActive) return false;
         const lvl = Number(u.leveling?.level || u.level || 1);
+        const prestigeLevel = Number(u.leveling?.prestigeLevel || 0);
         const w = Number(u.rankings?.userWealth?.value || u.wealth || 0);
         const userId = u._id || u.id;
-        if (donationTargetsByUserDate[userId]?.[effectiveDate]) return false;
+        const recordedTarget = donationTargetsByUserDate[userId]?.[effectiveDate];
+        const legacyPrestigeTarget =
+          effectiveDate === currentGameDate &&
+          prestigeLevel > 0 &&
+          recordedTarget?.prestigeLevel == null &&
+          !recordedTarget?.eligible;
+        if (recordedTarget && !legacyPrestigeTarget) return false;
         if (effectiveDate !== currentGameDate) return false;
         const mode = donationTargetsByUserDate[userId]?.[effectiveDate]?.playerMode ??
           playerModesByUserDate[userId]?.[effectiveDate] ??
@@ -413,7 +420,7 @@ async function processSingleArmy(
             ? calculatePlayerSkillMode(u).playerMode
             : "combat");
         const isEconomy = mode === "economy";
-        return lvl >= 30 && w >= 20000 && isEconomy;
+        return (lvl >= 30 || prestigeLevel > 0) && w >= 20000 && isEconomy;
       });
 
       await mapWithConcurrency(eligibleUsers, 2, async (u) => {
@@ -456,6 +463,8 @@ async function processSingleArmy(
 
       // Level & Wealth
       const level = Number(u.leveling?.level || u.level || 1);
+      const prestigeLevel = Number(u.leveling?.prestigeLevel || 0);
+      const meetsLevelRequirement = level >= 30 || prestigeLevel > 0;
       const wealth = Number(u.rankings?.userWealth?.value || u.wealth || 1000);
 
       // Oyuncu Modu
@@ -463,7 +472,7 @@ async function processSingleArmy(
         calculatePlayerSkillMode(u);
       const playerModeByDate = playerModesByUserDate[uid] || {};
       const allDonationTargetsByDate = donationTargetsByUserDate[uid] || {};
-      const savedDonationTarget = allDonationTargetsByDate[effectiveDate];
+      const recordedDonationTarget = allDonationTargetsByDate[effectiveDate];
       const donationTargetsByDate = Object.fromEntries(
         donationHistoryDates.flatMap((date) =>
           allDonationTargetsByDate[date]
@@ -471,11 +480,22 @@ async function processSingleArmy(
             : [],
         ),
       );
-      const isEffectiveEconomy = savedDonationTarget?.playerMode
-        ? savedDonationTarget.playerMode === "economy"
+      const isEffectiveEconomy = recordedDonationTarget?.playerMode
+        ? recordedDonationTarget.playerMode === "economy"
         : playerModeByDate[effectiveDate]
           ? playerModeByDate[effectiveDate] === "economy"
           : effectiveDate === currentGameDate && isEconomy;
+      const legacyPrestigeTarget =
+        effectiveDate === currentGameDate &&
+        prestigeLevel > 0 &&
+        recordedDonationTarget?.prestigeLevel == null &&
+        !recordedDonationTarget?.eligible &&
+        isActive &&
+        isEffectiveEconomy &&
+        wealth >= 20000;
+      const savedDonationTarget = legacyPrestigeTarget
+        ? undefined
+        : recordedDonationTarget;
       const isFighter = isCombatBuild(u);
       const potentialDamage = calculatePotentialDamage(
         level,
@@ -500,7 +520,7 @@ async function processSingleArmy(
         : savedDonationTarget
         ? Number(savedDonationTarget.rate) || 0
         : 0;
-      if (isActive && !savedDonationTarget && isEffectiveEconomy && level >= 30) {
+      if (isActive && !savedDonationTarget && isEffectiveEconomy && meetsLevelRequirement) {
         if (wealth < 20000) donationRate = 0;
         else if (wealth <= 30000) donationRate = 0.20;
         else donationRate = 0.25;
@@ -508,7 +528,7 @@ async function processSingleArmy(
 
       const isEligible = isActive && (savedDonationTarget
         ? Boolean(savedDonationTarget.eligible)
-        : isEffectiveEconomy && level >= 30 && wealth >= 20000 && donationRate > 0);
+        : isEffectiveEconomy && meetsLevelRequirement && wealth >= 20000 && donationRate > 0);
       const multiplier = donationRate;
 
       const targetDonation = !isEligible
@@ -542,7 +562,7 @@ async function processSingleArmy(
           exemptReason = "inactive";
         } else if (!isEffectiveEconomy) {
           exemptReason = "combat_mode";
-        } else if (level < 30) {
+        } else if (!meetsLevelRequirement) {
           exemptReason = "low_level";
         } else {
           exemptReason = "combat_mode";
@@ -564,6 +584,7 @@ async function processSingleArmy(
         username,
         role,
         level,
+        prestigeLevel,
         wealth,
         lastActive,
         isActive,

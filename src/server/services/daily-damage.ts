@@ -155,14 +155,16 @@ export async function snapshotAllArmies(
     const snapshotPromise = (async () => {
       const mode = calculatePlayerSkillMode(user);
       const level = Number(user?.leveling?.level || user?.level || 1);
+      const prestigeLevel = Number(user?.leveling?.prestigeLevel || 0);
       const wealth = Number(user?.rankings?.userWealth?.value ?? user?.wealth ?? 0);
-      const eligible = mode.isEconomy && level >= 30 && wealth >= 20000;
+      const eligible = mode.isEconomy && (level >= 30 || prestigeLevel > 0) && wealth >= 20000;
       const rate = wealth <= 30000 ? 0.2 : 0.25;
       const common = {
         rate: eligible ? rate : 0,
         eligible,
         playerMode: mode.playerMode,
         level,
+        prestigeLevel,
         wealth,
         capturedAt,
       };

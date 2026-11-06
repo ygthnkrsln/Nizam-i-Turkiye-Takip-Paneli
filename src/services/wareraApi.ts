@@ -2141,6 +2141,7 @@ export interface PlayerCompanyCalculationResponse {
   userId: string;
   username: string;
   level: number;
+  prestigeLevel: number;
   wealth: number;
   factoryLimit: number;
   totalOwnedFactories: number;
@@ -2212,6 +2213,7 @@ export interface ManagementMemberItem {
   username: string;
   role: string;
   level: number;
+  prestigeLevel: number;
   wealth: number;
   lastActive: string | null;
   isActive: boolean;
@@ -2226,6 +2228,7 @@ export interface ManagementMemberItem {
     eligible: boolean;
     playerMode: "economy" | "combat";
     level: number;
+    prestigeLevel?: number;
     wealth: number;
     source: "companies" | "fallback" | "policy";
     capturedAt: string;

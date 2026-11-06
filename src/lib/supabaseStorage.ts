@@ -83,6 +83,7 @@ export interface DailySnapshotRecord {
       eligible: boolean;
       playerMode: "economy" | "combat";
       level: number;
+      prestigeLevel?: number;
       wealth: number;
       source: "companies" | "fallback" | "policy";
       capturedAt: string;
@@ -114,6 +115,7 @@ export interface DailySnapshotRecord {
           eligible: boolean;
           playerMode: "economy" | "combat";
           level: number;
+          prestigeLevel?: number;
           wealth: number;
           source: "companies" | "fallback" | "policy";
           capturedAt: string;
