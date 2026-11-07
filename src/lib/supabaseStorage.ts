@@ -85,6 +85,9 @@ export interface DailySnapshotRecord {
       level: number;
       prestigeLevel?: number;
       wealth: number;
+      lastActive?: string | null;
+      isActive?: boolean;
+      incomeCalculated?: boolean;
       source: "companies" | "fallback" | "policy";
       capturedAt: string;
     };
@@ -117,6 +120,9 @@ export interface DailySnapshotRecord {
           level: number;
           prestigeLevel?: number;
           wealth: number;
+          lastActive?: string | null;
+          isActive?: boolean;
+          incomeCalculated?: boolean;
           source: "companies" | "fallback" | "policy";
           capturedAt: string;
         };

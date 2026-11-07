@@ -24,9 +24,9 @@ This document is a navigation index for coding assistants and contributors. It d
 
 1. `src/components/ManagementDonationTrackingSection.tsx` requests the management overview through `src/services/wareraApi.ts`.
 2. `src/server/handlers/management-overview.ts` fetches tracked-unit membership, user profiles and donations; it combines current data with daily snapshots and aggregates the overview.
-3. `src/server/services/daily-damage.ts` records one player-keyed profile for every player seen in tracked armies during the 30-day window, plus each day's tracked-army membership. The scheduled Vercel entry point `api/cron/record-daily-damage.ts` requests donation-target capture; targets, rates, player mode, income, level and wealth are stored with each player snapshot.
+3. `src/server/services/daily-damage.ts` records one player-keyed profile for every player seen in tracked armies during the 30-day window, plus each day's tracked-army membership. The scheduled cron captures each player's daily income calculation, donation eligibility, activity, player mode, level, prestige and wealth so history remains tied to that day.
 4. `src/lib/supabaseStorage.ts` stores player snapshots inside the existing `daily_snapshots.armies` JSONB payload (under `__players`) to avoid a database migration, normalizes them on read, and enforces the 30-day retention policy.
-5. The donation page uses date-specific targets for historical weekly totals. Detailed company calculations are loaded through the bulk `POST /api/player-factories` path; the individual calculation modal uses the single-player path.
+5. The donation page uses date-specific targets and player modes for historical weekly totals. It falls back to the bulk `POST /api/player-factories` path when a daily income calculation is unavailable; the individual calculation modal uses the single-player path.
 6. `src/server/handlers/player-factories.ts` calculates automated-engine and employee income, applying item conversion recipes and input-material costs.
 
 The canonical tracked unit list is `src/config/trackedArmies.ts`; server and client validation/display should derive from this list, not a hard-coded count.

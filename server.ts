@@ -2208,7 +2208,7 @@ async function startServer() {
           console.log(
             `[02:55 TSİ CRON] Taking scheduled daily damage snapshot for ${todayStr}...`,
           );
-          snapshotAllArmies()
+          snapshotAllArmies({ captureDonationTargets: true })
             .then(() => recordCountryTrackerSnapshot())
             .catch(console.error);
         }

@@ -39,7 +39,7 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-import { getNextWarEraToken } from "../../lib/wareraTokens.js";
+import { getNextWarEraToken, getWarEraTokens } from "../../lib/wareraTokens.js";
 
 async function fetchWarEra(url: string) {
   const token = getNextWarEraToken();
@@ -134,6 +134,7 @@ export async function readSnapshotsWithSupabase(): Promise<
 export async function snapshotAllArmies(
   options: { captureDonationTargets?: boolean } = {},
 ) {
+  const startedAt = Date.now();
   const captureDonationTargets = options.captureDonationTargets === true;
   const now = new Date();
   const dateStr = new Intl.DateTimeFormat("en-CA", {
@@ -142,43 +143,60 @@ export async function snapshotAllArmies(
   const timestamp = now.getTime();
   const capturedAt = now.toISOString();
 
+  let phaseStartedAt = Date.now();
   let currentStore = await readSnapshotsWithSupabase();
+  const loadSnapshotsMs = Date.now() - phaseStartedAt;
   const donationSnapshotsByUser = new Map<
     string,
     Promise<NonNullable<DailySnapshotRecord["armies"][string]["members"][string]["donationTargetSnapshot"]>>
   >();
-  const getDonationTargetSnapshot = (user: any) => {
+  const getDonationTargetSnapshot = (user: any, existingToday?: any) => {
     const userId = String(user?._id || user?.id || "");
     const existing = donationSnapshotsByUser.get(userId);
     if (existing) return existing;
 
     const snapshotPromise = (async () => {
       const mode = calculatePlayerSkillMode(user);
-      const level = Number(user?.leveling?.level || user?.level || 1);
-      const prestigeLevel = Number(user?.leveling?.prestigeLevel || 0);
-      const wealth = Number(user?.rankings?.userWealth?.value ?? user?.wealth ?? 0);
-      const eligible = mode.isEconomy && (level >= 30 || prestigeLevel > 0) && wealth >= 20000;
-      const rate = wealth <= 30000 ? 0.2 : 0.25;
+      const savedLevel = Number(user?.leveling?.level || user?.level || 1);
+      const savedPrestigeLevel = Number(user?.leveling?.prestigeLevel || 0);
+      const savedWealth = Number(user?.rankings?.userWealth?.value ?? user?.wealth ?? 0);
+      const lastActiveValue = user?.dates?.lastConnectionAt;
+      const lastActiveTime = lastActiveValue
+        ? new Date(lastActiveValue).getTime()
+        : Number.NaN;
+      const liveIsActive =
+        Number.isFinite(lastActiveTime) &&
+        lastActiveTime <= timestamp &&
+        timestamp - lastActiveTime <= 3 * 24 * 60 * 60 * 1000;
+      const liveLastActive = Number.isFinite(lastActiveTime)
+        ? new Date(lastActiveTime).toISOString()
+        : null;
+      const savedTarget = existingToday?.donationTargetSnapshot;
+      const level = Number(savedTarget?.level ?? savedLevel);
+      const prestigeLevel = Number(
+        savedTarget?.prestigeLevel ?? savedPrestigeLevel,
+      );
+      const wealth = Number(savedTarget?.wealth ?? savedWealth);
+      const playerMode = savedTarget?.playerMode ?? mode.playerMode;
+      const lastActive = savedTarget?.lastActive ?? liveLastActive;
+      const isActive = savedTarget?.isActive ?? liveIsActive;
+      const eligible =
+        isActive &&
+        playerMode === "economy" &&
+        (level >= 30 || prestigeLevel > 0) &&
+        wealth >= 20000;
+      const rate = eligible ? (wealth <= 30000 ? 0.2 : 0.25) : 0;
       const common = {
-        rate: eligible ? rate : 0,
+        rate,
         eligible,
-        playerMode: mode.playerMode,
+        playerMode,
         level,
         prestigeLevel,
         wealth,
+        lastActive,
+        isActive,
         capturedAt,
       };
-
-      if (!eligible) {
-        return {
-          ...common,
-          target: 0,
-          revenue: null,
-          autoIncome: null,
-          workerIncome: null,
-          source: "policy" as const,
-        };
-      }
 
       try {
         const calculation = await calculatePlayerCompanyRevenue(
@@ -188,11 +206,11 @@ export async function snapshotAllArmies(
           user,
         );
         if (
-          !Number.isFinite(calculation.dailyDonationTarget) ||
           !Number.isFinite(calculation.totalDailyRevenue) ||
-          !calculation.isEligible
+          !Number.isFinite(calculation.totalAutoIncome) ||
+          !Number.isFinite(calculation.totalWorkerIncome)
         ) {
-          throw new Error("Şirket geliri veya bağış uygunluğu doğrulanamadı");
+          throw new Error("Şirket gelirleri doğrulanamadı");
         }
         const estimateError = calculation.companies.find(
           (company) => company.isActive && company.workerEstimateError,
@@ -202,15 +220,13 @@ export async function snapshotAllArmies(
         }
         return {
           ...common,
-          target: calculation.dailyDonationTarget,
+          target: eligible
+            ? Math.round(calculation.totalDailyRevenue * rate)
+            : 0,
           revenue: calculation.totalDailyRevenue,
           autoIncome: calculation.totalAutoIncome,
           workerIncome: calculation.totalWorkerIncome,
-          rate: calculation.donationRate,
-          eligible: calculation.isEligible,
-          playerMode: calculation.playerMode,
-          level: calculation.level,
-          wealth: calculation.wealth,
+          incomeCalculated: true,
           source: "companies" as const,
         };
       } catch (error) {
@@ -220,10 +236,11 @@ export async function snapshotAllArmies(
         );
         return {
           ...common,
-          target: Math.round(level * (wealth >= 30000 ? 2 : 1.5)),
+          target: eligible ? Math.round(level * (wealth >= 30000 ? 2 : 1.5)) : 0,
           revenue: null,
           autoIncome: null,
           workerIncome: null,
+          incomeCalculated: false,
           source: "fallback" as const,
         };
       }
@@ -245,6 +262,7 @@ export async function snapshotAllArmies(
     };
   }
 
+  phaseStartedAt = Date.now();
   const armySnapshots = await mapWithConcurrency(
     PRESET_MILITARY_UNITS,
     4,
@@ -274,6 +292,7 @@ export async function snapshotAllArmies(
   const validArmySnapshots = armySnapshots.filter(
     (army): army is NonNullable<typeof army> => army !== null,
   );
+  const trackedArmyMembershipMs = Date.now() - phaseStartedAt;
   const currentArmyIdsByUser = new Map<string, string[]>();
   for (const army of validArmySnapshots) {
     for (const userId of army.memberIds) {
@@ -300,6 +319,7 @@ export async function snapshotAllArmies(
   for (let i = 0; i < userIds.length; i += 10) {
     userChunks.push(userIds.slice(i, i + 10));
   }
+  phaseStartedAt = Date.now();
   const profileBatches = await mapWithConcurrency(userChunks, 4, async (chunk) => {
     try {
       const endpoints = chunk.map(() => "user.getUserById").join(",");
@@ -334,7 +354,7 @@ export async function snapshotAllArmies(
 
   const playerEntries = await mapWithConcurrency(
     Array.from(usersById.entries()),
-    2,
+    Math.min(12, Math.max(2, getWarEraTokens().length * 2)),
     async ([userId, user]) => {
       const existingToday = getSnapshotPlayer(currentStore[dateStr], userId);
       const previousPlayer = previousPlayers.get(userId);
@@ -357,8 +377,12 @@ export async function snapshotAllArmies(
               totalSkillPoints: existingToday.totalSkillPoints ?? liveMode.totalSkillPoints,
             }
           : liveMode;
-      const donationTargetSnapshot = existingTarget ??
-        (captureDonationTargets ? await getDonationTargetSnapshot(user) : undefined);
+      const isCurrentTrackedPlayer = currentArmyIdsByUser.has(userId);
+      const donationTargetSnapshot = captureDonationTargets && isCurrentTrackedPlayer
+        ? existingTarget?.incomeCalculated
+            ? existingTarget
+            : await getDonationTargetSnapshot(user, existingToday)
+        : existingTarget;
       const weeklyDamage = Number(user.rankings?.weeklyUserDamages?.value || 0);
 
       return [userId, {
@@ -380,6 +404,7 @@ export async function snapshotAllArmies(
       }] as const;
     },
   );
+  const playerProfilesAndIncomeMs = Date.now() - phaseStartedAt;
 
   const players: NonNullable<DailySnapshotRecord["players"]> = {
     ...currentStore[dateStr].players,
@@ -412,6 +437,7 @@ export async function snapshotAllArmies(
   const retainedDates = Object.keys(currentStore).sort().slice(-30);
   currentStore = Object.fromEntries(retainedDates.map((date) => [date, currentStore[date]]));
 
+  phaseStartedAt = Date.now();
   // 1. Write to local file/memory
   writeSnapshotsToDisk(currentStore);
 
@@ -423,9 +449,27 @@ export async function snapshotAllArmies(
     console.warn("Could not persist snapshot to Supabase:", err);
   }
 
+  const timingMs = {
+    loadSnapshots: loadSnapshotsMs,
+    trackedArmyMembership: trackedArmyMembershipMs,
+    playerProfilesAndIncome: playerProfilesAndIncomeMs,
+    persistSnapshot: Date.now() - phaseStartedAt,
+    total: Date.now() - startedAt,
+  };
+  const incomeCalculatedCount = Object.values(currentStore[dateStr].players || {})
+    .filter((player: any) => player.donationTargetSnapshot?.incomeCalculated).length;
+  console.info("[Daily snapshot timing]", JSON.stringify({
+    date: dateStr,
+    ...timingMs,
+    trackedArmies: validArmySnapshots.length,
+    trackedPlayers: userIds.length,
+    incomeCalculatedPlayers: incomeCalculatedCount,
+  }));
+
   return {
     ...currentStore[dateStr],
     supabaseSaved,
     supabaseConnected: isSupabaseConnected(),
+    timingMs,
   };
 }

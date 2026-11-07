@@ -2230,6 +2230,9 @@ export interface ManagementMemberItem {
     level: number;
     prestigeLevel?: number;
     wealth: number;
+    lastActive?: string | null;
+    isActive?: boolean;
+    incomeCalculated?: boolean;
     source: "companies" | "fallback" | "policy";
     capturedAt: string;
   }>;
@@ -2254,6 +2257,7 @@ export interface ManagementMemberItem {
   autoIncome?: number;
   workerIncome?: number;
   totalDailyRevenue?: number;
+  incomeCalculated?: boolean;
   donationRate?: number;
   factoryCalculation?: PlayerCompanyCalculationResponse;
 }

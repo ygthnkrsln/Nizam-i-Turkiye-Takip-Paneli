@@ -483,6 +483,58 @@ export async function calculatePlayerCompanyRevenue(
   const activeCount = Math.min(factoryLimit, sortedCompanies.length);
 
   // 6. For each company, compute conversion-based auto & employee income
+  const employeeEstimatesByCompany = new Map<string, any>();
+  const employeeEstimateErrors = new Map<string, string>();
+  const missingEstimateCompanies = sortedCompanies
+    .slice(0, activeCount)
+    .filter((company) => {
+      const companyId = company._id || company.id;
+      const cached = employeeEstimateCache.get(companyId);
+      if (!forceRefresh && cached && Date.now() - cached.timestamp < ESTIMATE_CACHE_TTL_MS) {
+        employeeEstimatesByCompany.set(companyId, cached.data);
+        return false;
+      }
+      return true;
+    });
+
+  if (missingEstimateCompanies.length > 0) {
+    const batchInput: Record<string, { companyId: string }> = {};
+    missingEstimateCompanies.forEach((company, index) => {
+      batchInput[String(index)] = { companyId: company._id || company.id };
+    });
+    const estimateBatchUrl = `${BASE_URL}/${missingEstimateCompanies
+      .map(() => "employee.getCompanyEstimate")
+      .join(",")}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
+    try {
+      const estimateBatch = await fetchWarEraSafe(estimateBatchUrl, undefined, userToken);
+      if (!estimateBatch.ok || !Array.isArray(estimateBatch.data) ||
+        estimateBatch.data.length !== missingEstimateCompanies.length) {
+        throw new Error("Çalışan tahminlerinin toplu yanıtı eksik");
+      }
+      estimateBatch.data.forEach((item: any, index: number) => {
+        const company = missingEstimateCompanies[index];
+        const companyId = company._id || company.id;
+        const estimate = item?.result?.data?.json || item?.result?.data;
+        if (!estimate) {
+          employeeEstimateErrors.set(
+            companyId,
+            "API yanıtında çalışan tahmini bulunamadı.",
+          );
+          return;
+        }
+        employeeEstimatesByCompany.set(companyId, estimate);
+        employeeEstimateCache.set(companyId, { data: estimate, timestamp: Date.now() });
+      });
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : "Çalışan tahmini alınamadı.";
+      missingEstimateCompanies.forEach((company) => {
+        employeeEstimateErrors.set(company._id || company.id, message);
+      });
+    }
+  }
+
   const companyResults: SingleCompanyCalculation[] = [];
   let totalAutoIncome = 0;
   let totalWorkerIncome = 0;
@@ -513,21 +565,11 @@ export async function calculatePlayerCompanyRevenue(
 
     // Step 6: Fetch employee estimate safely if active
     let estData: any = null;
-    let workerEstimateError: string | undefined;
+    let workerEstimateError = isActive
+      ? employeeEstimateErrors.get(cid)
+      : undefined;
     if (isActive) {
-      const cachedEst = employeeEstimateCache.get(cid);
-      if (!forceRefresh && cachedEst && Date.now() - cachedEst.timestamp < ESTIMATE_CACHE_TTL_MS) {
-        estData = cachedEst.data;
-      } else {
-        const estUrl = `${BASE_URL}/employee.getCompanyEstimate?input=${encodeURIComponent(JSON.stringify({ companyId: cid }))}`;
-        const estRes = await fetchWarEraSafe(estUrl, undefined, userToken);
-        if (estRes.ok && estRes.data) {
-          estData = estRes.data?.result?.data;
-          employeeEstimateCache.set(cid, { data: estData, timestamp: Date.now() });
-        } else {
-          workerEstimateError = `Çalışan tahmini alınamadı (HTTP ${estRes.status}).`;
-        }
-      }
+      estData = employeeEstimatesByCompany.get(cid) ?? null;
     }
 
     // Step 7, 8, 9: Match each employee estimate to its item price and calculate its daily net.

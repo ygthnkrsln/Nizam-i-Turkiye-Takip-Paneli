@@ -30,16 +30,34 @@ export default async function handler(req: any, res: any) {
     }
   }
 
+  const startedAt = Date.now();
   try {
+    let phaseStartedAt = Date.now();
     const snapshot = await snapshotAllArmies({
       captureDonationTargets: req.method === "GET",
     });
+    const snapshotDurationMs = Date.now() - phaseStartedAt;
     let countrySnapshot: any = null;
+    let countrySnapshotDurationMs = 0;
+    phaseStartedAt = Date.now();
     try {
       countrySnapshot = await recordCountryTrackerSnapshot();
     } catch (error) {
       console.warn("Country tracker snapshot failed; daily damage snapshot is still available:", error);
+    } finally {
+      countrySnapshotDurationMs = Date.now() - phaseStartedAt;
     }
+    const timingMs = {
+      snapshot: snapshotDurationMs,
+      countrySnapshot: countrySnapshotDurationMs,
+      total: Date.now() - startedAt,
+    };
+    console.info("[Daily cron timing]", JSON.stringify({
+      date: snapshot.date,
+      ...timingMs,
+      trackedArmies: Object.keys(snapshot.armies).length,
+      trackedPlayers: Object.keys(snapshot.players || {}).length,
+    }));
     return res.status(200).json({
       success: true,
       message: `02:55 Günlük Hasar Snapshot başarıyla tamamlandı (${Object.keys(snapshot.armies).length} Ordu).`,
@@ -47,11 +65,15 @@ export default async function handler(req: any, res: any) {
       armiesCount: Object.keys(snapshot.armies).length,
       supabaseSaved: snapshot.supabaseSaved,
       supabaseConnected: snapshot.supabaseConnected,
+      timingMs,
       countrySnapshot,
       snapshot,
     });
   } catch (err: any) {
-    console.error("Cron job error:", err);
+    console.error("Cron job error:", JSON.stringify({
+      elapsedMs: Date.now() - startedAt,
+      error: err.message || "Snapshot failed",
+    }));
     return res
       .status(500)
       .json({ success: false, error: err.message || "Snapshot failed" });

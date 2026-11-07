@@ -185,6 +185,17 @@ const STATE_LABEL: Record<string, string> = {
   ok: "Tamam", covered: "Fazlası karşıladı", partial: "Kısmi", missed: "Eksik",
   today: "Bugün bekleniyor", future: "Bekleniyor", pre: "Sistem öncesi", free: "Muaf", extra: "Gönüllü",
 };
+const STATE_SHORT_LABEL: Record<string, string> = {
+  ok: "Tamam",
+  covered: "Devir",
+  partial: "Kısmi",
+  missed: "Eksik",
+  today: "Bugün",
+  future: "Bekliyor",
+  pre: "Önce",
+  free: "Muaf",
+  extra: "Gönüllü",
+};
 
 interface Props {
   currentMuId: string;
@@ -355,7 +366,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         .filter((army) => army.dataAvailable !== false)
         .flatMap((army) =>
           army.members
-            .filter((member) => member.isActive)
+            .filter((member) => !member.incomeCalculated)
             .map((member) => member.userId),
         ),
     )).filter((userId) =>
@@ -429,8 +440,9 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         const level = snapshot?.level ?? member.level;
         const prestigeLevel = snapshot?.prestigeLevel ?? member.prestigeLevel;
         const wealth = snapshot?.wealth ?? member.wealth;
+        const isActiveOnDate = snapshot?.isActive ?? member.isActive;
         if (
-          !member.isActive ||
+          !isActiveOnDate ||
           !isEconomyOnDate(date) ||
           (level < rules.minLevel && prestigeLevel <= 0) ||
           wealth < rules.wealthThresholdMid ||
@@ -443,6 +455,9 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         if (dateRate <= 0) return 0;
         const snapshot = member.donationTargetsByDate?.[date];
         if (snapshot && !manualMode) {
+          if (snapshot.incomeCalculated === false && date === today && calc) {
+            return Math.round(totalDailyRevenue * dateRate);
+          }
           if (snapshot.revenue !== null && Number.isFinite(Number(snapshot.revenue))) {
             return Math.round(Number(snapshot.revenue) * dateRate);
           }
@@ -1281,16 +1296,51 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                         {row.donationCells.map((cell, index) => {
                           const day = dates[index];
                           const shown = amountFor(cell, paymentView);
+                          const recordedMode =
+                            row.donationTargetsByDate?.[day]?.playerMode ??
+                            row.playerModeByDate?.[day] ??
+                            (day === today ? row.playerMode : undefined);
+                          const modeLabel = recordedMode === "economy"
+                            ? "Ekonomi"
+                            : recordedMode === "combat"
+                              ? "Savaşçı"
+                              : "Mod yok";
                           return (
                             <td
                               key={day}
-                              title={`${STATE_LABEL[cell.state]} · ülke ${money(cell.country)} · birlik ${money(cell.mu)}${cell.carry ? ` · devreden ${money(cell.carry)}` : ""}`}
-                              className="px-1 py-2 text-center"
+                              title={`${STATE_LABEL[cell.state]} · ${modeLabel} modu · ülke ${money(cell.country)} · birlik ${money(cell.mu)}${cell.carry ? ` · devreden ${money(cell.carry)}` : ""}`}
+                              className="px-1 py-1.5 text-center align-middle"
                             >
-                              <span className={`inline-flex min-h-8 min-w-[56px] flex-col items-center justify-center rounded-md border px-1 text-[9px] ${stateStyle(cell.state)}`}>
-                                {shown ? Math.round(shown).toLocaleString("tr-TR") : (cell.state === "covered" ? "✓" : cell.state === "future" || cell.state === "pre" ? "·" : "—")}
-                                <span className="opacity-70">{STATE_LABEL[cell.state]}</span>
-                              </span>
+                              <div className="mx-auto flex w-[68px] flex-col items-center gap-1">
+                                <span className={`flex h-9 w-full flex-col items-center justify-center overflow-hidden rounded-md border px-1 text-[9px] leading-3 ${stateStyle(cell.state)}`}>
+                                  <span className="max-w-full truncate font-semibold">
+                                    {shown
+                                      ? Math.round(shown).toLocaleString("tr-TR")
+                                      : cell.state === "covered"
+                                        ? "✓"
+                                        : cell.state === "future" || cell.state === "pre"
+                                          ? "·"
+                                          : "—"}
+                                  </span>
+                                  <span className="max-w-full truncate opacity-75">
+                                    {STATE_SHORT_LABEL[cell.state] || STATE_LABEL[cell.state]}
+                                  </span>
+                                </span>
+                                <span
+                                  title={recordedMode
+                                    ? `${dateLabel(day)} tarihinde ${modeLabel} modundaydı`
+                                    : `${dateLabel(day)} için mod kaydı bulunamadı`}
+                                  className={`flex h-4 w-full items-center justify-center overflow-hidden rounded border px-1 text-[8px] leading-none ${
+                                    recordedMode === "economy"
+                                      ? "border-cyan-500/25 bg-cyan-950/30 text-cyan-200/75"
+                                      : recordedMode === "combat"
+                                        ? "border-orange-500/20 bg-orange-950/20 text-orange-200/65"
+                                        : "border-slate-700/40 bg-slate-900/30 text-slate-500"
+                                  }`}
+                                >
+                                  <span className="truncate">{modeLabel}</span>
+                                </span>
+                              </div>
                             </td>
                           );
                         })}

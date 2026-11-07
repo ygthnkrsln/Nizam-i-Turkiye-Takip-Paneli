@@ -626,6 +626,14 @@ async function processSingleArmy(
         autoIncome: savedDonationTarget?.autoIncome ?? calc?.totalAutoIncome ?? 0,
         workerIncome: savedDonationTarget?.workerIncome ?? calc?.totalWorkerIncome ?? 0,
         totalDailyRevenue: savedDonationTarget?.revenue ?? calc?.totalDailyRevenue ?? 0,
+        incomeCalculated:
+          savedDonationTarget?.incomeCalculated === true ||
+          Boolean(
+            calc &&
+            !calc.companies.some(
+              (company: any) => company.isActive && company.workerEstimateError,
+            ),
+          ),
         donationRate,
         factoryCalculation: calc || undefined,
       };
