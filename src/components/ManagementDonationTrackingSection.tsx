@@ -1169,6 +1169,11 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                     <button
                       key={key}
                       onClick={() => setPaymentView(key)}
+                      title={key === "mu"
+                        ? "Birliğe yapılan bağışlar görüntülenir ancak günlük hedefe veya devre sayılmaz."
+                        : key === "total"
+                          ? "Günlük hedefe yalnızca ülkeye yapılan bağışlar sayılır."
+                          : undefined}
                       className={`rounded-md px-2 py-1 ${paymentView === key ? "bg-emerald-900 text-emerald-100" : "text-[#BBE1FA]/50"}`}
                     >
                       {label}
@@ -1195,7 +1200,9 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                         {["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"][index]}<br />{dateLabel(date)}
                       </th>
                     ))}
-                    <th className="px-2 py-3 text-right">Ödenen</th>
+                    <th className="px-2 py-3 text-right">
+                      {paymentView === "mu" ? "Birlik (sayılmaz)" : "Ülkeye ödenen"}
+                    </th>
                     <th className="px-2 py-3 text-right">Fazla</th>
                     <th className="px-2 py-3 text-right">Eksik</th>
                     <th className="px-3 py-3">Durum</th>
@@ -1308,7 +1315,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                           return (
                             <td
                               key={day}
-                              title={`${STATE_LABEL[cell.state]} · ${modeLabel} modu · ülke ${money(cell.country)} · birlik ${money(cell.mu)}${cell.carry ? ` · devreden ${money(cell.carry)}` : ""}`}
+                              title={`${STATE_LABEL[cell.state]} (durum yalnızca ülke bağışına göre hesaplanır) · ${modeLabel} modu · ülkeye ${money(cell.country)} · birliğe ${money(cell.mu)} (hedefe/devre sayılmaz)${cell.carry ? ` · devreden ${money(cell.carry)}` : ""}`}
                               className="px-1 py-1.5 text-center align-middle"
                             >
                               <div className="mx-auto flex w-[68px] flex-col items-center gap-1">

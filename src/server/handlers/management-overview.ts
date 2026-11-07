@@ -365,9 +365,12 @@ async function processSingleArmy(
               if (!dates.includes(day)) continue;
               const byDay = userDonationsMap[userId] || (userDonationsMap[userId] = {});
               const totals = byDay[day] || (byDay[day] = { country: 0, mu: 0, total: 0 });
-              if (sellerMuId) totals.mu += amount;
-              else totals.country += amount;
-              totals.total += amount;
+              if (sellerMuId) {
+                totals.mu += amount;
+              } else if (sellerCountryId) {
+                totals.country += amount;
+                totals.total += amount;
+              }
             }
 
             const nextCursor = txData?.nextCursor ? String(txData.nextCursor) : null;
