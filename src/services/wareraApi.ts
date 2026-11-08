@@ -2236,6 +2236,8 @@ export interface ManagementMemberItem {
     source: "companies" | "fallback" | "policy";
     capturedAt: string;
   }>;
+  donationBalanceBeforeWeek?: number;
+  donationBalanceDateBeforeWeek?: string;
   isFighter: boolean;
   potentialDamage: number;
   isEconomy?: boolean;

@@ -74,6 +74,8 @@ export interface DailySnapshotRecord {
     ecoSkillPoints?: number;
     totalSkillPoints?: number;
     armyIds: string[];
+    donationBalance?: number;
+    donationBalanceDate?: string;
     donationTargetSnapshot?: {
       target: number;
       revenue: number | null;
@@ -109,6 +111,8 @@ export interface DailySnapshotRecord {
         isEconomy?: boolean;
         ecoSkillPoints?: number;
         totalSkillPoints?: number;
+        donationBalance?: number;
+        donationBalanceDate?: string;
         donationTargetSnapshot?: {
           target: number;
           revenue: number | null;

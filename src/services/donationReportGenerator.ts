@@ -149,7 +149,7 @@ export function generateDonationTrackingPdf(input: DonationReportInput) {
     { label: "Haftalik hedef", value: gold(input.summary.weeklyQuota), detail: `${input.summary.eligible} yukumluluk` },
     { label: "Bu haftaki bagis", value: gold(input.summary.paidThisWeek), detail: `Bugune kadar ${gold(input.summary.paidToDate)}` },
     { label: "Kota acigi", value: gold(input.summary.gap), detail: `${input.summary.owing} uye eksik odemede` },
-    { label: "Tamamlanma", value: `%${Math.round(input.summary.completion)}`, detail: `Devir ${gold(input.summary.poolCarryIn)}` },
+    { label: "Tamamlanma", value: `%${Math.round(input.summary.completion)}`, detail: `Net bakiye ${gold(input.summary.poolCarryIn)}` },
   ];
   cards.forEach((card, index) => drawSummaryCard(doc, margin + index * (cardWidth + gap), 28, cardWidth, card.label, card.value, card.detail));
 
@@ -157,7 +157,7 @@ export function generateDonationTrackingPdf(input: DonationReportInput) {
   doc.setFontSize(6.5);
   doc.setTextColor(90, 105, 115);
   doc.text(cleanPdfText(`Filtre: ${input.filterLabel}  |  Kurallar: ${input.ruleLabel}`), margin, 50);
-  doc.text("Gunluk tutarlar secili odeme gorunumune gore; kota acigi tum bagis hedeflerine gore hesaplanmistir.", margin, 54);
+  doc.text("Kota acigi yalnizca ulkeye yapilan bagislara gore hesaplanmistir.", margin, 54);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
@@ -166,7 +166,7 @@ export function generateDonationTrackingPdf(input: DonationReportInput) {
   autoTable(doc, {
     startY: 64,
     margin: { top: 28, bottom: 12, left: margin, right: margin },
-    head: [["Birlik", "Uye", "Yukumluluk", "Haftalik hedef", "Devir", "Havuz (devir dahil)", "Kota acigi"]],
+    head: [["Birlik", "Uye", "Yukumluluk", "Haftalik hedef", "Net bakiye", "Havuz (net bakiye dahil)", "Kota acigi"]],
     body: input.armies.map((army) => [
       cleanPdfText(army.name),
       number(army.memberCount),

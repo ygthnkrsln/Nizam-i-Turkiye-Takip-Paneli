@@ -213,11 +213,30 @@ function collectDonationTargetsByDate(
   return targetsByUser;
 }
 
+function collectDonationBalancesBeforeDate(
+  snapshots: Record<string, any>,
+  beforeDate: string,
+): Record<string, { date: string; balance: number }> {
+  const balancesByUser: Record<string, { date: string; balance: number }> = {};
+  for (const snapshot of Object.values(snapshots)) {
+    for (const [userId, player] of Object.entries(getSnapshotPlayers(snapshot)) as [string, any][]) {
+      const date = String(player?.donationBalanceDate || "");
+      const balance = Number(player?.donationBalance);
+      if (!date || date >= beforeDate || !Number.isFinite(balance)) continue;
+      if (!balancesByUser[userId] || date >= balancesByUser[userId].date) {
+        balancesByUser[userId] = { date, balance };
+      }
+    }
+  }
+  return balancesByUser;
+}
+
 async function processSingleArmy(
   army: { id: string; name: string; avatarUrl: string },
   snapshots: Record<string, any>,
   playerModesByUserDate: Record<string, Record<string, PlayerMode>>,
   donationTargetsByUserDate: Record<string, Record<string, any>>,
+  donationBalancesByUser: Record<string, { date: string; balance: number }>,
   effectiveDate: string,
   currentGameDate: string,
   donationHistoryDates: string[],
@@ -594,6 +613,12 @@ async function processSingleArmy(
         playerMode,
         playerModeByDate,
         donationTargetsByDate,
+        ...(donationBalancesByUser[uid] !== undefined
+          ? {
+              donationBalanceBeforeWeek: donationBalancesByUser[uid].balance,
+              donationBalanceDateBeforeWeek: donationBalancesByUser[uid].date,
+            }
+          : {}),
         isFighter,
         potentialDamage,
         isEconomy,
@@ -769,7 +794,7 @@ export default async function handler(req: any, res: any) {
     effectiveDate === todayDateStr ? 30 * 1000 : CACHE_TTL_MS;
 
   const donationHistoryDates = getDonationHistoryDates(effectiveDate);
-  const cacheKey = `mgmt_overview_v19_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v20_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < cacheTtlMs) {
     return res.status(200).json(cached.data);
@@ -791,6 +816,10 @@ export default async function handler(req: any, res: any) {
     const snapshots = await readSnapshotsWithSupabase();
     const playerModesByUserDate = collectPlayerModesByDate(snapshots);
     const donationTargetsByUserDate = collectDonationTargetsByDate(snapshots);
+    const donationBalancesByUser = collectDonationBalancesBeforeDate(
+      snapshots,
+      getGameWeekDates(effectiveDate)[0],
+    );
     const dates = Object.keys(snapshots).sort();
     const baselineDate =
       dates.length > 0 ? dates[dates.length - 1] : "2026-10-03";
@@ -803,6 +832,7 @@ export default async function handler(req: any, res: any) {
         snapshots,
         playerModesByUserDate,
         donationTargetsByUserDate,
+        donationBalancesByUser,
         effectiveDate,
         todayDateStr,
         donationHistoryDates,

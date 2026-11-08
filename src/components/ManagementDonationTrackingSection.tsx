@@ -493,28 +493,74 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         (sum, date) => sum + ((!rules.startDate || date >= rules.startDate) ? targetForDate(date) : 0),
         0,
       );
-      const previousPaid = previousDates.reduce((sum, date) => sum + (member.donationsByDate?.[date]?.total || 0), 0);
-      const carryIn = isEligible ? Math.max(0, previousPaid - previousTarget) : 0;
+      const previousPaid = previousDates.reduce((sum, date) => {
+        const donation = member.donationsByDate?.[date];
+        return sum + (Number(donation?.country) || 0);
+      }, 0);
+      const savedBalance = member.donationBalanceBeforeWeek;
+      const savedBalanceDate = member.donationBalanceDateBeforeWeek;
+      const balanceWindowStart = shiftDate(previousDates[0], -1);
+      const canReconcileSavedBalance =
+        Number.isFinite(savedBalance) &&
+        Boolean(savedBalanceDate && savedBalanceDate >= balanceWindowStart);
+      const unreconciledPreviousNet = canReconcileSavedBalance
+        ? previousDates.reduce((sum, date) => {
+            if (date <= (savedBalanceDate || "")) return sum;
+            const target = !rules.startDate || date >= rules.startDate
+              ? targetForDate(date)
+              : 0;
+            const payment = Number(member.donationsByDate?.[date]?.country) || 0;
+            return sum + payment - target;
+          }, 0)
+        : 0;
+      const carryIn = excluded
+        ? 0
+        : canReconcileSavedBalance
+          ? Number(savedBalance) + unreconciledPreviousNet
+          : previousPaid - previousTarget;
       let carry = carryIn;
 
       const donationCells = dates.map((date) => {
         const raw = member.donationsByDate?.[date] || { country: 0, mu: 0, total: 0 };
-        const payment = { country: Number(raw.country) || 0, mu: Number(raw.mu) || 0, total: Number(raw.total) || 0 };
+        const country = Number(raw.country);
+        const payment = {
+          country: Number.isFinite(country) ? country : 0,
+          mu: Number(raw.mu) || 0,
+          total: Number.isFinite(country) ? country : 0,
+        };
         let state = "free";
         const dayActive = !rules.startDate || date >= rules.startDate;
         const dayTarget = dayActive ? targetForDate(date) : 0;
-        if (!dayActive) state = payment.total ? "extra" : "pre";
-        else if (dayTarget <= 0) state = payment.total ? "extra" : "free";
-        else if (date > visibleThrough) state = "future";
-        else {
-          const available = carry + payment.total;
-          if (payment.total >= dayTarget) state = "ok";
-          else if (available >= dayTarget) state = "covered";
-          else if (date === today) state = payment.total ? "partial" : "today";
-          else state = payment.total ? "partial" : "missed";
-          carry = Math.max(0, available - dayTarget);
+        if (date > visibleThrough) {
+          state = "future";
+        } else {
+          const balanceBeforePayment = carry;
+          const requiredPayment = Math.max(0, dayTarget - balanceBeforePayment);
+          carry = balanceBeforePayment + payment.total - dayTarget;
+
+          if (!dayActive) {
+            state = payment.total
+              ? balanceBeforePayment < 0
+                ? carry < 0 ? "partial" : "covered"
+                : "extra"
+              : "pre";
+          } else if (dayTarget <= 0) {
+            state = payment.total
+              ? balanceBeforePayment < 0
+                ? carry < 0 ? "partial" : "covered"
+                : "extra"
+              : "free";
+          } else if (payment.total >= requiredPayment) {
+            state = balanceBeforePayment === 0 && payment.total >= dayTarget
+              ? "ok"
+              : "covered";
+          } else if (payment.total > 0) {
+            state = "partial";
+          } else {
+            state = date === today ? "today" : "missed";
+          }
         }
-        return { ...payment, state, carry: Math.max(0, carry) };
+        return { ...payment, state, carry };
       });
 
       const paidFor = (keys: string[], view: PaymentView) => keys.reduce((sum, date) => {
@@ -536,13 +582,15 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
       const muThisWeek = paidFor(dates, "mu");
       const todaySnapshot = member.donationTargetsByDate?.[today];
       const todayLevel = todaySnapshot?.level ?? member.level;
+      const unpaid = Math.max(0, dueToDate - (paidToDate + carryIn));
+      const surplus = Math.max(0, paidToDate + carryIn - dueToDate);
 
-      const memberStatus = !member.isActive
-        ? "Pasif — bağış yükümlülüğü yok"
-        : excluded
+      const memberStatus = excluded
         ? "Hariç tutuldu"
-        : Math.max(0, dueToDate - paidToDate - carryIn) > 0
+        : unpaid > 0
         ? "Eksik ödeme"
+        : !member.isActive
+        ? "Pasif — bağış yükümlülüğü yok"
         : !isEcoMode
         ? "Savaş modu — muaf"
         : dailyTarget === 0
@@ -573,8 +621,8 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         paidThisWeek,
         countryThisWeek,
         muThisWeek,
-        unpaid: Math.max(0, dueToDate - (paidToDate + carryIn)),
-        surplus: Math.max(0, paidToDate + carryIn - dueToDate),
+        unpaid,
+        surplus,
         statusLabel: memberStatus,
         autoIncome,
         workerIncome,
@@ -590,14 +638,12 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
     const quotaToDate = rows.reduce((total, row) => total + row.dueToDate, 0);
     const weeklyQuota = rows.reduce((total, row) => total + row.weeklyTarget, 0);
     const paidToDate = sum("paidToDate");
-    const previousPaid = sum("previousPaid");
-    const previousQuota = sum("previousTarget");
-    const poolCarryIn = Math.max(0, previousPaid - previousQuota);
+    const poolCarryIn = sum("carryIn");
     return {
       quotaToDate, weeklyQuota, paidToDate, paidThisWeek: sum("paidThisWeek"), poolCarryIn,
       unpaid: sum("unpaid"), remainingWeek: Math.max(0, weeklyQuota - sum("paidThisWeek")),
       gap: Math.max(0, quotaToDate - paidToDate - poolCarryIn),
-      completion: quotaToDate ? Math.min(100, ((paidToDate + poolCarryIn) / quotaToDate) * 100) : 0,
+      completion: quotaToDate ? Math.max(0, Math.min(100, ((paidToDate + poolCarryIn) / quotaToDate) * 100)) : 0,
       eligible: rows.filter((row) => row.dailyTarget > 0).length,
       owing: rows.filter((row) => row.unpaid > 0).length,
     };
@@ -605,9 +651,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
 
   const armyTotals = useMemo(() => data?.armies.map((army) => {
     const armyRows = rows.filter((row) => row.muId === army.muId);
-    const previousPaid = armyRows.reduce((sum, row) => sum + row.previousPaid, 0);
-    const previousQuota = armyRows.reduce((sum, row) => sum + row.previousTarget, 0);
-    const poolCarryIn = Math.max(0, previousPaid - previousQuota);
+    const poolCarryIn = armyRows.reduce((sum, row) => sum + row.carryIn, 0);
     return {
       ...army,
       dataAvailable: army.dataAvailable !== false,
@@ -1029,7 +1073,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
               <div>
                 <div className="text-sm font-bold text-emerald-200">Haftalık kota havuzu</div>
                 <div className="mt-1 text-[11px] text-[#BBE1FA]/55">
-                  Bugüne kadar beklenen {money(totals.quotaToDate)} · geçen haftadan devreden {money(totals.poolCarryIn)} · ödenen tüm bağışlar kotaya sayılır.
+                  Bugüne kadar beklenen {money(totals.quotaToDate)} · geçen haftadan devreden net bakiye {money(totals.poolCarryIn)} · yalnızca ülkeye yapılan bağışlar kotaya sayılır.
                 </div>
               </div>
               <div className="text-sm font-bold text-white">
@@ -1315,7 +1359,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                           return (
                             <td
                               key={day}
-                              title={`${STATE_LABEL[cell.state]} (durum yalnızca ülke bağışına göre hesaplanır) · ${modeLabel} modu · ülkeye ${money(cell.country)} · birliğe ${money(cell.mu)} (hedefe/devre sayılmaz)${cell.carry ? ` · devreden ${money(cell.carry)}` : ""}`}
+                              title={`${STATE_LABEL[cell.state]} (durum yalnızca ülke bağışına göre hesaplanır) · ${modeLabel} modu · ülkeye ${money(cell.country)} · birliğe ${money(cell.mu)} (hedefe/devre sayılmaz)${cell.carry ? cell.carry < 0 ? ` · devreden borç ${money(Math.abs(cell.carry))}` : ` · devreden fazla ${money(cell.carry)}` : ""}`}
                               className="px-1 py-1.5 text-center align-middle"
                             >
                               <div className="mx-auto flex w-[68px] flex-col items-center gap-1">
