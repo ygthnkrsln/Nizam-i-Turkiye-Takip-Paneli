@@ -350,6 +350,7 @@ export async function snapshotAllArmies(
         wealth >= 20000;
       const rate = eligible ? (wealth <= 30000 ? 0.2 : 0.25) : 0;
       const common = {
+        calculationVersion: 2,
         rate,
         eligible,
         playerMode,
@@ -582,7 +583,8 @@ export async function snapshotAllArmies(
           : liveMode;
       const isCurrentTrackedPlayer = currentArmyIdsByUser.has(userId);
       const donationTargetSnapshot = captureDonationTargets && isCurrentTrackedPlayer
-        ? existingTarget?.incomeCalculated
+        ? existingTarget?.incomeCalculated &&
+          existingTarget?.calculationVersion === 2
             ? existingTarget
             : await getDonationTargetSnapshot(user, existingToday)
         : existingTarget;

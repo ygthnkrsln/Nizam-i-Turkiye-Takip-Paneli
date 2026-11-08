@@ -2233,6 +2233,7 @@ export interface ManagementMemberItem {
     lastActive?: string | null;
     isActive?: boolean;
     incomeCalculated?: boolean;
+    calculationVersion?: number;
     source: "companies" | "fallback" | "policy";
     capturedAt: string;
   }>;
@@ -2306,6 +2307,14 @@ export interface ManagementOverviewResponse {
     };
   };
   armies: ManagementArmyItem[];
+  donationTargetsRefresh?: {
+    success: boolean;
+    updatedUsers: number;
+    updatedDays: number;
+    failedUsers: number;
+    errors: Record<string, string>;
+    error?: string;
+  };
 }
 
 export interface ManagementTreasuryTransaction {

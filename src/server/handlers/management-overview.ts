@@ -8,15 +8,20 @@ import { getNextWarEraToken, getWarEraTokens } from "../../lib/wareraTokens.js";
 import {
   readManagementOverviewCache,
   saveManagementOverviewCache,
+  saveSnapshotToSupabase,
 } from "../../lib/supabaseStorage.js";
 import {
   calculateDailyDamageFromSnapshot,
   findBaselineForCurrentCycle,
   getCurrentWeeklyDamage,
   getMilitaryUnitWeeklyDamage,
+  getSnapshotPlayer,
   getSnapshotPlayers,
 } from "../../lib/dailyDamage.js";
-import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
+import {
+  readSnapshotsWithSupabase,
+  writeSnapshotsToDisk,
+} from "../services/daily-damage.js";
 import { calculatePotentialDamage, isCombatBuild } from "../../lib/potentialDamage.js";
 import { calculatePlayerSkillMode, PlayerMode } from "../../lib/playerMode.js";
 import { calculatePlayerCompanyRevenue } from "./player-factories.js";
@@ -56,7 +61,25 @@ interface CacheItem {
   timestamp: number;
   data: any;
 }
+interface DonationTargetRefreshResult {
+  success: boolean;
+  weekStart: string;
+  weekEnd: string;
+  updatedUsers: number;
+  updatedDays: number;
+  failedUsers: number;
+  errors: Record<string, string>;
+  error?: string;
+}
 const cache = new Map<string, CacheItem>();
+const donationTargetRefreshes = new Map<string, {
+  timestamp: number;
+  result: DonationTargetRefreshResult;
+}>();
+const activeDonationTargetRefreshes = new Map<
+  string,
+  Promise<DonationTargetRefreshResult>
+>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes: enough to avoid repeated heavy refreshes while staying fresh
 
 async function mapWithConcurrency<T, R>(
@@ -229,6 +252,146 @@ function collectDonationBalancesBeforeDate(
     }
   }
   return balancesByUser;
+}
+
+async function recalculateDonationTargetsForWeek(
+  weekStart: string,
+  userApiKey: string,
+): Promise<DonationTargetRefreshResult> {
+  const weekDates = getGameWeekDates(weekStart);
+  if (weekDates[0] !== weekStart) {
+    throw new Error("Hedefleri güncellemek için haftanın pazartesi tarihini seçin.");
+  }
+  const currentGameDate = new Date(Date.now() - GAME_DAY_RESET_MS)
+    .toISOString()
+    .slice(0, 10);
+  const endDate = weekDates.at(-1) || weekStart;
+  if (weekStart > currentGameDate || endDate < currentGameDate) {
+    throw new Error("Yalnızca içinde bulunulan haftanın hedefleri güncellenebilir.");
+  }
+
+  const snapshots = await readSnapshotsWithSupabase();
+  const snapshotDatesByGameDate = new Map<string, string>();
+  const usersToUpdate = new Set<string>();
+  for (const [snapshotDate, snapshot] of Object.entries(snapshots)) {
+    const timestamp = Number(snapshot?.timestamp);
+    const gameDate = Number.isFinite(timestamp) && timestamp > 0
+      ? new Date(timestamp - GAME_DAY_RESET_MS).toISOString().slice(0, 10)
+      : snapshotDate;
+    if (!weekDates.includes(gameDate) || gameDate > currentGameDate) continue;
+
+    snapshotDatesByGameDate.set(gameDate, snapshotDate);
+    for (const [userId, player] of Object.entries(getSnapshotPlayers(snapshot)) as [string, any][]) {
+      const target = player?.donationTargetSnapshot;
+      if (
+        !target ||
+        !target.eligible ||
+        Number(target.rate) <= 0 ||
+        (target.incomeCalculated && target.calculationVersion === 2)
+      ) continue;
+      usersToUpdate.add(userId);
+    }
+  }
+
+  if (usersToUpdate.size > 300) {
+    throw new Error("Seçili haftada 300'den fazla eski hedef var; güncellemeyi daha küçük bir zaman aralığına bölün.");
+  }
+
+  const calculationsByUser = new Map<string, Awaited<ReturnType<typeof calculatePlayerCompanyRevenue>>>();
+  const errors: Record<string, string> = {};
+  await mapWithConcurrency(Array.from(usersToUpdate), 8, async (userId) => {
+    try {
+      const calculation = await calculatePlayerCompanyRevenue(
+        userId,
+        userApiKey,
+        true,
+      );
+      if (!Number.isFinite(calculation.totalDailyRevenue)) {
+        throw new Error("Günlük fabrika geliri doğrulanamadı.");
+      }
+      const estimateError = calculation.companies.find(
+        (company) => company.isActive && company.workerEstimateError,
+      )?.workerEstimateError;
+      if (estimateError) throw new Error(estimateError);
+      calculationsByUser.set(userId, calculation);
+    } catch (error) {
+      errors[userId] = error instanceof Error ? error.message : "Fabrika geliri hesaplanamadı.";
+    }
+  });
+
+  const updatedUsers = new Set<string>();
+  const affectedSnapshotDates = new Set<string>();
+  for (const [gameDate, snapshotDate] of snapshotDatesByGameDate) {
+    const snapshot = snapshots[snapshotDate];
+    for (const [userId, player] of Object.entries(getSnapshotPlayers(snapshot)) as [string, any][]) {
+      const calculation = calculationsByUser.get(userId);
+      const target = player?.donationTargetSnapshot;
+      if (
+        !calculation ||
+        !target ||
+        !target.eligible ||
+        Number(target.rate) <= 0 ||
+        (target.incomeCalculated && target.calculationVersion === 2)
+      ) continue;
+
+      snapshot.players ||= {};
+      snapshot.players[userId] = {
+        ...getSnapshotPlayer(snapshot, userId),
+        donationTargetSnapshot: {
+          ...target,
+          target: Math.round(calculation.totalDailyRevenue * Number(target.rate)),
+          revenue: calculation.totalDailyRevenue,
+          autoIncome: calculation.totalAutoIncome,
+          workerIncome: calculation.totalWorkerIncome,
+          incomeCalculated: true,
+          calculationVersion: 2,
+          source: "companies",
+          capturedAt: new Date().toISOString(),
+        },
+      };
+      updatedUsers.add(userId);
+      affectedSnapshotDates.add(snapshotDate);
+    }
+  }
+
+  for (const snapshotDate of affectedSnapshotDates) {
+    const saved = await saveSnapshotToSupabase(snapshots[snapshotDate]);
+    if (!saved) {
+      throw new Error(`Hedefler hesaplandı ancak ${snapshotDate} tarihli snapshot Supabase'e kaydedilemedi.`);
+    }
+  }
+  if (affectedSnapshotDates.size > 0) writeSnapshotsToDisk(snapshots);
+
+  return {
+    success: true,
+    weekStart,
+    weekEnd: endDate,
+    updatedUsers: updatedUsers.size,
+    updatedDays: affectedSnapshotDates.size,
+    failedUsers: Object.keys(errors).length,
+    errors,
+  };
+}
+
+async function getOrRecalculateDonationTargets(
+  weekStart: string,
+  userApiKey: string,
+) {
+  const cached = donationTargetRefreshes.get(weekStart);
+  if (cached && Date.now() - cached.timestamp < 5 * 60_000) return cached.result;
+
+  const active = activeDonationTargetRefreshes.get(weekStart);
+  if (active) return active;
+
+  const refresh = recalculateDonationTargetsForWeek(weekStart, userApiKey);
+  activeDonationTargetRefreshes.set(weekStart, refresh);
+  try {
+    const result = await refresh;
+    donationTargetRefreshes.set(weekStart, { timestamp: Date.now(), result });
+    return result;
+  } finally {
+    activeDonationTargetRefreshes.delete(weekStart);
+  }
 }
 
 async function processSingleArmy(
@@ -790,14 +953,42 @@ export default async function handler(req: any, res: any) {
     isValidDate(targetDateQuery)
       ? targetDateQuery
       : todayDateStr;
+  const currentWeekStart = getGameWeekDates(todayDateStr)[0];
+  let donationTargetsRefresh: DonationTargetRefreshResult | undefined;
+  if (
+    includeDonations &&
+    getGameWeekDates(effectiveDate)[0] === currentWeekStart
+  ) {
+    try {
+      donationTargetsRefresh = await getOrRecalculateDonationTargets(
+        currentWeekStart,
+        userApiKey,
+      );
+    } catch (error) {
+      console.error("Automatic donation target refresh failed:", error);
+      donationTargetsRefresh = {
+        success: false,
+        weekStart: currentWeekStart,
+        weekEnd: getGameWeekDates(currentWeekStart).at(-1) || currentWeekStart,
+        updatedUsers: 0,
+        updatedDays: 0,
+        failedUsers: 0,
+        errors: {},
+        error: error instanceof Error ? error.message : "Hedefler güncellenemedi.",
+      };
+    }
+  }
   const cacheTtlMs =
     effectiveDate === todayDateStr ? 30 * 1000 : CACHE_TTL_MS;
 
   const donationHistoryDates = getDonationHistoryDates(effectiveDate);
-  const cacheKey = `mgmt_overview_v20_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
+  const cacheKey = `mgmt_overview_v22_${includeDonations ? "full" : "armies"}_${effectiveDate}`;
   const cached = cache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.timestamp < cacheTtlMs) {
-    return res.status(200).json(cached.data);
+    return res.status(200).json({
+      ...cached.data,
+      ...(donationTargetsRefresh ? { donationTargetsRefresh } : {}),
+    });
   }
 
   if (!forceRefresh) {
@@ -807,7 +998,10 @@ export default async function handler(req: any, res: any) {
         timestamp: persisted.timestamp,
         data: persisted.payload,
       });
-      return res.status(200).json(persisted.payload);
+      return res.status(200).json({
+        ...persisted.payload,
+        ...(donationTargetsRefresh ? { donationTargetsRefresh } : {}),
+      });
     }
   }
 
@@ -905,6 +1099,7 @@ export default async function handler(req: any, res: any) {
       timestamp: Date.now(),
       effectiveDate,
       baselineDate,
+      ...(donationTargetsRefresh ? { donationTargetsRefresh } : {}),
       alliance: {
         totalMembers: totalAllMembers,
         totalHealth: {

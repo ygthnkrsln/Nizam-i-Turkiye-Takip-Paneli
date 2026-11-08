@@ -310,7 +310,7 @@ export async function calculatePlayerCompanyRevenue(
   forceRefresh = false,
   preloadedProfile?: any,
 ): Promise<PlayerCalculationResult> {
-  const cacheKey = `calc_v2_${userId}`;
+  const cacheKey = `calc_v3_${userId}`;
   if (!forceRefresh) {
     const cached = calculationCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CALCULATION_CACHE_TTL_MS) {
@@ -321,10 +321,13 @@ export async function calculatePlayerCompanyRevenue(
   // 1. Fetch user profile if not preloaded
   let userProfile = preloadedProfile;
   if (!userProfile) {
-    const userUrl = `${BASE_URL}/user.getUserLite?input=${encodeURIComponent(JSON.stringify({ userId }))}`;
+    const userUrl = `${BASE_URL}/user.getUserById?input=${encodeURIComponent(JSON.stringify({ userId }))}`;
     const uRes = await fetchWarEraSafe(userUrl, undefined, userToken);
     if (uRes.ok && uRes.data) {
       userProfile = uRes.data?.result?.data?.json || uRes.data?.result?.data;
+    }
+    if (!userProfile) {
+      throw new Error("Oyuncu profili ve fabrika limiti alınamadı.");
     }
   }
 
@@ -336,28 +339,65 @@ export async function calculatePlayerCompanyRevenue(
 
   const { isEconomy, playerMode } = calculatePlayerSkillMode(userProfile);
 
-  // 2. Determine company limit from companies skill
+  // Read the active company slots from the full player profile.
   const companiesSkill = userProfile?.skills?.companies;
-  const factoryLimit = Number(
-    companiesSkill?.total ??
-      2 + (companiesSkill?.level || 0) + (companiesSkill?.prestige || 0),
-  );
+  const skillTotal = Number(companiesSkill?.total);
+  const skillLevel = Number(companiesSkill?.level);
+  const skillPrestige = Number(companiesSkill?.prestige);
+  const factoryLimit = Number.isFinite(skillTotal) && skillTotal >= 0
+    ? Math.floor(skillTotal)
+    : Number.isFinite(skillLevel) && Number.isFinite(skillPrestige)
+      ? Math.max(0, 2 + skillLevel + skillPrestige)
+      : Number.isFinite(skillLevel) && skillLevel >= 0
+        ? Math.max(0, 2 + skillLevel)
+        : 2;
 
-  // 3. Step 1: Call company.getCompanies with { userId, perPage: 13 }
+  // Fetch every owned company; this list is separate from the active company limit.
   let companyIds: string[] = [];
   const cachedIds = userCompanyIdsCache.get(userId);
   if (!forceRefresh && cachedIds && Date.now() - cachedIds.timestamp < COMPANY_IDS_CACHE_TTL_MS) {
     companyIds = cachedIds.items;
   } else {
-    const compUrl = `${BASE_URL}/company.getCompanies?input=${encodeURIComponent(
-      JSON.stringify({ userId, perPage: 13 }),
-    )}`;
-    const compRes = await fetchWarEraSafe(compUrl, undefined, userToken);
-    if (compRes.ok && compRes.data) {
-      companyIds = compRes.data?.result?.data?.items || [];
+    const fetchedCompanyIds: string[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 5; page++) {
+      const input: Record<string, string | number> = { userId, perPage: 100 };
+      if (cursor) input.cursor = cursor;
+      const compUrl = `${BASE_URL}/company.getCompanies?input=${encodeURIComponent(JSON.stringify(input))}`;
+      const compRes = await fetchWarEraSafe(compUrl, undefined, userToken);
+      if (!compRes.ok) {
+        if (cachedIds) {
+          companyIds = cachedIds.items;
+          break;
+        }
+        throw new Error(`Oyuncu fabrikaları alınamadı (${compRes.status}).`);
+      }
+
+      const responseData = compRes.data?.result?.data?.json ?? compRes.data?.result?.data;
+      const items = responseData?.items;
+      if (!Array.isArray(items)) {
+        throw new Error("Fabrika listesi API yanıtında bulunamadı.");
+      }
+      const pageIds = items
+        .map((item: any) => typeof item === "string" ? item : item?._id || item?.id)
+        .filter((id: unknown): id is string => typeof id === "string" && id.length > 0);
+      fetchedCompanyIds.push(...pageIds);
+      if (items.length < 100) {
+        cursor = undefined;
+        break;
+      }
+      const nextCursor = pageIds.at(-1);
+      if (!nextCursor || nextCursor === cursor) {
+        throw new Error("Fabrika listesi sayfalaması tamamlanamadı.");
+      }
+      cursor = nextCursor;
+      if (page === 4) {
+        throw new Error("Fabrika listesi sayfalama sınırını aştı.");
+      }
+    }
+    if (cursor === undefined && companyIds.length === 0) {
+      companyIds = Array.from(new Set(fetchedCompanyIds));
       userCompanyIdsCache.set(userId, { items: companyIds, timestamp: Date.now() });
-    } else if (cachedIds) {
-      companyIds = cachedIds.items;
     }
   }
 
@@ -399,7 +439,7 @@ export async function calculatePlayerCompanyRevenue(
     return emptyResult;
   }
 
-  // 4. Step 3: Fetch company details using tRPC Batching for missing IDs
+  // Fetch company details in bounded batches.
   const rawCompanies: any[] = [];
   const missingCompanyIds: string[] = [];
 
@@ -413,52 +453,26 @@ export async function calculatePlayerCompanyRevenue(
   }
 
   // Batch query missing companies in one request
-  if (missingCompanyIds.length > 0) {
+  for (let offset = 0; offset < missingCompanyIds.length; offset += 50) {
+    const chunk = missingCompanyIds.slice(offset, offset + 50);
     const batchInput: Record<string, { companyId: string }> = {};
-    missingCompanyIds.forEach((id, idx) => {
-      batchInput[String(idx)] = { companyId: id };
+    chunk.forEach((id, index) => {
+      batchInput[String(index)] = { companyId: id };
     });
 
-    const batchUrl = `${BASE_URL}/${missingCompanyIds.map(() => "company.getById").join(",")}?batch=1&input=${encodeURIComponent(
-      JSON.stringify(batchInput),
-    )}`;
-
+    const batchUrl = `${BASE_URL}/${chunk.map(() => "company.getById").join(",")}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
     const batchRes = await fetchWarEraSafe(batchUrl, undefined, userToken);
-    if (batchRes.ok && Array.isArray(batchRes.data)) {
-      batchRes.data.forEach((item: any, idx: number) => {
-        const cd = item?.result?.data;
-        const cid = missingCompanyIds[idx];
-        if (cd) {
-          companyDetailsCache.set(cid, { data: cd, timestamp: Date.now() });
-          rawCompanies.push(cd);
-        } else {
-          // Synthetic fallback to avoid missing company
-          const fallback = {
-            _id: cid,
-            id: cid,
-            name: `Fabrika #${idx + 1}`,
-            itemCode: "iron",
-            production: 12,
-            activeUpgradeLevels: { automatedEngine: 2, storage: 2, breakRoom: 1 },
-          };
-          companyDetailsCache.set(cid, { data: fallback, timestamp: Date.now() });
-          rawCompanies.push(fallback);
-        }
-      });
-    } else {
-      // Fallback for each missing company if batch failed
-      missingCompanyIds.forEach((cid, idx) => {
-        const fallback = {
-          _id: cid,
-          id: cid,
-          name: `Fabrika #${idx + 1}`,
-          itemCode: "iron",
-          production: 12,
-          activeUpgradeLevels: { automatedEngine: 2, storage: 2, breakRoom: 1 },
-        };
-        rawCompanies.push(fallback);
-      });
+    if (!batchRes.ok || !Array.isArray(batchRes.data) || batchRes.data.length !== chunk.length) {
+      throw new Error("Fabrika detayları API'den eksiksiz alınamadı.");
     }
+    batchRes.data.forEach((item: any, index: number) => {
+      const company = item?.result?.data?.json ?? item?.result?.data;
+      if (!company || typeof company !== "object") {
+        throw new Error(`Fabrika detayı alınamadı (${chunk[index]}).`);
+      }
+      companyDetailsCache.set(chunk[index], { data: company, timestamp: Date.now() });
+      rawCompanies.push(company);
+    });
   }
 
   // 5. Step 2 Sorting: Sort by automatedEngine desc, storage desc, breakRoom desc, production desc

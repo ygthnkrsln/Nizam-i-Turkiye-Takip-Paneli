@@ -90,6 +90,7 @@ export interface DailySnapshotRecord {
       lastActive?: string | null;
       isActive?: boolean;
       incomeCalculated?: boolean;
+      calculationVersion?: number;
       source: "companies" | "fallback" | "policy";
       capturedAt: string;
     };
@@ -127,6 +128,7 @@ export interface DailySnapshotRecord {
           lastActive?: string | null;
           isActive?: boolean;
           incomeCalculated?: boolean;
+          calculationVersion?: number;
           source: "companies" | "fallback" | "policy";
           capturedAt: string;
         };

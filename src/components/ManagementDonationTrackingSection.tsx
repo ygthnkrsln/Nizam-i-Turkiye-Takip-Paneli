@@ -50,7 +50,7 @@ type DonationRules = {
 
 type DonationClass = "auto" | "eco" | "fighter";
 type PaymentView = "total" | "country" | "mu";
-type DonationCell = { country: number; mu: number; total: number; state: string; carry: number };
+type DonationCell = { country: number; mu: number; total: number; target: number; state: string; carry: number };
 
 type DonationRow = ManagementMemberItem & {
   muId: string;
@@ -207,6 +207,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
   const [weekStart, setWeekStart] = useState(currentGameWeekStart);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [targetRefreshMessage, setTargetRefreshMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
   const activeRequest = useRef<AbortController | null>(null);
@@ -318,6 +319,20 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
       const response = await fetchManagementOverview(weekStart, forceRefresh, controller.signal);
       if (requestId === requestSequence.current) {
         setData(response);
+        const targetRefresh = response.donationTargetsRefresh;
+        if (targetRefresh?.error) {
+          setTargetRefreshMessage(`Hedefler otomatik güncellenemedi: ${targetRefresh.error}`);
+        } else if (targetRefresh && (targetRefresh.updatedUsers > 0 || targetRefresh.failedUsers > 0)) {
+          const details = Object.entries(targetRefresh.errors)
+            .slice(0, 2)
+            .map(([userId, message]) => `${userId}: ${message}`)
+            .join(" · ");
+          setTargetRefreshMessage(
+            `${targetRefresh.updatedUsers} oyuncunun hedefi ${targetRefresh.updatedDays} gün için güncellendi.${targetRefresh.failedUsers > 0 ? ` ${targetRefresh.failedUsers} oyuncu API hatası nedeniyle atlandı. ${details}` : ""}`,
+          );
+        } else {
+          setTargetRefreshMessage(null);
+        }
         // Pre-populate company calcs from response if available
         const calcs: Record<string, PlayerCompanyCalculationResponse> = {};
         for (const army of response.armies) {
@@ -560,7 +575,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
             state = date === today ? "today" : "missed";
           }
         }
-        return { ...payment, state, carry };
+        return { ...payment, target: dayTarget, state, carry };
       });
 
       const paidFor = (keys: string[], view: PaymentView) => keys.reduce((sum, date) => {
@@ -1039,6 +1054,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
         )}
 
         {pdfError && <div role="alert" className="mt-4 rounded-xl border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-200">{pdfError}</div>}
+        {targetRefreshMessage && <div role="status" className={`mt-4 rounded-xl border p-3 text-xs ${data?.donationTargetsRefresh?.error || data?.donationTargetsRefresh?.failedUsers ? "border-amber-500/30 bg-amber-950/30 text-amber-200" : "border-emerald-500/30 bg-emerald-950/30 text-emerald-200"}`}>{targetRefreshMessage}</div>}
         {error && <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-200"><span>{error}</span><button type="button" onClick={() => loadData(true)} className="shrink-0 rounded-lg border border-rose-500/30 px-3 py-1.5 font-bold">Tekrar dene</button></div>}
         {(isLoading || isRefreshing) && <div className="mt-4 rounded-xl border border-[#3282B8]/20 bg-[#141C21] p-3 text-xs text-[#BBE1FA]/70">Üyeler ve haftalık bağış işlemleri WarEra’dan güncelleniyor…</div>}
       </section>
@@ -1359,7 +1375,7 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                           return (
                             <td
                               key={day}
-                              title={`${STATE_LABEL[cell.state]} (durum yalnızca ülke bağışına göre hesaplanır) · ${modeLabel} modu · ülkeye ${money(cell.country)} · birliğe ${money(cell.mu)} (hedefe/devre sayılmaz)${cell.carry ? cell.carry < 0 ? ` · devreden borç ${money(Math.abs(cell.carry))}` : ` · devreden fazla ${money(cell.carry)}` : ""}`}
+                              title={`${STATE_LABEL[cell.state]} · günlük hedef ${money(cell.target)} · ${modeLabel} modu · ülkeye ${money(cell.country)} · birliğe ${money(cell.mu)} (hedefe/devre sayılmaz)${cell.carry ? cell.carry < 0 ? ` · devreden borç ${money(Math.abs(cell.carry))}` : ` · devreden fazla ${money(cell.carry)}` : ""}`}
                               className="px-1 py-1.5 text-center align-middle"
                             >
                               <div className="mx-auto flex w-[68px] flex-col items-center gap-1">
@@ -1376,6 +1392,9 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
                                   <span className="max-w-full truncate opacity-75">
                                     {STATE_SHORT_LABEL[cell.state] || STATE_LABEL[cell.state]}
                                   </span>
+                                </span>
+                                <span className="w-full truncate text-[8px] leading-none text-[#BBE1FA]/55">
+                                  Hedef {cell.target > 0 ? Math.round(cell.target).toLocaleString("tr-TR") : "—"}
                                 </span>
                                 <span
                                   title={recordedMode
