@@ -1,10 +1,11 @@
 // Vercel Serverless Function: GET /api/country-stats
-// Aggregates military unit & factory statistics across the 8 tracked Turkish armies
+// Aggregates military unit & factory statistics across tracked Turkish armies
 
 import {
   COUNTRY_STATS_ARMIES,
   includesRequiredCountryStatsArmies,
 } from "../../config/countryStatsArmies.js";
+import { calculatePlayerSkillMode } from "../../lib/playerMode.js";
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
 
 async function fetchWarEra(
@@ -38,7 +39,7 @@ async function fetchWarEra(
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const COUNTRY_STATS_CACHE_KEY = "warera_country_stats_8_armies_v6";
+const COUNTRY_STATS_CACHE_KEY = "warera_country_stats_v7";
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour cache
 
@@ -78,7 +79,7 @@ export default async function handler(req: any, res: any) {
       avatarUrl?: string;
     }[] = [];
 
-    // 1. Fetch member lists from the 6 military units in parallel
+    // 1. Fetch member lists from the configured military units in parallel
     const muPromises = armiesConfig.map(async (army) => {
       try {
         const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: army.id }))}`;
@@ -138,12 +139,14 @@ export default async function handler(req: any, res: any) {
         batchInput[String(idx)] = { userId: id };
       });
 
-      const batchUrl = `https://api2.warera.io/trpc/${chunk.map(() => "user.getUserLite").join(",")}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
+      const batchUrl = `https://api2.warera.io/trpc/${chunk.map(() => "user.getUserById").join(",")}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
       const bRes = await fetchWarEra(batchUrl, undefined, userApiKey);
       if (bRes.ok) {
         const bJson = await bRes.json();
         const items = Array.isArray(bJson) ? bJson : [bJson];
-        return items.map((item: any) => item?.result?.data).filter(Boolean);
+        return items
+          .map((item: any) => item?.result?.data?.json || item?.result?.data)
+          .filter(Boolean);
       }
       return [];
     });
@@ -155,6 +158,14 @@ export default async function handler(req: any, res: any) {
       if (userId) allUsersById.set(userId, user);
     }
     const allUsers = Array.from(allUsersById.values());
+    if (
+      allUsers.length !== uniqueUserIds.length ||
+      allUsers.some((user: any) => !user?.skills || typeof user.skills !== "object")
+    ) {
+      throw new Error(
+        "Oyuncu beceri profilleri eksik; ekonomi/savaşçı dağılımı hesaplanamadı.",
+      );
+    }
     allUsers.forEach((u: any) => {
       const level = Number(u.leveling?.level || 1);
       const compSkill = u.skills?.companies;
@@ -164,34 +175,10 @@ export default async function handler(req: any, res: any) {
       );
       const wealth = Number(u.rankings?.userWealth?.value ?? u.wealth ?? 0);
 
-      // Economy vs Combat mode calculation
-      const ecoSkillNames = [
-        "entrepreneurship",
-        "energy",
-        "stamina",
-        "production",
-        "companies",
-        "management",
-      ];
-      let ecoSkillPoints = 0;
-      if (u.skills) {
-        for (const sName of ecoSkillNames) {
-          const sk = u.skills[sName];
-          if (sk && sk.level > 0) {
-            const lvl = Number(sk.level);
-            ecoSkillPoints += (lvl * (lvl + 1)) / 2;
-          }
-        }
-      }
-      const totalSkillPoints = Number(
-        u.leveling?.spentSkillPoints ?? u.leveling?.totalSkillPoints ?? 0,
-      );
-      const effectiveTotalSP =
-        totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
-      const isEconomy = ecoSkillPoints > effectiveTotalSP / 2;
+      const { isEconomy } = calculatePlayerSkillMode(u);
 
       playersList.push({
-        userId: u._id,
+        userId: u._id || u.id,
         username: u.username || "Oyuncu",
         level,
         factoryLimit,

@@ -17,6 +17,7 @@ import {
   getMilitaryUnitWeeklyDamage,
 } from "./src/lib/dailyDamage.ts";
 import { calculatePotentialDamage, isCombatBuild } from "./src/lib/potentialDamage.ts";
+import { calculatePlayerSkillMode } from "./src/lib/playerMode.ts";
 import { COUNTRY_STATS_ARMIES } from "./src/config/countryStatsArmies.js";
 import { getTrpcData } from "./src/utils/wareraTransactions.js";
 import economyDonationsHandler from "./src/server/handlers/economy-donations.js";
@@ -472,7 +473,7 @@ app.get("/api/mu-data", async (req, res) => {
   const forceRefresh = req.query.refresh === "true";
   const userApiKey =
     (req.headers["x-user-api-key"] as string) || (req.query.apiKey as string);
-  const cacheKey = `mu_v7_${muId}`;
+  const cacheKey = `mu_v8_${muId}`;
 
   const cached = cache.get(cacheKey);
   if (
@@ -531,18 +532,22 @@ app.get("/api/mu-data", async (req, res) => {
         const donations: any[] = [];
         const calculatedTotal = 0;
 
-        // Fetch User Lite using token rotation
+        // Fetch the full user profile, including skills.
         try {
-          const userUrl = `https://api2.warera.io/trpc/user.getUserLite?input=${encodeURIComponent(
+          const userUrl = `https://api2.warera.io/trpc/user.getUserById?input=${encodeURIComponent(
             JSON.stringify({ userId }),
           )}`;
-          const userRes = await fetchWarEra(userUrl);
+          const userRes = await fetchWarEra(userUrl, undefined, userApiKey);
           if (userRes.ok) {
             const userJson = await userRes.json();
             userProfile = getTrpcData(userJson);
           }
         } catch (e) {
           console.error(`Error fetching user profile for ${userId}:`, e);
+        }
+
+        if (!userProfile?.skills || typeof userProfile.skills !== "object") {
+          throw new Error(`Oyuncu beceri profili alınamadı: ${userId}`);
         }
 
         const wealth = userProfile?.rankings?.userWealth?.value || 1000;
@@ -630,33 +635,11 @@ app.get("/api/mu-data", async (req, res) => {
         });
 
         // Skills analysis: Check economy vs combat mode
-        const ecoSkillNames = [
-          "entrepreneurship",
-          "energy",
-          "stamina",
-          "production",
-          "companies",
-          "management",
-        ];
-        let ecoSkillPoints = 0;
-        if (userProfile?.skills) {
-          for (const sName of ecoSkillNames) {
-            const sk = userProfile.skills[sName];
-            if (sk && sk.level > 0) {
-              const lvl = Number(sk.level);
-              ecoSkillPoints += (lvl * (lvl + 1)) / 2;
-            }
-          }
-        }
-        const totalSkillPoints = Number(
-          userProfile?.leveling?.spentSkillPoints ??
-            userProfile?.leveling?.totalSkillPoints ??
-            0,
-        );
-        const effectiveTotalSP =
-          totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
-        const playerMode: "economy" | "combat" =
-          ecoSkillPoints > effectiveTotalSP / 2 ? "economy" : "combat";
+        const {
+          playerMode,
+          ecoSkillPoints,
+          totalSkillPoints: effectiveTotalSP,
+        } = calculatePlayerSkillMode(userProfile);
 
         return {
           userId,
@@ -778,8 +761,8 @@ app.post("/api/mu-data", economyDonationsHandler);
 // API Route: Fetch individual player factories and company revenue calculation
 app.get("/api/player-factories", playerFactoriesHandler);
 
-// API Route: Fetch country-wide statistics across the 8 tracked military units
-const COUNTRY_STATS_CACHE_KEY = "warera_country_stats_8_armies_v6";
+// API Route: Fetch country-wide statistics across tracked military units
+const COUNTRY_STATS_CACHE_KEY = "warera_country_stats_v7";
 const COUNTRY_STATS_TTL_MS = 60 * 60 * 1000; // 1 hour cache (weekly update rhythm)
 
 app.get("/api/country-stats", async (req, res) => {
@@ -807,7 +790,7 @@ app.get("/api/country-stats", async (req, res) => {
       avatarUrl?: string;
     }[] = [];
 
-    // 1. Fetch member lists from the 6 military units in parallel
+    // 1. Fetch member lists from the configured military units in parallel
     const muPromises = armiesConfig.map(async (army) => {
       try {
         const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(JSON.stringify({ muId: army.id }))}`;
@@ -867,12 +850,14 @@ app.get("/api/country-stats", async (req, res) => {
         batchInput[String(idx)] = { userId: id };
       });
 
-      const batchUrl = `https://api2.warera.io/trpc/${chunk.map(() => "user.getUserLite").join(",")}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
+      const batchUrl = `https://api2.warera.io/trpc/${chunk.map(() => "user.getUserById").join(",")}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`;
       const bRes = await fetchWarEra(batchUrl, undefined, userApiKey);
       if (bRes.ok) {
         const bJson = await bRes.json();
         const items = Array.isArray(bJson) ? bJson : [bJson];
-        return items.map((item: any) => item?.result?.data).filter(Boolean);
+        return items
+          .map((item: any) => item?.result?.data?.json || item?.result?.data)
+          .filter(Boolean);
       }
       return [];
     });
@@ -884,6 +869,14 @@ app.get("/api/country-stats", async (req, res) => {
       if (userId) uniqueUsersById.set(userId, user);
     }
     const allUsers = Array.from(uniqueUsersById.values());
+    if (
+      allUsers.length !== uniqueUserIds.length ||
+      allUsers.some((user: any) => !user?.skills || typeof user.skills !== "object")
+    ) {
+      throw new Error(
+        "Oyuncu beceri profilleri eksik; ekonomi/savaşçı dağılımı hesaplanamadı.",
+      );
+    }
     allUsers.forEach((u: any) => {
       const level = Number(u.leveling?.level || 1);
       const compSkill = u.skills?.companies;
@@ -893,34 +886,10 @@ app.get("/api/country-stats", async (req, res) => {
       );
       const wealth = Number(u.rankings?.userWealth?.value ?? u.wealth ?? 0);
 
-      // Economy vs Combat mode calculation
-      const ecoSkillNames = [
-        "entrepreneurship",
-        "energy",
-        "stamina",
-        "production",
-        "companies",
-        "management",
-      ];
-      let ecoSkillPoints = 0;
-      if (u.skills) {
-        for (const sName of ecoSkillNames) {
-          const sk = u.skills[sName];
-          if (sk && sk.level > 0) {
-            const lvl = Number(sk.level);
-            ecoSkillPoints += (lvl * (lvl + 1)) / 2;
-          }
-        }
-      }
-      const totalSkillPoints = Number(
-        u.leveling?.spentSkillPoints ?? u.leveling?.totalSkillPoints ?? 0,
-      );
-      const effectiveTotalSP =
-        totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
-      const isEconomy = ecoSkillPoints > effectiveTotalSP / 2;
+      const { isEconomy } = calculatePlayerSkillMode(u);
 
       playersList.push({
-        userId: u._id,
+        userId: u._id || u.id,
         username: u.username || "Oyuncu",
         level,
         factoryLimit,

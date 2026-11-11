@@ -2,6 +2,7 @@
 // Handles shared military unit and player statistics, without donation history lookups.
 
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
+import { calculatePlayerSkillMode } from "../../lib/playerMode.js";
 import { getTrpcData } from "../../utils/wareraTransactions.js";
 
 async function fetchWarEra(
@@ -285,7 +286,7 @@ export default async function handler(req: any, res: any) {
   const forceRefresh = req.query?.refresh === "true";
   const userApiKey =
     (req.headers["x-user-api-key"] as string) || (req.query?.apiKey as string);
-  const cacheKey = `mu_v7_${muId}`;
+  const cacheKey = `mu_v8_${muId}`;
 
   const cached = cache.get(cacheKey);
   if (
@@ -339,16 +340,20 @@ export default async function handler(req: any, res: any) {
         const calculatedTotal = 0;
 
         try {
-          const userUrl = `https://api2.warera.io/trpc/user.getUserLite?input=${encodeURIComponent(
+          const userUrl = `https://api2.warera.io/trpc/user.getUserById?input=${encodeURIComponent(
             JSON.stringify({ userId }),
           )}`;
-          const userRes = await fetchWarEra(userUrl);
+          const userRes = await fetchWarEra(userUrl, undefined, userApiKey);
           if (userRes.ok) {
             const userJson = await userRes.json();
             userProfile = getTrpcData(userJson);
           }
         } catch (e) {
           console.error(`Error user ${userId}:`, e);
+        }
+
+        if (!userProfile?.skills || typeof userProfile.skills !== "object") {
+          throw new Error(`Oyuncu beceri profili alınamadı: ${userId}`);
         }
 
         const wealth = userProfile?.rankings?.userWealth?.value || 1000;
@@ -427,33 +432,11 @@ export default async function handler(req: any, res: any) {
         });
 
         // Skills analysis: Check economy vs combat mode
-        const ecoSkillNames = [
-          "entrepreneurship",
-          "energy",
-          "stamina",
-          "production",
-          "companies",
-          "management",
-        ];
-        let ecoSkillPoints = 0;
-        if (userProfile?.skills) {
-          for (const sName of ecoSkillNames) {
-            const sk = userProfile.skills[sName];
-            if (sk && sk.level > 0) {
-              const lvl = Number(sk.level);
-              ecoSkillPoints += (lvl * (lvl + 1)) / 2;
-            }
-          }
-        }
-        const totalSkillPoints = Number(
-          userProfile?.leveling?.spentSkillPoints ??
-            userProfile?.leveling?.totalSkillPoints ??
-            0,
-        );
-        const effectiveTotalSP =
-          totalSkillPoints > 0 ? totalSkillPoints : Math.max(1, ecoSkillPoints);
-        const playerMode: "economy" | "combat" =
-          ecoSkillPoints > effectiveTotalSP / 2 ? "economy" : "combat";
+        const {
+          playerMode,
+          ecoSkillPoints,
+          totalSkillPoints: effectiveTotalSP,
+        } = calculatePlayerSkillMode(userProfile);
 
         const lastActive =
           userProfile?.dates?.lastConnectionAt ||

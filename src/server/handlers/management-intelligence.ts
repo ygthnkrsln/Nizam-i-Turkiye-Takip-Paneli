@@ -109,7 +109,7 @@ async function queryBatchUsers(ids: string[]): Promise<any[]> {
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += 25) chunks.push(ids.slice(i, i + 25));
   const batches = await mapWithConcurrency(chunks, 4, async (chunk) => {
-    const procedure = "user.getUserLite";
+    const procedure = "user.getUserById";
     const url = new URL(`https://api2.warera.io/trpc/${chunk.map(() => procedure).join(",")}`);
     url.searchParams.set("batch", "1");
     url.searchParams.set("input", JSON.stringify(Object.fromEntries(chunk.map((userId, index) => [String(index), { userId }]))));
@@ -615,8 +615,11 @@ function skillTotal(skills: any, keys: string[]): number {
 }
 
 function profileRow(profile: any, joinedAt: string | null, governmentRoles: string[], voteMin: number, minDays: number, now: number) {
+  if (!profile?.skills || typeof profile.skills !== "object") {
+    throw new Error("Oyuncu beceri profili eksik; oyuncu sınıfı hesaplanamadı.");
+  }
   const dates = profile?.dates || {};
-  const skills = profile?.skills || {};
+  const skills = profile.skills;
   const level = Number(profile?.leveling?.level || profile?.level || 0);
   const militaryPoints = skillTotal(skills, MILITARY_SKILLS);
   const economyPoints = skillTotal(skills, ECONOMY_SKILLS);
@@ -863,7 +866,7 @@ async function citizensData(force = false, countryFilter = "all") {
     government: publicGovernments.find((item) => item.country.key === (activeCountry?.country.key || "tr"))?.government,
     actions,
     fetchedAt: new Date().toISOString(),
-    source: "user.getUsersByCountry · user.getUserLite · government.getByCountryId · gameConfig",
+    source: "user.getUsersByCountry · user.getUserById · government.getByCountryId · gameConfig",
     note: "Asker/ekonomist sınıfı askeri ve ekonomi beceri seviyeleri karşılaştırılarak hesaplanır. Profil alınabilen kişi: " + profileCount + "/" + counts.total + ".",
     warnings: missingProfiles ? [missingProfiles + " vatandaş profil verisi alınamadı."] : [],
     countries: publicCountries,
@@ -947,7 +950,7 @@ export default async function handler(req: any, res: any) {
     : view === "country-tracker"
       ? countrySelectionProvided ? (selectedCountryIds?.length ? [...selectedCountryIds].sort().join("-") : "none") : "default"
       : "all";
-  const key = `nizam_management_${view}_${selectionKey}_v3`;
+  const key = `nizam_management_${view}_${selectionKey}_v4`;
   const ttl = view === "citizens" ? 10 * 60_000 : view === "country-tracker" ? 30_000 : VIEW_TTL_MS;
   try {
     const cached = viewCache.get(key);

@@ -36,7 +36,7 @@ The canonical tracked unit list is `src/config/trackedArmies.ts`; server and cli
 
 - Cron route: `api/cron/record-daily-damage.ts` → `src/server/services/daily-damage.ts`.
 - Shared snapshots: player profiles are keyed once per user while daily army membership is stored separately; `src/lib/supabaseStorage.ts` handles backward-compatible persistence and `src/lib/dailyDamage.ts` resolves legacy and current snapshot shapes.
-- Economy/combat mode classification: `src/lib/playerMode.ts`; consumers include the snapshot service and management handlers.
+- Economy/combat mode classification: `src/lib/playerMode.ts`; mode-sensitive profile flows use `user.getUserById` because `user.getUserLite` no longer includes skills. Consumers include daily snapshots, management handlers, country statistics, and military-unit data.
 - Snapshot dates are retained for 30 days. Check the `Europe/Istanbul` game-day offset/reset logic before changing date calculations.
 - Local Express routes are separately defined in `server.ts`; when changing cron/snapshot behavior, compare the local route with the Vercel API route.
 
