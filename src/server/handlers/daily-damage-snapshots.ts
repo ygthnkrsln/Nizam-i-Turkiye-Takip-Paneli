@@ -44,15 +44,18 @@ export default async function handler(req: any, res: any) {
     }
 
     const directory = new Map<string, { userId: string; username: string; armyNames: Set<string> }>();
-    const latestDate = Object.keys(store).sort().at(-1) || null;
-    const latestSnapshot = latestDate ? store[latestDate] : undefined;
-    for (const army of TRACKED_ARMIES) {
-      const members = getSnapshotArmyMembers(latestSnapshot, army.id);
-      for (const [userId, member] of Object.entries(members) as [string, { username?: string }][]) {
-        const entry = directory.get(userId) || { userId, username: "", armyNames: new Set<string>() };
-        if (member.username) entry.username = member.username;
-        entry.armyNames.add(army.name);
-        directory.set(userId, entry);
+    const snapshotDates = Object.keys(store).sort().slice(-30).reverse();
+    const latestDate = snapshotDates[0] || null;
+    for (const date of snapshotDates) {
+      const snapshot = store[date];
+      for (const army of TRACKED_ARMIES) {
+        const members = getSnapshotArmyMembers(snapshot, army.id);
+        for (const [userId, member] of Object.entries(members) as [string, { username?: string }][]) {
+          const entry = directory.get(userId) || { userId, username: "", armyNames: new Set<string>() };
+          if (!entry.username && member.username) entry.username = member.username;
+          entry.armyNames.add(army.name);
+          directory.set(userId, entry);
+        }
       }
     }
 

@@ -22,7 +22,7 @@ This document is a navigation index for coding assistants and contributors. It d
 
 ### Donation tracking
 
-1. `src/components/ManagementDonationTrackingSection.tsx` requests the management overview through `src/services/wareraApi.ts`.
+1. `src/components/ManagementDonationTrackingSection.tsx` requests the management overview through `src/services/wareraApi.ts`; its player autocomplete combines the saved 30-day tracked-player directory with members in the current overview response.
 2. `src/server/handlers/management-overview.ts` fetches tracked-unit membership, user profiles and donations; it combines current data with daily snapshots and aggregates the overview.
 3. `src/server/services/daily-damage.ts` records one player-keyed profile for every player seen in tracked armies during the 30-day window, plus each day's tracked-army membership. The scheduled cron captures each player's daily income calculation and eligibility, and advances a signed country-donation balance from the daily target and donation transactions. Nonzero balances remain player-keyed across inactivity and army changes.
 4. `src/lib/supabaseStorage.ts` stores player snapshots and donation balances inside the existing `daily_snapshots.armies` JSONB payload (under `__players`) to avoid a database migration, normalizes them on read, and enforces the 30-day snapshot retention policy.

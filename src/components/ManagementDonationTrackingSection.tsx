@@ -319,6 +319,28 @@ export const ManagementDonationTrackingSection: React.FC<Props> = ({ onSelectArm
       const response = await fetchManagementOverview(weekStart, forceRefresh, controller.signal);
       if (requestId === requestSequence.current) {
         setData(response);
+        setTrackedPlayers((currentPlayers) => {
+          const playersById = new Map<string, TrackedPlayerDirectoryEntry>(
+            currentPlayers.map((player): [string, TrackedPlayerDirectoryEntry] => [
+              player.userId,
+              player,
+            ]),
+          );
+          for (const army of response.armies) {
+            if (army.dataAvailable === false) continue;
+            for (const member of army.members) {
+              const existing = playersById.get(member.userId);
+              playersById.set(member.userId, {
+                userId: member.userId,
+                username: member.username || existing?.username || member.userId,
+                armyNames: Array.from(new Set([...(existing?.armyNames || []), army.name])),
+              });
+            }
+          }
+          return Array.from(playersById.values())
+            .filter((player) => player.username)
+            .sort((a, b) => a.username.localeCompare(b.username, "tr"));
+        });
         const targetRefresh = response.donationTargetsRefresh;
         if (targetRefresh?.error) {
           setTargetRefreshMessage(`Hedefler otomatik güncellenemedi: ${targetRefresh.error}`);
