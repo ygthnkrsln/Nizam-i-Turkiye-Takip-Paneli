@@ -71,6 +71,9 @@ export const DailyDamageTelemetrySection: React.FC<
   const [pillFilter, setPillFilter] = useState<
     "all" | "ready" | "buff" | "debuff"
   >("all");
+  const [playerModeFilter, setPlayerModeFilter] = useState<
+    "all" | "fighter" | "economy"
+  >("all");
 
   // Sorting
   const [sortField, setSortField] = useState<SortField>("damage");
@@ -322,6 +325,9 @@ export const DailyDamageTelemetrySection: React.FC<
   // Filter and sort members
   const filteredAndSortedMembers = useMemo(() => {
     let list = membersWithDailyDamage.filter((m) => {
+      if (playerModeFilter === "fighter" && !m.isFighter) return false;
+      if (playerModeFilter === "economy" && m.isFighter) return false;
+
       // Pill filter
       if (pillFilter !== "all" && m.pillStatus !== pillFilter) return false;
 
@@ -366,6 +372,7 @@ export const DailyDamageTelemetrySection: React.FC<
     return list;
   }, [
     membersWithDailyDamage,
+    playerModeFilter,
     pillFilter,
     searchQuery,
     sortField,
@@ -747,6 +754,34 @@ export const DailyDamageTelemetrySection: React.FC<
             placeholder="Kullanıcı adı veya ID ara..."
             className="w-full pl-9 pr-4 py-2 rounded-xl bg-[#141C21] border border-rose-500/30 text-xs font-mono text-white placeholder:text-[#BBE1FA]/40 focus:outline-none focus:border-rose-400 transition-colors"
           />
+        </div>
+
+        <div
+          role="group"
+          aria-label="Oyuncu modu filtresi"
+          className="inline-flex shrink-0 rounded-xl border border-rose-500/25 bg-[#141C21] p-1"
+        >
+          {([
+            ["all", "Varsayılan"],
+            ["fighter", "Savaşçı"],
+            ["economy", "Ekonomi"],
+          ] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={playerModeFilter === mode}
+              onClick={() => setPlayerModeFilter(mode)}
+              className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors ${
+                playerModeFilter === mode
+                  ? mode === "economy"
+                    ? "bg-emerald-950/80 text-emerald-300"
+                    : "bg-rose-950/80 text-rose-200"
+                  : "text-[#BBE1FA]/60 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Butonlar: Hasar Güncelle, PDF İndir, Sütunlar */}
