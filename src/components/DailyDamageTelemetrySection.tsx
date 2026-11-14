@@ -1033,6 +1033,7 @@ export const DailyDamageTelemetrySection: React.FC<
             {filteredAndSortedMembers.map((member) => {
               const pillMs = getPillRemainingMs(member.pillExpiresAt);
               const isPillActive = pillMs > 0;
+              const isPillDebuff = member.pillStatus === "debuff";
               const skillsReset = getSkillsResetInfo(member);
 
               const finishTimeStr = member.pillExpiresAt
@@ -1111,8 +1112,12 @@ export const DailyDamageTelemetrySection: React.FC<
                     <td className="p-3.5">
                       {isPillActive ? (
                         <div
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#141C21] border border-emerald-500/30 text-emerald-400 text-xs font-bold"
-                          title={`Bitiş: ${finishTimeStr} (TSİ UTC+3)`}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#141C21] text-xs font-bold ${
+                            isPillDebuff
+                              ? "border border-rose-500/40 text-rose-400"
+                              : "border border-emerald-500/30 text-emerald-400"
+                          }`}
+                          title={`${isPillDebuff ? "Debuff" : "Buff"} · Bitiş: ${finishTimeStr} (TSİ UTC+3)`}
                         >
                           <span>💊</span>
                           <span>{formatCountdown(pillMs)}</span>
@@ -1449,7 +1454,13 @@ export const DailyDamageTelemetrySection: React.FC<
                 <span className="text-[#BBE1FA]/60">Pill Durumu:</span>
                 <span className="font-bold text-white">
                   {getPillRemainingMs(selectedMember.pillExpiresAt) > 0 ? (
-                    <span className="text-emerald-400">
+                    <span
+                      className={
+                        selectedMember.pillStatus === "debuff"
+                          ? "text-rose-400"
+                          : "text-emerald-400"
+                      }
+                    >
                       💊{" "}
                       {formatCountdown(
                         getPillRemainingMs(selectedMember.pillExpiresAt),
