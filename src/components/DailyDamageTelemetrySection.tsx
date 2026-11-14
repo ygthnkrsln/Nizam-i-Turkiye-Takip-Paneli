@@ -343,6 +343,10 @@ export const DailyDamageTelemetrySection: React.FC<
     });
 
     list.sort((a, b) => {
+      const pillPriority = { buff: 0, debuff: 1, ready: 2 } as const;
+      const statusComparison = pillPriority[a.pillStatus] - pillPriority[b.pillStatus];
+      if (statusComparison !== 0) return statusComparison;
+
       let comparison = 0;
       if (sortField === "name") {
         comparison = a.username.localeCompare(b.username);
