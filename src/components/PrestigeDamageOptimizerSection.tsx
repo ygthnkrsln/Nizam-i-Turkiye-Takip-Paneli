@@ -22,7 +22,7 @@ import {
 
 const missionKeys: MissionKey[] = ["daily", "weekly", "monthly"];
 const numberFormat = new Intl.NumberFormat("tr-TR");
-const OPTIMIZER_STORAGE_KEY = "nizam_level_prestige_optimizer_v1";
+const OPTIMIZER_STORAGE_KEY = "nizam_level_prestige_optimizer_v2";
 
 function loadOptimizerPreferences(): { settings: PrestigeOptimizerSettings; damageRates: LevelDamageRate[] } {
   if (typeof window === "undefined") return { settings: DEFAULT_OPTIMIZER_SETTINGS, damageRates: DEFAULT_LEVEL_DAMAGE };
