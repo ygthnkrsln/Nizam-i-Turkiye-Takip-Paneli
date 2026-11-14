@@ -4,7 +4,7 @@
 import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
 
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
-import { calculatePotentialDamage, isCombatBuild } from "../../lib/potentialDamage.js";
+import { calculatePotentialDamage, isCombatBuild, isPlayerInactive } from "../../lib/potentialDamage.js";
 import {
   calculateDailyDamageFromSnapshot,
   findBaselineForCurrentCycle as selectDailyDamageBaseline,
@@ -201,6 +201,7 @@ export default async function handler(req: any, res: any) {
         baselineWeekly,
       );
       const isFighter = isCombatBuild(u);
+      const isInactive = isPlayerInactive(u.dates?.lastConnectionAt);
       const potentialDamage = calculatePotentialDamage(
         u.leveling?.level || 1,
         healthCurrent,
@@ -218,6 +219,7 @@ export default async function handler(req: any, res: any) {
         avatarUrl: u.avatarUrl || "",
         level: u.leveling?.level || 1,
         isFighter,
+        isInactive,
         potentialDamage,
         militaryRank: u.militaryRank || 1,
         role,

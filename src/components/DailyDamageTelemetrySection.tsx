@@ -238,7 +238,12 @@ export const DailyDamageTelemetrySection: React.FC<
   }, [data, membersWithDailyDamage]);
 
   const totalPotentialDamage = useMemo(
-    () => membersWithDailyDamage.reduce((sum, member) => sum + (member.potentialDamage || 0), 0),
+    () =>
+      membersWithDailyDamage.reduce(
+        (sum, member) =>
+          sum + (member.isFighter && !member.isInactive ? member.potentialDamage || 0 : 0),
+        0,
+      ),
     [membersWithDailyDamage],
   );
   const fighterCount = useMemo(
@@ -1085,7 +1090,7 @@ export const DailyDamageTelemetrySection: React.FC<
                 <tr
                   key={member.userId}
                   onClick={() => setSelectedMember(member)}
-                  className="hover:bg-rose-950/15 transition-colors cursor-pointer group"
+                  className={`hover:bg-rose-950/15 transition-colors cursor-pointer group ${member.isInactive ? "opacity-50" : ""}`}
                 >
                   {/* Sütun 1: Ordu Üyesi (Avatar, Flag pin, İsim, Rozet, Lv, ID) */}
                   <td className="p-3.5">

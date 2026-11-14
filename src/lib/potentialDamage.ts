@@ -16,6 +16,17 @@ function clampRatio(current: unknown, maximum: unknown): number {
   return Math.min(1, Math.max(0, value / max));
 }
 
+export function isPlayerInactive(lastConnectionAt?: unknown, now = Date.now()): boolean {
+  const lastConnectionTime = lastConnectionAt instanceof Date
+    ? lastConnectionAt.getTime()
+    : typeof lastConnectionAt === "number"
+      ? lastConnectionAt
+      : lastConnectionAt
+        ? new Date(String(lastConnectionAt)).getTime()
+        : NaN;
+  return Number.isFinite(lastConnectionTime) && now - lastConnectionTime > 3 * 24 * 60 * 60 * 1000;
+}
+
 export function isCombatBuild(user: any): boolean {
   const skills = user?.skills || {};
   const economySkillPoints = ECONOMY_SKILLS.reduce((sum, key) => {
@@ -41,15 +52,7 @@ export function calculatePotentialDamage(
   const playerLevel = Number(level);
   if (!isFighter || !Number.isFinite(playerLevel) || playerLevel < 1) return 0;
 
-  const lastConnectionTime = lastConnectionAt instanceof Date
-    ? lastConnectionAt.getTime()
-    : typeof lastConnectionAt === "number"
-      ? lastConnectionAt
-      : lastConnectionAt
-        ? new Date(String(lastConnectionAt)).getTime()
-        : NaN;
-  const inactiveThresholdMs = 3 * 24 * 60 * 60 * 1000;
-  if (Number.isFinite(lastConnectionTime) && Date.now() - lastConnectionTime > inactiveThresholdMs) return 0;
+  if (isPlayerInactive(lastConnectionAt)) return 0;
 
   const rawPrestige = Number(prestigeLevel);
   const safePrestige = Number.isFinite(rawPrestige) ? Math.max(0, rawPrestige) : 0;

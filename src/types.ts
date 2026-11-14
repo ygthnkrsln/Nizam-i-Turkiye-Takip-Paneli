@@ -314,6 +314,7 @@ export interface CombatMemberTelemetry {
   avatarUrl: string;
   level: number;
   isFighter: boolean;
+  isInactive: boolean;
   potentialDamage: number;
   militaryRank: number;
   role: "leader" | "commander" | "manager" | "soldier";
