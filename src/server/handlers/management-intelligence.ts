@@ -146,7 +146,10 @@ async function queryBatchProcedure(procedure: string, inputs: Record<string, any
 }
 
 async function factoryAuditData(force = false) {
-  const { raw: countries } = await getCountries(force);
+  const [{ raw: countries }, rawRegions] = await Promise.all([
+    getCountries(force),
+    query("region.getRegionsObject", undefined, force, 5 * 60_000),
+  ]);
   const normalized = countries.map((country) => ({
     id: countryId(country),
     name: String(country?.name || "Bilinmeyen ülke"),
@@ -219,6 +222,10 @@ async function factoryAuditData(force = false) {
   });
 
   const countryNames = new Map(normalized.map((country) => [country.id, country.name]));
+  const regionRows = Array.isArray(rawRegions)
+    ? rawRegions
+    : Object.entries(rawRegions || {}).map(([id, region]: [string, any]) => ({ ...region, _id: region?._id || id }));
+  const regionsById = new Map<string, any>(regionRows.map((region: any): [string, any] => [String(region?._id || region?.id || ""), region]));
   const rows = rosters.flatMap((roster) => roster.ids.map((id) => {
     const profile = players.get(id);
     if (!profile) return null;
@@ -226,11 +233,13 @@ async function factoryAuditData(force = false) {
     const companies = playerCompanyIds.flatMap((companyId) => {
       const company = companyById.get(companyId);
       if (!company) return [];
-      const location = company.countryId ?? company.country?._id ?? company.country?.id ?? company.country;
+      const companyRegionId = String(company.regionId ?? company.region?._id ?? company.region?.id ?? company.region ?? "");
+      const region = regionsById.get(companyRegionId);
+      const location = company.countryId ?? company.country?._id ?? company.country?.id ?? company.country ?? region?.countryId ?? region?.country;
       const factoryCountryId = typeof location === "object" ? String(location?._id || location?.id || "") : String(location || "");
       const explicitName = typeof company.country === "object" ? company.country?.name : company.countryName;
       const countryName = String(explicitName || countryNames.get(factoryCountryId) || (factoryCountryId ? factoryCountryId : "Konum bilinmiyor"));
-      return [{ id: companyId, name: String(company.name || company.companyName || company.itemCode || "Fabrika"), countryId: factoryCountryId, countryName, outsideTurkey: Boolean(factoryCountryId && factoryCountryId !== TURKEY_ID) }];
+      return [{ id: companyId, name: String(company.name || company.companyName || company.itemCode || "Fabrika"), regionName: String(region?.name || company.regionName || ""), countryId: factoryCountryId, countryName, outsideTurkey: Boolean(factoryCountryId && factoryCountryId !== TURKEY_ID) }];
     });
     const outsideFactories = companies.filter((company) => company.outsideTurkey);
     const unknownLocationCount = Math.max(0, playerCompanyIds.length - companies.length) + companies.filter((company) => !company.countryId).length;
@@ -262,7 +271,7 @@ async function factoryAuditData(force = false) {
     },
     countries: rosters.map(({ key, label, countryId, ids, complete }) => ({ key, label, countryId, citizens: ids.length, complete })),
     fetchedAt: new Date().toISOString(),
-    source: "user.getUsersByCountry · user.getUserById · company.getCompanies · company.getById",
+    source: "user.getUsersByCountry · user.getUserById · company.getCompanies · company.getById · region.getRegionsObject",
     note: "Türkiye ve Kamerun vatandaşlarının sahip olduğu fabrikalar taranır. Türkiye dışı fabrika sayısına yalnızca konumu API'den doğrulanan fabrikalar eklenir; konumu çözülemeyenler eksik tarama olarak işaretlenir.",
   };
 }
@@ -1090,7 +1099,8 @@ export default async function handler(req: any, res: any) {
     : view === "country-tracker"
       ? countrySelectionProvided ? (selectedCountryIds?.length ? [...selectedCountryIds].sort().join("-") : "none") : "default"
       : "all";
-  const key = `nizam_management_${view}_${selectionKey}_v4`;
+  const cacheVersion = view === "factory-audit" ? "v5" : "v4";
+  const key = `nizam_management_${view}_${selectionKey}_${cacheVersion}`;
   const ttl = view === "citizens" || view === "factory-audit" ? 10 * 60_000 : view === "country-tracker" ? 30_000 : VIEW_TTL_MS;
   try {
     const cached = viewCache.get(key);
