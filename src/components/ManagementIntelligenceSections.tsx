@@ -323,12 +323,12 @@ export function ManagementFactoryAuditSection() {
 
   return (
     <div className="space-y-4">
-      <PageHeading title="Fabrika Konum Takibi" subtitle="Kamerun vatandaşlarının Kamerun dışındaki, Türkiye vatandaşlarının Türkiye dışındaki fabrikalarını bulun ve toplu mesaj olarak kopyalayın." onRefresh={reload} refreshing={refreshing} />
+      <PageHeading title="Fabrika Konum Takibi" subtitle="Yalnızca son 24 saatte giriş yapan oyuncuları ve aktif fabrika slotlarını tarayın; kendi ülkesi dışındaki fabrikaları topluca kopyalayın." onRefresh={reload} refreshing={refreshing} />
       <StatusMessage error={error} loading={loading && !data} />
       {data && <>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="Taranan vatandaş" value={`${formatNumber(counts.profiled)} / ${formatNumber(counts.citizens)}`} detail="Türkiye ve Kamerun" icon={<Users className="h-4 w-4" />} />
-          <MetricCard label="Bulunan fabrika" value={formatNumber(counts.factories)} detail="Sahip olunan fabrikalar" tone="good" icon={<Factory className="h-4 w-4" />} />
+          <MetricCard label="Aktif oyuncu" value={`${formatNumber(counts.activePlayers)} / ${formatNumber(counts.citizens)}`} detail="Son 24 saatte giriş yapan" icon={<Users className="h-4 w-4" />} />
+          <MetricCard label="Aktif fabrika" value={formatNumber(counts.factories)} detail="Açık fabrika slotları" tone="good" icon={<Factory className="h-4 w-4" />} />
           <MetricCard label="Kendi ülkesi dışındaki fabrika" value={formatNumber(counts.outsideFactories)} detail={`${formatNumber(counts.citizensWithOutsideFactories)} vatandaşta bulunuyor`} tone={counts.outsideFactories ? "warn" : "good"} icon={<Flag className="h-4 w-4" />} />
           <MetricCard label="Eksik tarama" value={formatNumber(counts.incompleteScans)} detail="Profil veya fabrika sayfalaması tamamlanamadı" tone={counts.incompleteScans ? "warn" : "good"} icon={<Activity className="h-4 w-4" />} />
         </div>

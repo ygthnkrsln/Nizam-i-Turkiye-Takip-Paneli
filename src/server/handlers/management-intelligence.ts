@@ -11,6 +11,7 @@ const ACTIVE_CITIZEN_PROFILE_LIMIT = 5_000;
 const ACTIVE_CITIZEN_WINDOW_MS = 24 * 60 * 60 * 1000;
 const COUNTRY_WEALTH_TRACKING_LIMIT = 4;
 const USER_PROFILE_LIMIT = 2_000;
+const FACTORY_AUDIT_ACTIVE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const VIEW_TTL_MS = 5 * 60 * 1000;
 const QUERY_TTL_MS = 2 * 60 * 1000;
 type AnyRecord = Record<string, any>;
@@ -187,9 +188,17 @@ async function factoryAuditData(force = false) {
     if (id && profile && typeof profile === "object") players.set(id, profile);
   });
 
+  const now = Date.now();
+  const activePlayerIds = new Set(allIds.filter((id) => {
+    const lastConnectionAt = players.get(id)?.dates?.lastConnectionAt;
+    if (!lastConnectionAt) return false;
+    const lastConnection = new Date(lastConnectionAt).getTime();
+    return Number.isFinite(lastConnection) && now - lastConnection <= FACTORY_AUDIT_ACTIVE_WINDOW_MS;
+  }));
+
   const companyIdsByPlayer = new Map<string, string[]>();
   const companyScanErrors = new Set<string>();
-  let remaining = allIds.filter((id) => players.has(id)).map((userId) => ({ userId, cursor: "" }));
+  let remaining = Array.from(activePlayerIds).map((userId) => ({ userId, cursor: "" }));
   for (let page = 0; page < 5 && remaining.length; page++) {
     const inputs = remaining.map(({ userId, cursor }) => ({ userId, perPage: 100, ...(cursor ? { cursor } : {}) }));
     const responses = await queryBatchProcedure("company.getCompanies", inputs);
@@ -228,9 +237,39 @@ async function factoryAuditData(force = false) {
   const regionsById = new Map<string, any>(regionRows.map((region: any): [string, any] => [String(region?._id || region?.id || ""), region]));
   const rows = rosters.flatMap((roster) => roster.ids.map((id) => {
     const profile = players.get(id);
-    if (!profile) return null;
+    if (!profile || !activePlayerIds.has(id)) return null;
     const playerCompanyIds = Array.from(new Set(companyIdsByPlayer.get(id) || []));
-    const companies = playerCompanyIds.flatMap((companyId) => {
+    const playerCompanies = playerCompanyIds.flatMap((companyId) => {
+      const company = companyById.get(companyId);
+      if (!company) return [];
+      return [{ id: companyId, company }];
+    }).sort((left, right) => {
+      const a = left.company;
+      const b = right.company;
+      const autoA = Number(a?.activeUpgradeLevels?.automatedEngine ?? a?.upgradesV2?.upgrades?.automatedEngine?.level ?? 0);
+      const autoB = Number(b?.activeUpgradeLevels?.automatedEngine ?? b?.upgradesV2?.upgrades?.automatedEngine?.level ?? 0);
+      if (autoB !== autoA) return autoB - autoA;
+      const storageA = Number(a?.activeUpgradeLevels?.storage ?? a?.upgradesV2?.upgrades?.storage?.level ?? 1);
+      const storageB = Number(b?.activeUpgradeLevels?.storage ?? b?.upgradesV2?.upgrades?.storage?.level ?? 1);
+      if (storageB !== storageA) return storageB - storageA;
+      const breakRoomA = Number(a?.activeUpgradeLevels?.breakRoom ?? a?.upgradesV2?.upgrades?.breakRoom?.level ?? 0);
+      const breakRoomB = Number(b?.activeUpgradeLevels?.breakRoom ?? b?.upgradesV2?.upgrades?.breakRoom?.level ?? 0);
+      if (breakRoomB !== breakRoomA) return breakRoomB - breakRoomA;
+      return Number(b?.productionRatePerHour ?? b?.production ?? 0) - Number(a?.productionRatePerHour ?? a?.production ?? 0);
+    });
+    const companiesSkill = profile?.skills?.companies;
+    const skillTotal = Number(companiesSkill?.total);
+    const skillLevel = Number(companiesSkill?.level);
+    const skillPrestige = Number(companiesSkill?.prestige);
+    const factoryLimit = Number.isFinite(skillTotal) && skillTotal >= 0
+      ? Math.floor(skillTotal)
+      : Number.isFinite(skillLevel) && Number.isFinite(skillPrestige)
+        ? Math.max(0, 2 + skillLevel + skillPrestige)
+        : Number.isFinite(skillLevel) && skillLevel >= 0
+          ? Math.max(0, 2 + skillLevel)
+          : 2;
+    const activeCompanyIds = playerCompanies.slice(0, factoryLimit).map(({ id: companyId }) => companyId);
+    const companies = activeCompanyIds.flatMap((companyId) => {
       const company = companyById.get(companyId);
       if (!company) return [];
       const companyRegionId = String(company.regionId ?? company.region?._id ?? company.region?.id ?? company.region ?? "");
@@ -242,14 +281,15 @@ async function factoryAuditData(force = false) {
       return [{ id: companyId, name: String(company.name || company.companyName || company.itemCode || "Fabrika"), regionName: String(region?.name || company.regionName || ""), countryId: factoryCountryId, countryName, outsideHomeCountry: Boolean(factoryCountryId && factoryCountryId !== roster.countryId) }];
     });
     const outsideFactories = companies.filter((company) => company.outsideHomeCountry);
-    const unknownLocationCount = Math.max(0, playerCompanyIds.length - companies.length) + companies.filter((company) => !company.countryId).length;
+    const unknownLocationCount = Math.max(0, activeCompanyIds.length - companies.length) + companies.filter((company) => !company.countryId).length;
     return {
       id,
       name: String(profile.username || id.slice(0, 8)),
       url: `https://app.warera.io/user/${id}`,
       countryKey: roster.key,
       countryName: roster.label,
-      factoryCount: playerCompanyIds.length,
+      factoryCount: activeCompanyIds.length,
+      ownedFactoryCount: playerCompanyIds.length,
       outsideFactoryCount: outsideFactories.length,
       unknownLocationCount,
       companies,
@@ -264,15 +304,16 @@ async function factoryAuditData(force = false) {
     counts: {
       citizens: allIds.length,
       profiled: players.size,
-      factories: allCompanyIds.length,
+      factories: sortedRows.reduce((sum: number, row: any) => sum + row.factoryCount, 0),
       outsideFactories: sortedRows.reduce((sum: number, row: any) => sum + row.outsideFactoryCount, 0),
       citizensWithOutsideFactories: sortedRows.filter((row: any) => row.outsideFactoryCount > 0).length,
+      activePlayers: activePlayerIds.size,
       incompleteScans: companyScanErrors.size + (allIds.length - players.size) + sortedRows.filter((row: any) => !row.scanComplete).length + rosters.filter((roster) => !roster.complete).length,
     },
     countries: rosters.map(({ key, label, countryId, ids, complete }) => ({ key, label, countryId, citizens: ids.length, complete })),
     fetchedAt: new Date().toISOString(),
     source: "user.getUsersByCountry · user.getUserById · company.getCompanies · company.getById · region.getRegionsObject",
-    note: "Fabrika konumu vatandaşın ülkesiyle karşılaştırılır: Kamerun vatandaşlarında Kamerun dışı, Türkiye vatandaşlarında Türkiye dışı fabrikalar işaretlenir. Konumu çözülemeyen fabrikalar eksik tarama olarak işaretlenir.",
+    note: "Son 24 saatte giriş yapan oyuncular gösterilir. Fabrikalar oyuncunun şirket becerisiyle açılan aktif fabrika slotlarına göre seçilir ve ülkeyle karşılaştırılır.",
   };
 }
 
