@@ -239,9 +239,9 @@ async function factoryAuditData(force = false) {
       const factoryCountryId = typeof location === "object" ? String(location?._id || location?.id || "") : String(location || "");
       const explicitName = typeof company.country === "object" ? company.country?.name : company.countryName;
       const countryName = String(explicitName || countryNames.get(factoryCountryId) || (factoryCountryId ? factoryCountryId : "Konum bilinmiyor"));
-      return [{ id: companyId, name: String(company.name || company.companyName || company.itemCode || "Fabrika"), regionName: String(region?.name || company.regionName || ""), countryId: factoryCountryId, countryName, outsideTurkey: Boolean(factoryCountryId && factoryCountryId !== TURKEY_ID) }];
+      return [{ id: companyId, name: String(company.name || company.companyName || company.itemCode || "Fabrika"), regionName: String(region?.name || company.regionName || ""), countryId: factoryCountryId, countryName, outsideHomeCountry: Boolean(factoryCountryId && factoryCountryId !== roster.countryId) }];
     });
-    const outsideFactories = companies.filter((company) => company.outsideTurkey);
+    const outsideFactories = companies.filter((company) => company.outsideHomeCountry);
     const unknownLocationCount = Math.max(0, playerCompanyIds.length - companies.length) + companies.filter((company) => !company.countryId).length;
     return {
       id,
@@ -272,7 +272,7 @@ async function factoryAuditData(force = false) {
     countries: rosters.map(({ key, label, countryId, ids, complete }) => ({ key, label, countryId, citizens: ids.length, complete })),
     fetchedAt: new Date().toISOString(),
     source: "user.getUsersByCountry · user.getUserById · company.getCompanies · company.getById · region.getRegionsObject",
-    note: "Türkiye ve Kamerun vatandaşlarının sahip olduğu fabrikalar taranır. Türkiye dışı fabrika sayısına yalnızca konumu API'den doğrulanan fabrikalar eklenir; konumu çözülemeyenler eksik tarama olarak işaretlenir.",
+    note: "Fabrika konumu vatandaşın ülkesiyle karşılaştırılır: Kamerun vatandaşlarında Kamerun dışı, Türkiye vatandaşlarında Türkiye dışı fabrikalar işaretlenir. Konumu çözülemeyen fabrikalar eksik tarama olarak işaretlenir.",
   };
 }
 
@@ -1099,7 +1099,7 @@ export default async function handler(req: any, res: any) {
     : view === "country-tracker"
       ? countrySelectionProvided ? (selectedCountryIds?.length ? [...selectedCountryIds].sort().join("-") : "none") : "default"
       : "all";
-  const cacheVersion = view === "factory-audit" ? "v5" : "v4";
+  const cacheVersion = view === "factory-audit" ? "v6" : "v4";
   const key = `nizam_management_${view}_${selectionKey}_${cacheVersion}`;
   const ttl = view === "citizens" || view === "factory-audit" ? 10 * 60_000 : view === "country-tracker" ? 30_000 : VIEW_TTL_MS;
   try {
