@@ -297,22 +297,9 @@ export function ManagementFactoryAuditSection() {
     const reportRows = (data?.rows || []).filter((row: AnyRecord) =>
       Number(row.outsideFactoryCount) > 0 && (countryFilter === "all" || row.countryKey === countryFilter),
     );
-    const groups = countries
-      .filter((country: AnyRecord) => countryFilter === "all" || country.key === countryFilter)
-      .map((country: AnyRecord) => {
-        const countryRows = reportRows.filter((row: AnyRecord) => row.countryKey === country.key);
-        if (!countryRows.length) return "";
-        const flag = country.key === "cm" ? "🇨🇲" : "🇹🇷";
-        const lines = countryRows.map((row: AnyRecord) => {
-          const locations = row.outsideFactories.map((factory: AnyRecord) =>
-            `${factory.name} (${[factory.regionName, factory.countryName].filter(Boolean).join(", ")})`,
-          ).join("; ");
-          return `• ${row.name} — ${formatNumber(row.outsideFactoryCount)} fabrika: ${locations}`;
-        });
-        return `${flag} ${country.label} vatandaşları · ${countryRows.length} kişi\n${lines.join("\n")}`;
-      })
-      .filter(Boolean);
-    const message = `Fabrika konumu düzenlemesi gereken vatandaşlar\n\n${groups.join("\n\n") || "Listelenecek vatandaş bulunmuyor."}`;
+    const activeFactoryCount = reportRows.reduce((total: number, row: AnyRecord) => total + Number(row.outsideFactoryCount || 0), 0);
+    const names = reportRows.map((row: AnyRecord) => row.name).join("\n") || "Listelenecek vatandaş bulunmuyor.";
+    const message = `Vergi kaçıran aktif fabrika sayısı: ${formatNumber(activeFactoryCount)}\n\nDüzenleme yapması gereken oyuncular:\n${names}`;
     try {
       await navigator.clipboard.writeText(message);
       setCopyStatus("copied");
