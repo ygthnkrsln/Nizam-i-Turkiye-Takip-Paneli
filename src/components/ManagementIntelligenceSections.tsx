@@ -158,6 +158,7 @@ function CitizenSortHeader({
 export function ManagementCitizensSection() {
   const [countryFilter, setCountryFilter] = useState("all");
   const { data, error, loading, refreshing, reload } = useManagementView<AnyRecord>("citizens", { country: countryFilter });
+  const counts = data?.counts || {};
   const [filter, setFilter] = useState("Tümü");
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<CitizenSortKey>("level");
@@ -218,17 +219,17 @@ export function ManagementCitizensSection() {
       {data && <>
         {!data.complete && <div className="rounded-lg border border-amber-500/25 bg-amber-950/15 p-3 text-xs text-amber-200">{data.note} Liste, canlı API sayfalama sınırına kadar gösteriliyor.</div>}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="Aktif vatandaş" value={`${formatNumber(data.counts.active)} / ${formatNumber(data.counts.total)}`} detail={`${formatNumber(data.counts.sleeping)} uykuda · ${formatNumber(data.counts.inactive)} inaktif`} tone={data.counts.active / Math.max(1, data.counts.total) >= 0.6 ? "good" : "warn"} icon={<Activity className="h-4 w-4" />} />
-          <MetricCard label="Yeni vatandaş" value={formatNumber(data.counts.new)} detail="Son 7 günde ülkeye katılan" tone={data.counts.new ? "good" : "info"} icon={<Users className="h-4 w-4" />} />
-          <MetricCard label="Asker / ekonomist" value={`${formatNumber(data.counts.soldiers)} / ${formatNumber(data.counts.economists)}`} detail={`${formatNumber(data.counts.mixed)} karma · ${formatNumber(data.counts.novices)} acemi`} tone="info" icon={<Swords className="h-4 w-4" />} />
-          <MetricCard label="Oy verebilen" value={formatNumber(data.counts.voters)} detail={`Seviye ${formatNumber(data.government.voters.minLevel)}+`} tone="info" icon={<CheckCircle2 className="h-4 w-4" />} />
+          <MetricCard label="Aktif vatandaş" value={`${formatNumber(counts.active)} / ${formatNumber(counts.total)}`} detail={`${formatNumber(counts.sleeping)} uykuda · ${formatNumber(counts.inactive)} inaktif`} tone={counts.active / Math.max(1, counts.total) >= 0.6 ? "good" : "warn"} icon={<Activity className="h-4 w-4" />} />
+          <MetricCard label="Yeni vatandaş" value={formatNumber(counts.new)} detail="Son 7 günde ülkeye katılan" tone={counts.new ? "good" : "info"} icon={<Users className="h-4 w-4" />} />
+          <MetricCard label="Asker / ekonomist" value={`${formatNumber(counts.soldiers)} / ${formatNumber(counts.economists)}`} detail={`${formatNumber(counts.mixed)} karma · ${formatNumber(counts.novices)} acemi`} tone="info" icon={<Swords className="h-4 w-4" />} />
+          <MetricCard label="Oy verebilen" value={formatNumber(counts.voters)} detail={`Seviye ${formatNumber(data.government?.voters?.minLevel)}+`} tone="info" icon={<CheckCircle2 className="h-4 w-4" />} />
         </div>
         <Panel title="Vatandaş aktivite dağılımı" subtitle="Aktiflik sınıflarına göre vatandaşların mevcut durumu.">
           {(() => {
             const activity = [
-              { name: "Aktif", value: Number(data.counts.active) || 0, color: "#34d399" },
-              { name: "Uykuda", value: Number(data.counts.sleeping) || 0, color: "#fbbf24" },
-              { name: "İnaktif", value: Number(data.counts.inactive) || 0, color: "#fb7185" },
+              { name: "Aktif", value: Number(counts.active) || 0, color: "#34d399" },
+              { name: "Uykuda", value: Number(counts.sleeping) || 0, color: "#fbbf24" },
+              { name: "İnaktif", value: Number(counts.inactive) || 0, color: "#fb7185" },
             ].filter((item) => item.value > 0);
             return <div className="grid items-center gap-4 sm:grid-cols-[250px_1fr]">
               <div className="relative mx-auto h-60 w-full max-w-[260px]">
@@ -238,10 +239,10 @@ export function ManagementCitizensSection() {
                   </Pie>
                   <Tooltip formatter={(value, name) => [formatNumber(value), String(name)]} contentStyle={{ background: "#0b1419", border: "1px solid rgba(56,189,248,.35)", borderRadius: 10, color: "#fff" }} />
                 </PieChart></ResponsiveContainer>
-                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="text-[10px] uppercase tracking-wider text-[#BBE1FA]/50">Vatandaş</span><b className="mt-1 text-2xl text-white">{formatNumber(data.counts.total)}</b><span className="text-[10px] text-[#BBE1FA]/45">toplam</span></div>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="text-[10px] uppercase tracking-wider text-[#BBE1FA]/50">Vatandaş</span><b className="mt-1 text-2xl text-white">{formatNumber(counts.total)}</b><span className="text-[10px] text-[#BBE1FA]/45">toplam</span></div>
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
-                {activity.map((item) => <div key={item.name} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-[#141C21] p-3"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} /><div className="min-w-0"><div className="text-[10px] uppercase tracking-wider text-[#BBE1FA]/50">{item.name}</div><div className="text-lg font-black text-white">{formatNumber(item.value)}</div><div className="text-[10px] text-[#BBE1FA]/45">{(item.value / Math.max(1, Number(data.counts.total)) * 100).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%</div></div></div>)}
+                {activity.map((item) => <div key={item.name} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-[#141C21] p-3"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} /><div className="min-w-0"><div className="text-[10px] uppercase tracking-wider text-[#BBE1FA]/50">{item.name}</div><div className="text-lg font-black text-white">{formatNumber(item.value)}</div><div className="text-[10px] text-[#BBE1FA]/45">{(item.value / Math.max(1, Number(counts.total)) * 100).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%</div></div></div>)}
               </div>
             </div>;
           })()}
@@ -257,7 +258,7 @@ export function ManagementCitizensSection() {
             {!!government.government.countdowns?.length && <div className="mt-3 space-y-1 border-t border-[#3282B8]/10 pt-3">{government.government.countdowns.filter((item: AnyRecord) => item.key.includes("Election")).map((item: AnyRecord) => <div key={item.key} className="flex items-center justify-between gap-2 text-[10px] text-[#BBE1FA]/65"><span className="flex items-center gap-1"><Clock3 className="h-3 w-3 text-amber-300" />{item.name}</span><b className="text-white">{formatNumber(item.hoursLeft, 0)} sa</b></div>)}</div>}
           </Panel>)}
         </div>
-        <Panel title="Vatandaş listesi" subtitle={`${formatNumber(data.counts.profiled)} profil · ${formatNumber(data.counts.total)} vatandaş kaydı · sıralamak için sütun başlığına tıklayın`} right={<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="İsim ara" className="w-36 rounded-md border border-[#3282B8]/20 bg-[#141C21] px-2.5 py-1.5 text-xs text-white outline-none focus:border-[#3282B8]/60 sm:w-48" />}>
+        <Panel title="Vatandaş listesi" subtitle={`${formatNumber(counts.profiled)} profil · ${formatNumber(counts.total)} vatandaş kaydı · sıralamak için sütun başlığına tıklayın`} right={<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="İsim ara" className="w-36 rounded-md border border-[#3282B8]/20 bg-[#141C21] px-2.5 py-1.5 text-xs text-white outline-none focus:border-[#3282B8]/60 sm:w-48" />}>
           <div className="mb-3 flex flex-wrap gap-1.5">{CITIZEN_FILTERS.map((item) => <button key={item} type="button" onClick={() => setFilter(item)} className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold transition ${filter === item ? "border-sky-400/50 bg-sky-950/40 text-sky-100" : "border-[#3282B8]/15 bg-[#141C21] text-[#BBE1FA]/55 hover:text-white"}`}>{item}</button>)}</div>
           <div className="max-h-[560px] overflow-auto"><table className="w-full min-w-[900px] text-left text-xs"><thead className="sticky top-0 bg-[#182329] text-[10px] uppercase text-[#BBE1FA]/45"><tr>
             <CitizenSortHeader label="Ülke" active={sortKey === "country"} direction={sortDirection} onClick={() => toggleSort("country")} />
@@ -279,6 +280,7 @@ export function ManagementCitizensSection() {
 
 export function ManagementFactoryAuditSection() {
   const { data, error, loading, refreshing, reload } = useManagementView<AnyRecord>("factory-audit");
+  const counts = data?.counts || {};
   const [countryFilter, setCountryFilter] = useState("all");
   const [foreignOnly, setForeignOnly] = useState(true);
   const [search, setSearch] = useState("");
@@ -296,10 +298,10 @@ export function ManagementFactoryAuditSection() {
       <StatusMessage error={error} loading={loading && !data} />
       {data && <>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="Taranan vatandaş" value={`${formatNumber(data.counts.profiled)} / ${formatNumber(data.counts.citizens)}`} detail="Türkiye ve Kamerun" icon={<Users className="h-4 w-4" />} />
-          <MetricCard label="Bulunan fabrika" value={formatNumber(data.counts.factories)} detail="Sahip olunan fabrikalar" tone="good" icon={<Factory className="h-4 w-4" />} />
-          <MetricCard label="Türkiye dışındaki fabrika" value={formatNumber(data.counts.outsideFactories)} detail={`${formatNumber(data.counts.citizensWithOutsideFactories)} vatandaşta bulunuyor`} tone={data.counts.outsideFactories ? "warn" : "good"} icon={<Flag className="h-4 w-4" />} />
-          <MetricCard label="Eksik tarama" value={formatNumber(data.counts.incompleteScans)} detail="Profil veya fabrika sayfalaması tamamlanamadı" tone={data.counts.incompleteScans ? "warn" : "good"} icon={<Activity className="h-4 w-4" />} />
+          <MetricCard label="Taranan vatandaş" value={`${formatNumber(counts.profiled)} / ${formatNumber(counts.citizens)}`} detail="Türkiye ve Kamerun" icon={<Users className="h-4 w-4" />} />
+          <MetricCard label="Bulunan fabrika" value={formatNumber(counts.factories)} detail="Sahip olunan fabrikalar" tone="good" icon={<Factory className="h-4 w-4" />} />
+          <MetricCard label="Türkiye dışındaki fabrika" value={formatNumber(counts.outsideFactories)} detail={`${formatNumber(counts.citizensWithOutsideFactories)} vatandaşta bulunuyor`} tone={counts.outsideFactories ? "warn" : "good"} icon={<Flag className="h-4 w-4" />} />
+          <MetricCard label="Eksik tarama" value={formatNumber(counts.incompleteScans)} detail="Profil veya fabrika sayfalaması tamamlanamadı" tone={counts.incompleteScans ? "warn" : "good"} icon={<Activity className="h-4 w-4" />} />
         </div>
         <Panel title="Fabrika sahipleri" subtitle={`${formatNumber(rows.length)} kişi gösteriliyor · Türkiye dışı fabrika sayısına yalnızca API'den konumu doğrulanan fabrikalar dahil edilir`} right={<label className="relative block"><Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#BBE1FA]/40" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Vatandaş ara" className="w-40 rounded-md border border-[#3282B8]/20 bg-[#141C21] py-1.5 pl-8 pr-2.5 text-xs text-white outline-none focus:border-[#3282B8]/60 sm:w-52" /></label>}>
           <div className="mb-3 flex flex-wrap items-center gap-2">
