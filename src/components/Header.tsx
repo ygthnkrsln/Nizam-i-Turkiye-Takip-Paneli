@@ -12,6 +12,7 @@ import {
   Sparkles,
   Shield,
   Users,
+  Factory,
   Map,
   Handshake,
   X,
@@ -39,6 +40,7 @@ const groups: {
       { id: 'marketPrices', title: 'Market Fiyatları', icon: ShoppingCart },
       { id: 'countryStats', title: 'Ülke İstatistikleri', icon: BarChart3 },
       { id: 'mgmtCountryTracker', title: 'Ülke Takibi & Karşılaştırma', icon: Map },
+      { id: 'mgmtFactoryAudit', title: 'Fabrika Konum Takibi', icon: Factory },
     ],
   },
   {

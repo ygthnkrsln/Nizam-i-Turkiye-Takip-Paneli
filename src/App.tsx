@@ -15,6 +15,7 @@ const DailyDamageTelemetrySection = React.lazy(() => import('./components/DailyD
 const ManagementArmyTrackingSection = React.lazy(() => import('./components/ManagementArmyTrackingSection').then((module) => ({ default: module.ManagementArmyTrackingSection })));
 const ManagementDonationTrackingSection = React.lazy(() => import('./components/ManagementDonationTrackingSection').then((module) => ({ default: module.ManagementDonationTrackingSection })));
 const ManagementCitizensSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementCitizensSection })));
+const ManagementFactoryAuditSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementFactoryAuditSection })));
 const ManagementCountryTrackerSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementCountryTrackerSection })));
 const AllianceDamageSection = React.lazy(() => import('./components/AllianceDamageSection').then((module) => ({ default: module.AllianceDamageSection })));
 const LevelCalculatorSection = React.lazy(() => import('./components/LevelCalculatorSection').then((module) => ({ default: module.LevelCalculatorSection })));
@@ -41,6 +42,7 @@ export type ActiveTab =
   | 'mgmtOrders'
   | 'mgmtDiplomacy'
   | 'mgmtCitizens'
+  | 'mgmtFactoryAudit'
   | 'mgmtCountryTracker'
   | 'allianceDamage'
   | 'levelCalculator'
@@ -59,6 +61,7 @@ export const TAB_TO_SLUG: Record<ActiveTab, string> = {
   mgmtOrders: 'gorev-ve-emirler',
   mgmtDiplomacy: 'ittifak-diplomasi',
   mgmtCitizens: 'vatandaslar-ve-hukumet',
+  mgmtFactoryAudit: 'fabrika-konum-takibi',
   mgmtCountryTracker: 'ulke-takibi',
   allianceDamage: 'ittifak-hasari',
   levelCalculator: 'seviye-hesaplayici',
@@ -77,6 +80,7 @@ const TAB_TITLES: Record<ActiveTab, string> = {
   mgmtOrders: 'TürkEra - Görev & Emirler (Yönetim Modu)',
   mgmtDiplomacy: 'TürkEra - İttifak & Diplomasi (Yönetim Modu)',
   mgmtCitizens: 'TürkEra - Vatandaşlar & Hükümet',
+  mgmtFactoryAudit: 'TürkEra - Fabrika Konum Takibi',
   mgmtCountryTracker: 'TürkEra - Ülke Takibi & Karşılaştırma',
   allianceDamage: 'TürkEra - İttifak Hasarı',
   levelCalculator: 'TürkEra - Seviye Hesaplayıcı',
@@ -136,6 +140,8 @@ export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
     tab = 'mgmtDonations';
   } else if (tabSlug === 'vatandaslar-ve-hukumet' || tabSlug === 'vatandaslar' || tabSlug === 'citizens') {
     tab = 'mgmtCitizens';
+  } else if (tabSlug === 'fabrika-konum-takibi' || tabSlug === 'fabrikalar' || tabSlug === 'factory-audit') {
+    tab = 'mgmtFactoryAudit';
   } else if (tabSlug === 'ulke-takibi' || tabSlug === 'ulke-karsilastirma' || tabSlug === 'country-tracker') {
     tab = 'mgmtCountryTracker';
   } else if (tabSlug === 'ittifak-hasari' || tabSlug === 'ittifak' || tabSlug === 'alliance-damage') {
@@ -477,6 +483,8 @@ export default function App() {
           <ManagementDonationTrackingSection currentMuId={muId} onSelectArmy={handleMuIdChange} />
         ) : activeTab === 'mgmtCitizens' ? (
           <ManagementCitizensSection />
+        ) : activeTab === 'mgmtFactoryAudit' ? (
+          <ManagementFactoryAuditSection />
         ) : activeTab === 'mgmtCountryTracker' ? (
           <ManagementCountryTrackerSection />
         ) : activeTab === 'allianceDamage' ? (

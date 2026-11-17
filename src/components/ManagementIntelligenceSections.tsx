@@ -5,6 +5,8 @@ import {
   CheckCircle2,
   Clock3,
   Flag,
+  Factory,
+  Search,
   RefreshCw,
   Swords,
   Users,
@@ -270,6 +272,46 @@ export function ManagementCitizensSection() {
           </tr></thead><tbody>{sortedRows.slice(0, 500).map((row: AnyRecord) => <tr key={`${row.countryKey}-${row.id}`} className="border-t border-[#3282B8]/10"><td className="py-2.5 text-[#BBE1FA]/60">{row.countryName}</td><td className="py-2.5 font-semibold text-white">{row.url ? <a href={row.url} target="_blank" rel="noreferrer" className="hover:text-sky-300">{row.name} ↗</a> : row.name}{row.isNew && <span className="ml-2 rounded bg-sky-950/50 px-1.5 py-0.5 text-[9px] text-sky-200">yeni</span>}</td><td className="py-2.5"><Pill tone={row.tone}>{row.status}</Pill></td><td className="py-2.5 text-[#BBE1FA]/75">{formatNumber(row.level)}</td><td className="py-2.5 text-[#BBE1FA]/75">{row.build}</td><td className="py-2.5 text-[#BBE1FA]/55">{row.hoursSinceConnection === null ? "—" : `${formatNumber(row.hoursSinceConnection, 0)} sa önce`}</td><td className="py-2.5 text-[#BBE1FA]/75">{formatNumber(row.weeklyDamage)}</td><td className="py-2.5">{row.canVote ? <span className="text-emerald-300">✓</span> : <span className="text-[#BBE1FA]/30">—</span>}</td><td className="py-2.5 text-[#BBE1FA]/55">{row.roles?.join(", ") || "—"}</td></tr>)}{!sortedRows.length && <tr><td colSpan={9} className="py-5 text-center text-[#BBE1FA]/45">Bu filtrede vatandaş bulunamadı.</td></tr>}</tbody></table></div>
         </Panel>
         <div className="text-[10px] text-[#BBE1FA]/40">Veri: {data.source} · Son güncelleme: {formatDate(data.fetchedAt)} · {data.note}</div>
+      </>}
+    </div>
+  );
+}
+
+export function ManagementFactoryAuditSection() {
+  const { data, error, loading, refreshing, reload } = useManagementView<AnyRecord>("factory-audit");
+  const [countryFilter, setCountryFilter] = useState("all");
+  const [foreignOnly, setForeignOnly] = useState(true);
+  const [search, setSearch] = useState("");
+  const rows = useMemo(() => (data?.rows || []).filter((row: AnyRecord) => {
+    const matchesCountry = countryFilter === "all" || row.countryKey === countryFilter;
+    const query = search.trim().toLocaleLowerCase("tr-TR");
+    const matchesSearch = !query || String(row.name || "").toLocaleLowerCase("tr-TR").includes(query);
+    return matchesCountry && matchesSearch && (!foreignOnly || Number(row.outsideFactoryCount) > 0);
+  }), [data, countryFilter, foreignOnly, search]);
+  const countries = data?.countries || [];
+
+  return (
+    <div className="space-y-4">
+      <PageHeading title="Fabrika Konum Takibi" subtitle="Türkiye ve Kamerun vatandaşlarının fabrikalarını tarayın; Türkiye dışındaki fabrikaları oyuncu ve ülke bazında inceleyin." onRefresh={reload} refreshing={refreshing} />
+      <StatusMessage error={error} loading={loading && !data} />
+      {data && <>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="Taranan vatandaş" value={`${formatNumber(data.counts.profiled)} / ${formatNumber(data.counts.citizens)}`} detail="Türkiye ve Kamerun" icon={<Users className="h-4 w-4" />} />
+          <MetricCard label="Bulunan fabrika" value={formatNumber(data.counts.factories)} detail="Sahip olunan fabrikalar" tone="good" icon={<Factory className="h-4 w-4" />} />
+          <MetricCard label="Türkiye dışındaki fabrika" value={formatNumber(data.counts.outsideFactories)} detail={`${formatNumber(data.counts.citizensWithOutsideFactories)} vatandaşta bulunuyor`} tone={data.counts.outsideFactories ? "warn" : "good"} icon={<Flag className="h-4 w-4" />} />
+          <MetricCard label="Eksik tarama" value={formatNumber(data.counts.incompleteScans)} detail="Profil veya fabrika sayfalaması tamamlanamadı" tone={data.counts.incompleteScans ? "warn" : "good"} icon={<Activity className="h-4 w-4" />} />
+        </div>
+        <Panel title="Fabrika sahipleri" subtitle={`${formatNumber(rows.length)} kişi gösteriliyor · Türkiye dışı fabrika sayısına yalnızca API'den konumu doğrulanan fabrikalar dahil edilir`} right={<label className="relative block"><Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#BBE1FA]/40" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Vatandaş ara" className="w-40 rounded-md border border-[#3282B8]/20 bg-[#141C21] py-1.5 pl-8 pr-2.5 text-xs text-white outline-none focus:border-[#3282B8]/60 sm:w-52" /></label>}>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            {[{ key: "all", label: "Türkiye + Kamerun" }, ...countries.map((country: AnyRecord) => ({ key: country.key, label: country.label }))].map((country: AnyRecord) => <button key={country.key} type="button" onClick={() => setCountryFilter(country.key)} className={`rounded-full border px-3 py-1.5 text-[10px] font-bold transition ${countryFilter === country.key ? "border-sky-400/40 bg-sky-950/40 text-sky-100" : "border-[#3282B8]/15 bg-[#141C21] text-[#BBE1FA]/55 hover:text-white"}`}>{country.label}</button>)}
+            <button type="button" onClick={() => setForeignOnly((value) => !value)} aria-pressed={foreignOnly} className={`rounded-full border px-3 py-1.5 text-[10px] font-bold transition ${foreignOnly ? "border-amber-400/40 bg-amber-950/30 text-amber-100" : "border-[#3282B8]/15 bg-[#141C21] text-[#BBE1FA]/55 hover:text-white"}`}>{foreignOnly ? "✓ Türkiye dışında fabrikası olanlar" : "Tüm vatandaşlar"}</button>
+          </div>
+          <div className="max-h-[620px] overflow-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="sticky top-0 bg-[#182329] text-[10px] uppercase text-[#BBE1FA]/45"><tr><th className="pb-2">Vatandaş</th><th className="pb-2">Vatandaşlık</th><th className="pb-2">Toplam fabrika</th><th className="pb-2">Türkiye dışında</th><th className="pb-2">Fabrika konumları</th><th className="pb-2">Tarama</th></tr></thead><tbody>
+            {rows.map((row: AnyRecord) => <tr key={row.id} className="border-t border-[#3282B8]/10 align-top"><td className="py-3 font-semibold text-white"><a href={row.url} target="_blank" rel="noreferrer" className="hover:text-sky-300">{row.name} ↗</a></td><td className="py-3 text-[#BBE1FA]/65">{row.countryName}</td><td className="py-3 text-[#BBE1FA]/80">{formatNumber(row.factoryCount)}</td><td className="py-3"><Pill tone={row.outsideFactoryCount ? "warn" : "good"}>{formatNumber(row.outsideFactoryCount)}</Pill></td><td className="max-w-[440px] py-3 text-[#BBE1FA]/70">{row.outsideFactories?.length || row.unknownLocationCount ? <div className="flex flex-wrap gap-1.5">{row.outsideFactories?.map((factory: AnyRecord) => <span key={factory.id} title={factory.name} className="rounded-md border border-amber-500/20 bg-amber-950/20 px-2 py-1 text-[10px] text-amber-100">{factory.name} · {factory.countryName}</span>)}{row.unknownLocationCount > 0 && <span className="rounded-md border border-rose-500/20 bg-rose-950/20 px-2 py-1 text-[10px] text-rose-100">{formatNumber(row.unknownLocationCount)} konum çözülemedi</span>}</div> : <span className="text-[#BBE1FA]/35">Türkiye dışında fabrika yok</span>}</td><td className="py-3">{row.scanComplete ? <Pill tone="good">Tamam</Pill> : <Pill tone="warn">Eksik</Pill>}</td></tr>)}
+            {!rows.length && <tr><td colSpan={6} className="py-8 text-center text-[#BBE1FA]/45">Bu filtrelerde gösterilecek vatandaş bulunamadı.</td></tr>}
+          </tbody></table></div>
+        </Panel>
+        <div className="text-[10px] text-[#BBE1FA]/40">Veri: {data.source} · Son tarama: {formatDate(data.fetchedAt)} · {data.note}</div>
       </>}
     </div>
   );

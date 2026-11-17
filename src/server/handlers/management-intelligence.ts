@@ -128,6 +128,145 @@ async function queryBatchUsers(ids: string[]): Promise<any[]> {
   return batches.flat();
 }
 
+async function queryBatchProcedure(procedure: string, inputs: Record<string, any>[]): Promise<any[]> {
+  if (!inputs.length) return [];
+  const chunks: Record<string, any>[][] = [];
+  for (let i = 0; i < inputs.length; i += 25) chunks.push(inputs.slice(i, i + 25));
+  const batches = await mapWithConcurrency(chunks, 4, async (chunk) => {
+    const url = new URL(`https://api2.warera.io/trpc/${chunk.map(() => procedure).join(",")}`);
+    url.searchParams.set("batch", "1");
+    url.searchParams.set("input", JSON.stringify(Object.fromEntries(chunk.map((input, index) => [String(index), input]))));
+    const response = await fetchWarEra(url.toString());
+    if (!response.ok) throw Object.assign(new Error(`${procedure} verisi alınamadı (${response.status}).`), { statusCode: response.status });
+    const raw = await response.json();
+    if (!Array.isArray(raw)) throw new Error(`${procedure} toplu yanıtı geçersiz.`);
+    return raw.map((item) => unpack(item));
+  });
+  return batches.flat();
+}
+
+async function factoryAuditData(force = false) {
+  const { raw: countries } = await getCountries(force);
+  const normalized = countries.map((country) => ({
+    id: countryId(country),
+    name: String(country?.name || "Bilinmeyen ülke"),
+    code: String(country?.code || "").toLowerCase(),
+  }));
+  const selectedCountries = [
+    { key: "tr", label: "Türkiye", country: normalized.find((item) => item.id === TURKEY_ID || item.code === "tr" || /turkiye|turkey/i.test(item.name)) },
+    { key: "cm", label: "Kamerun", country: normalized.find((item) => item.code === "cm" || item.code === "cmr" || /kamerun|cameroon/i.test(item.name)) },
+  ].filter((item) => item.country);
+  if (selectedCountries.length !== 2) throw new Error("Türkiye veya Kamerun ülke verisi WarEra API yanıtında bulunamadı.");
+
+  const rosters = await mapWithConcurrency(selectedCountries, 2, async ({ key, label, country }) => {
+    const ids: string[] = [];
+    let cursor: string | null = null;
+    let complete = false;
+    for (let page = 0; page < Math.ceil(USER_PROFILE_LIMIT / 100); page++) {
+      const input: Record<string, any> = { countryId: country!.id, limit: 100 };
+      if (cursor) input.cursor = cursor;
+      const response = await query("user.getUsersByCountry", input, force, 3 * 60_000);
+      const items = listOf(response);
+      for (const row of items) {
+        const id = String(row?._id || row?.id || (typeof row === "string" ? row : ""));
+        if (id) ids.push(id);
+      }
+      cursor = response?.nextCursor ? String(response.nextCursor) : null;
+      if (!cursor || !items.length) { complete = true; break; }
+    }
+    return { key, label, countryId: country!.id, ids: Array.from(new Set(ids)), complete };
+  });
+  const allIds = Array.from(new Set(rosters.flatMap((roster) => roster.ids)));
+  const profiles = await queryBatchUsers(allIds);
+  const players = new Map<string, any>();
+  profiles.forEach((profile, index) => {
+    const id = String(profile?._id || profile?.id || allIds[index] || "");
+    if (id && profile && typeof profile === "object") players.set(id, profile);
+  });
+
+  const companyIdsByPlayer = new Map<string, string[]>();
+  const companyScanErrors = new Set<string>();
+  let remaining = allIds.filter((id) => players.has(id)).map((userId) => ({ userId, cursor: "" }));
+  for (let page = 0; page < 5 && remaining.length; page++) {
+    const inputs = remaining.map(({ userId, cursor }) => ({ userId, perPage: 100, ...(cursor ? { cursor } : {}) }));
+    const responses = await queryBatchProcedure("company.getCompanies", inputs);
+    const next: typeof remaining = [];
+    responses.forEach((response, index) => {
+      const current = remaining[index];
+      const items = listOf(response);
+      const ids = items.map((item) => typeof item === "string" ? item : item?._id || item?.id).filter((id): id is string => typeof id === "string" && id.length > 0);
+      companyIdsByPlayer.set(current.userId, [...(companyIdsByPlayer.get(current.userId) || []), ...ids]);
+      if (items.length >= 100) {
+        const nextCursor = ids.at(-1);
+        if (nextCursor && nextCursor !== current.cursor) next.push({ userId: current.userId, cursor: nextCursor });
+        else companyScanErrors.add(current.userId);
+      }
+    });
+    remaining = next;
+  }
+  remaining.forEach(({ userId }) => companyScanErrors.add(userId));
+
+  const allCompanyIds = Array.from(new Set(Array.from(companyIdsByPlayer.values()).flat()));
+  const companyById = new Map<string, any>();
+  const companyChunks: string[][] = [];
+  for (let i = 0; i < allCompanyIds.length; i += 25) companyChunks.push(allCompanyIds.slice(i, i + 25));
+  await mapWithConcurrency(companyChunks, 4, async (chunk) => {
+    const result = await queryBatchProcedure("company.getById", chunk.map((companyId) => ({ companyId })));
+    result.forEach((company, index) => {
+      const id = String(company?._id || company?.id || chunk[index]);
+      if (company && typeof company === "object") companyById.set(id, company);
+    });
+  });
+
+  const countryNames = new Map(normalized.map((country) => [country.id, country.name]));
+  const rows = rosters.flatMap((roster) => roster.ids.map((id) => {
+    const profile = players.get(id);
+    if (!profile) return null;
+    const playerCompanyIds = Array.from(new Set(companyIdsByPlayer.get(id) || []));
+    const companies = playerCompanyIds.flatMap((companyId) => {
+      const company = companyById.get(companyId);
+      if (!company) return [];
+      const location = company.countryId ?? company.country?._id ?? company.country?.id ?? company.country;
+      const factoryCountryId = typeof location === "object" ? String(location?._id || location?.id || "") : String(location || "");
+      const explicitName = typeof company.country === "object" ? company.country?.name : company.countryName;
+      const countryName = String(explicitName || countryNames.get(factoryCountryId) || (factoryCountryId ? factoryCountryId : "Konum bilinmiyor"));
+      return [{ id: companyId, name: String(company.name || company.companyName || company.itemCode || "Fabrika"), countryId: factoryCountryId, countryName, outsideTurkey: Boolean(factoryCountryId && factoryCountryId !== TURKEY_ID) }];
+    });
+    const outsideFactories = companies.filter((company) => company.outsideTurkey);
+    const unknownLocationCount = Math.max(0, playerCompanyIds.length - companies.length) + companies.filter((company) => !company.countryId).length;
+    return {
+      id,
+      name: String(profile.username || id.slice(0, 8)),
+      url: `https://app.warera.io/user/${id}`,
+      countryKey: roster.key,
+      countryName: roster.label,
+      factoryCount: playerCompanyIds.length,
+      outsideFactoryCount: outsideFactories.length,
+      unknownLocationCount,
+      companies,
+      outsideFactories,
+      scanComplete: !companyScanErrors.has(id) && unknownLocationCount === 0,
+    };
+  }).filter(Boolean));
+  const sortedRows = rows.sort((a: any, b: any) => b.outsideFactoryCount - a.outsideFactoryCount || a.countryName.localeCompare(b.countryName, "tr") || a.name.localeCompare(b.name, "tr"));
+  return {
+    success: true,
+    rows: sortedRows,
+    counts: {
+      citizens: allIds.length,
+      profiled: players.size,
+      factories: allCompanyIds.length,
+      outsideFactories: sortedRows.reduce((sum: number, row: any) => sum + row.outsideFactoryCount, 0),
+      citizensWithOutsideFactories: sortedRows.filter((row: any) => row.outsideFactoryCount > 0).length,
+      incompleteScans: companyScanErrors.size + (allIds.length - players.size) + sortedRows.filter((row: any) => !row.scanComplete).length + rosters.filter((roster) => !roster.complete).length,
+    },
+    countries: rosters.map(({ key, label, countryId, ids, complete }) => ({ key, label, countryId, citizens: ids.length, complete })),
+    fetchedAt: new Date().toISOString(),
+    source: "user.getUsersByCountry · user.getUserById · company.getCompanies · company.getById",
+    note: "Türkiye ve Kamerun vatandaşlarının sahip olduğu fabrikalar taranır. Türkiye dışı fabrika sayısına yalnızca konumu API'den doğrulanan fabrikalar eklenir; konumu çözülemeyenler eksik tarama olarak işaretlenir.",
+  };
+}
+
 async function fetchActiveCitizenWealth(countries: any[], force = false): Promise<Record<string, AnyRecord>> {
   if (!countries.length) return {};
   const rosters = await mapWithConcurrency(countries, 2, async (country) => {
@@ -924,6 +1063,7 @@ async function dailyDashboard(force = false) {
 async function loadView(view: string, force: boolean, countryFilter = "all", selectedCountryIds?: string[]) {
   switch (view) {
     case "citizens": return citizensData(force, countryFilter);
+    case "factory-audit": return factoryAuditData(force);
     case "country-tracker": return countryTrackerData(force, selectedCountryIds);
     case "alliance-damage": return allianceDamageData(force);
     default: throw Object.assign(new Error("Geçersiz yönetim görünümü."), { statusCode: 400 });
@@ -937,7 +1077,7 @@ export default async function handler(req: any, res: any) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET") return res.status(405).json({ success: false, error: "Method not allowed" });
   const view = String(req.query?.view || "");
-  const allowed = new Set(["citizens", "country-tracker", "alliance-damage"]);
+  const allowed = new Set(["citizens", "factory-audit", "country-tracker", "alliance-damage"]);
   if (!allowed.has(view)) return res.status(400).json({ success: false, error: "Geçersiz yönetim görünümü." });
   const force = req.query?.refresh === "true";
   const countryFilter = String(req.query?.country || "all");
@@ -951,7 +1091,7 @@ export default async function handler(req: any, res: any) {
       ? countrySelectionProvided ? (selectedCountryIds?.length ? [...selectedCountryIds].sort().join("-") : "none") : "default"
       : "all";
   const key = `nizam_management_${view}_${selectionKey}_v4`;
-  const ttl = view === "citizens" ? 10 * 60_000 : view === "country-tracker" ? 30_000 : VIEW_TTL_MS;
+  const ttl = view === "citizens" || view === "factory-audit" ? 10 * 60_000 : view === "country-tracker" ? 30_000 : VIEW_TTL_MS;
   try {
     const cached = viewCache.get(key);
     if (!force && cached && Date.now() - cached.timestamp < ttl) return res.status(200).json(cached.data);
