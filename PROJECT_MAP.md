@@ -29,7 +29,7 @@ This document is a navigation index for coding assistants and contributors. It d
 5. `src/server/handlers/management-overview.ts` automatically refreshes stale eligible daily targets for the current week when the donation overview is requested, using current company income while preserving each day's saved eligibility/rate. It returns refresh status with the overview; `src/components/ManagementDonationTrackingSection.tsx` applies country payments against the signed balance (debts first, then positive carry) and shows each day's target alongside its payments.
 6. The donation page falls back to the bulk `POST /api/player-factories` path when a daily income calculation is unavailable; the individual calculation modal uses the single-player path.
 7. `src/server/handlers/player-factories.ts` calculates automated-engine and employee income, applying item conversion recipes and input-material costs.
-8. Factory location tracking uses the existing `/api/management-overview?view=factory-audit` dispatch to scan active Türkiye and Cameroon citizens, their active company slots, and company regions; `region.getRegionsObject` maps each factory region to its country. It does not add a Vercel function.
+8. Factory location tracking uses the existing `/api/management-overview?view=factory-audit` dispatch to scan active Türkiye and Cameroon citizens, their active company slots, and company regions; `region.getRegionsObject` maps each factory region to its country, with Yaounde and Central Anatolia treated as their initial-country capitals. It does not add a Vercel function.
 
 The canonical tracked unit list is `src/config/trackedArmies.ts`; server and client validation/display should derive from this list, not a hard-coded count.
 
