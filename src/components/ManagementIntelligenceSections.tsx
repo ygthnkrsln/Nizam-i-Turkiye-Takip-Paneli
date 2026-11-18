@@ -335,6 +335,60 @@ export function ManagementFactoryAuditSection() {
   );
 }
 
+export function CountryWarsSection() {
+  const { data, error, loading, refreshing, reload } = useManagementView<AnyRecord>("country-wars");
+  const [countryFilter, setCountryFilter] = useState("all");
+  const countries = data?.countries || [];
+  const filteredWars = (data?.wars || []).filter((war: AnyRecord) => {
+    if (countryFilter === "all") return true;
+    const target = countries.find((country: AnyRecord) => country.key === countryFilter);
+    return Boolean(target && [war.attacker, war.defender].some((side: AnyRecord) => side.mainCountry.id === target.id || side.countries?.some((country: AnyRecord) => country.id === target.id)));
+  });
+  const formatPercent = (value: unknown) => {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "—";
+    return `${number > 0 ? "+" : ""}${formatNumber(number, 1)}%`;
+  };
+  const sidePanel = (side: AnyRecord, label: string, color: "rose" | "sky") => (
+    <div className={`rounded-xl border p-3 ${color === "rose" ? "border-rose-500/20 bg-rose-950/10" : "border-sky-500/20 bg-sky-950/10"}`}>
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-white/[0.06] pb-2">
+        <div><div className={`text-[9px] font-bold uppercase tracking-[0.18em] ${color === "rose" ? "text-rose-300" : "text-sky-300"}`}>{label}</div><div className="mt-1 font-black text-white">{side.mainCountry.name}</div></div>
+        <div className="text-right"><div className="text-xl font-black text-white">{formatPercent(side.totalBonusPercent)}</div><div className="text-[9px] uppercase tracking-wider text-[#BBE1FA]/45">ülkelerin toplam bonusu</div></div>
+      </div>
+      <div className="mt-2 flex items-center justify-between text-[10px] text-[#BBE1FA]/60"><span>Bu tur hasarı</span><b className="text-white">{formatNumber(side.damage)}</b></div>
+      <div className="mt-1 flex items-center justify-between text-[10px] text-[#BBE1FA]/60"><span>Tur puanı</span><b className="text-white">{formatNumber(side.points)}</b></div>
+      <div className="mt-3 space-y-2">
+        {(side.countries || []).map((country: AnyRecord) => <div key={country.id} className="rounded-lg border border-white/[0.06] bg-[#11191E]/80 p-2.5">
+          <div className="flex items-center justify-between gap-2"><span className="text-xs font-bold text-white">{country.name}</span><span className={`text-xs font-black ${country.bonusPercent < 0 ? "text-rose-300" : "text-emerald-300"}`}>{formatPercent(country.bonusPercent)}</span></div>
+          <div className="mt-1.5 flex flex-wrap gap-1">{(country.bonuses || []).map((bonus: AnyRecord, index: number) => <span key={`${bonus.name}-${index}`} className="rounded border border-[#3282B8]/15 bg-[#182329] px-1.5 py-0.5 text-[9px] text-[#BBE1FA]/65">{bonus.name} {formatPercent(bonus.percent)}</span>)}</div>
+        </div>)}
+        {!side.countries?.length && <div className="py-2 text-center text-[10px] text-[#BBE1FA]/40">Ülke bonusu bulunamadı.</div>}
+      </div>
+    </div>
+  );
+  return (
+    <div className="space-y-4">
+      <PageHeading title="Türkiye & Kamerun Aktif Savaşları" subtitle="Türkiye ve Kamerun’un devam eden savaşlarını, iki taraftaki ülkelerin hasar bonuslarıyla birlikte görüntüleyin." onRefresh={reload} refreshing={refreshing} />
+      <StatusMessage error={error} loading={loading && !data} />
+      {data && <>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <MetricCard label="Aktif muharebe" value={formatNumber(data.counts?.wars)} detail="Türkiye veya Kamerun’un katıldığı" icon={<Swords className="h-4 w-4" />} />
+          <MetricCard label="Türkiye savaşları" value={formatNumber(data.counts?.turkey)} detail="Savaş, direniş ve devrim" tone="bad" icon={<Flag className="h-4 w-4" />} />
+          <MetricCard label="Kamerun savaşları" value={formatNumber(data.counts?.cameroon)} detail="Savaş, direniş ve devrim" tone="warn" icon={<Flag className="h-4 w-4" />} />
+        </div>
+        <div className="flex flex-wrap gap-2 rounded-xl border border-[#3282B8]/15 bg-[#182329] p-2">
+          {[{ key: "all", label: "Türkiye + Kamerun" }, ...countries].map((country: AnyRecord) => <button key={country.key} type="button" onClick={() => setCountryFilter(country.key)} className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${countryFilter === country.key ? "border-sky-400/40 bg-sky-950/40 text-sky-100" : "border-transparent text-[#BBE1FA]/60 hover:bg-[#141C21] hover:text-white"}`}>{country.label}</button>)}
+        </div>
+        {filteredWars.map((war: AnyRecord) => <Panel key={war.id} title={`${war.typeLabel} · ${war.region}`} subtitle={`Tur ${formatNumber(war.round)} / ${formatNumber(war.roundsToWin)} · ${formatDate(war.startedAt)}`} right={war.url && <a href={war.url} target="_blank" rel="noreferrer" className="rounded-md border border-[#3282B8]/20 bg-[#141C21] px-2.5 py-1.5 text-[10px] font-bold text-sky-200 hover:text-white">Savaşı aç ↗</a>}>
+          <div className="grid gap-3 xl:grid-cols-2">{sidePanel(war.attacker, "Saldıran taraf", "rose")}{sidePanel(war.defender, "Savunan taraf", "sky")}</div>
+        </Panel>)}
+        {!filteredWars.length && !loading && <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-5 text-center text-sm text-emerald-200">Seçilen ülkeler için aktif savaş bulunmuyor.</div>}
+        <div className="text-[10px] leading-relaxed text-[#BBE1FA]/40">Veri: {data.source} · Güncelleme: {formatDate(data.fetchedAt)} · {data.note}</div>
+      </>}
+    </div>
+  );
+}
+
 const COUNTRY_METRICS = [
   { key: "activeCitizenWealth", label: "Aktif vatandaş serveti", money: true },
   { key: "wealth", label: "Ülke serveti", money: true },

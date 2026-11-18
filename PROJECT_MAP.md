@@ -81,6 +81,7 @@ The canonical tracked unit list is `src/config/trackedArmies.ts`; server and cli
 | Army overview / army member table | `src/components/ManagementArmyTrackingSection.tsx`, `src/components/ArmyStatsTable.tsx`, `src/server/handlers/mu-data.ts` |
 | Military overview and details | `src/components/MilitaryOverviewSection.tsx`, `src/components/MilitaryDetailsSection.tsx`, `src/server/handlers/military-overview.ts`, `src/server/handlers/military-details.ts` |
 | Combat telemetry and daily damage | `src/components/DailyDamageTelemetrySection.tsx`, `src/components/AllianceDamageSection.tsx`, `src/server/handlers/combat-telemetry.ts`, `src/server/handlers/all-armies-daily-summary.ts` |
+| Türkiye and Cameroon active wars / country damage bonuses | `src/components/ManagementIntelligenceSections.tsx`, `src/server/handlers/management-intelligence.ts` (`country-wars` view through the existing management endpoint) |
 | Potential damage / combat classification | `src/lib/potentialDamage.ts`, `src/lib/dailyDamage.ts` |
 | Level and prestige tools | `src/components/LevelCalculatorSection.tsx`, `src/components/PrestigeDamageOptimizerSection.tsx`, `src/utils/levelProgression.ts`, `src/utils/prestigeOptimizer.ts` |
 | Shared management API dispatch | `src/server/handlers/management-overview.ts` |

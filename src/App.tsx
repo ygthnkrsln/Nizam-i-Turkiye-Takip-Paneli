@@ -16,6 +16,7 @@ const ManagementArmyTrackingSection = React.lazy(() => import('./components/Mana
 const ManagementDonationTrackingSection = React.lazy(() => import('./components/ManagementDonationTrackingSection').then((module) => ({ default: module.ManagementDonationTrackingSection })));
 const ManagementCitizensSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementCitizensSection })));
 const ManagementFactoryAuditSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementFactoryAuditSection })));
+const CountryWarsSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.CountryWarsSection })));
 const ManagementCountryTrackerSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementCountryTrackerSection })));
 const AllianceDamageSection = React.lazy(() => import('./components/AllianceDamageSection').then((module) => ({ default: module.AllianceDamageSection })));
 const LevelCalculatorSection = React.lazy(() => import('./components/LevelCalculatorSection').then((module) => ({ default: module.LevelCalculatorSection })));
@@ -36,6 +37,7 @@ export type ActiveTab =
   | 'combatArmyInfo' 
   | 'combatDetails' 
   | 'combatDamage'
+  | 'countryWars'
   | 'mgmtArmies'
   | 'mgmtDonations'
   | 'mgmtUnit'
@@ -55,6 +57,7 @@ export const TAB_TO_SLUG: Record<ActiveTab, string> = {
   combatArmyInfo: 'ordu-bilgisi',
   combatDetails: 'detayli-bilgi',
   combatDamage: 'hasar',
+  countryWars: 'ulke-savaslari',
   mgmtArmies: 'ordu-takibi',
   mgmtDonations: 'bagis-takibi',
   mgmtUnit: 'birlik-yonetimi',
@@ -74,6 +77,7 @@ const TAB_TITLES: Record<ActiveTab, string> = {
   combatArmyInfo: 'TürkEra - Ordu Bilgisi',
   combatDetails: 'TürkEra - Detaylı Bilgi (Savaş Modu)',
   combatDamage: 'TürkEra - Hasar Telemetrisi (Savaş Modu)',
+  countryWars: 'TürkEra - Türkiye & Kamerun Aktif Savaşları',
   mgmtArmies: 'TürkEra - Ordu Takibi (Yönetim Modu)',
   mgmtDonations: 'TürkEra - Bağış Takibi',
   mgmtUnit: 'TürkEra - Birlik Yönetimi (Yönetim Modu)',
@@ -154,6 +158,8 @@ export function getRouteFromUrl(): { tab: ActiveTab; muId: string | null } {
     tab = 'combatDetails';
   } else if (tabSlug === 'hasar' || tabSlug === 'damage' || tabSlug === 'hasar-takibi' || tabSlug === 'hasar-takip') {
     tab = 'combatDamage';
+  } else if (tabSlug === 'ulke-savaslari' || tabSlug === 'aktif-savaslar' || tabSlug === 'country-wars') {
+    tab = 'countryWars';
   } else if (
     tabSlug === 'seviye-hesaplayici' ||
     tabSlug === 'level-calculator' ||
@@ -505,6 +511,8 @@ export default function App() {
           <MilitaryDetailsSection muId={muId} onMuIdChange={handleMuIdChange} onNavigateTab={handleTabChange} />
         ) : activeTab === 'combatDamage' ? (
           <DailyDamageTelemetrySection muId={muId} onMuIdChange={handleMuIdChange} onNavigateTab={handleTabChange} />
+        ) : activeTab === 'countryWars' ? (
+          <CountryWarsSection />
         ) : activeTab === 'mgmtUnit' || activeTab === 'mgmtOrders' || activeTab === 'mgmtDiplomacy' ? (
           <WorkInProgressPanel activeTab={activeTab} onSwitchToEconomy={() => handleTabChange('mgmtDonations')} />
         ) : (

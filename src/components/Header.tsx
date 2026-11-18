@@ -50,6 +50,7 @@ const groups: {
       { id: 'combatArmyInfo', title: 'Ordu Bilgisi', icon: Shield },
       { id: 'combatDetails', title: 'Detaylı Bilgi', icon: Crosshair },
       { id: 'combatDamage', title: 'Hasar', icon: Flame },
+      { id: 'countryWars', title: 'Türkiye & Kamerun Savaşları', icon: Crosshair },
     ],
   },
   {

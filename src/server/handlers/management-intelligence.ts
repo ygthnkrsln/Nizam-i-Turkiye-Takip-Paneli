@@ -796,6 +796,220 @@ async function warRoomData(force = false) {
   };
 }
 
+function normalizeWarOrders(value: any): any[] {
+  if (Array.isArray(value)) return value.filter((row) => row && typeof row === "object");
+  return listOf(value).filter((row) => row && typeof row === "object");
+}
+
+function orderBonusPercent(order: any, fallback: number): number {
+  const direct = finite(order?.damageBonusPercent ?? order?.bonusPercent ?? order?.damageBonus);
+  if (direct !== null) return direct;
+  const priority = String(order?.priority || order?.level || "").toLowerCase();
+  if (priority === "low" || priority === "1") return 5;
+  if (priority === "medium" || priority === "2") return 10;
+  if (priority === "high" || priority === "3") return 15;
+  return fallback;
+}
+
+async function countryWarsData(force = false) {
+  const [{ raw: countries }, config, rawRegions] = await Promise.all([
+    getCountries(force),
+    getGameConfig(force).catch(() => ({})),
+    query("region.getRegionsObject", undefined, force, 5 * 60_000).catch(() => ({})),
+  ]);
+  const TURKEY_ID = "6813b6d446e731854c7ac7eb";
+  const CAMEROON_ID = "6873d0ea1758b40e712b5ef5";
+  const tracked = [
+    { id: TURKEY_ID, key: "tr", label: "Türkiye" },
+    { id: CAMEROON_ID, key: "cm", label: "Kamerun" },
+  ].map((target) => ({ ...target, country: countries.find((country) => countryId(country) === target.id) }))
+    .filter((target) => target.country);
+  const countryMap = asCountryMap(countries);
+  const regionRows = normalizeRegions(rawRegions);
+  const regionsById = new Map<string, any>(regionRows.map((region): [string, any] => [String(region?._id || region?.id || ""), region]));
+  const battleLists = await mapWithConcurrency(tracked, 2, async (target) => {
+    const result = await query("battle.getBattles", { countryId: target.id, isActive: true, limit: 100 }, force, 45_000);
+    return listOf(result);
+  });
+  const battlesById = new Map<string, any>();
+  battleLists.flat().forEach((battle) => {
+    if (!battle?.isActive) return;
+    const id = String(battle?._id || battle?.id || "");
+    if (id) battlesById.set(id, battle);
+  });
+  const battles = Array.from(battlesById.values());
+  const allOrderRequests = await Promise.all(battles.flatMap((battle) => (["attacker", "defender"] as const).map(async (side) => {
+    const id = String(battle?._id || battle?.id || "");
+    const value = await query("battleOrder.getByBattle", { battleId: id, side }, force, 30_000).catch(() => []);
+    return { key: `${id}:${side}`, orders: normalizeWarOrders(value) };
+  })));
+  const ordersByBattleSide = new Map(allOrderRequests.map((entry) => [entry.key, entry.orders]));
+  const allMuIds = Array.from(new Set(battles.flatMap((battle) => [
+    ...(Array.isArray(battle?.attacker?.muOrders) ? battle.attacker.muOrders : []),
+    ...(Array.isArray(battle?.defender?.muOrders) ? battle.defender.muOrders : []),
+  ]).map(String)));
+  const muRows = await queryBatchProcedure("mu.getById", allMuIds.map((muId) => ({ muId }))).catch(() => []);
+  const muById = new Map<string, any>();
+  muRows.forEach((mu, index) => {
+    if (mu && typeof mu === "object") muById.set(String(mu?._id || mu?.id || allMuIds[index]), mu);
+  });
+  const battleConfig = config?.battle || {};
+  const upgradesConfig = config?.upgradesConfig || {};
+  const percentFromUpgrade = (type: string, level: number, keys: string[]): number => {
+    const entry = upgradesConfig?.[type]?.levels?.[String(level)] || {};
+    for (const key of keys) {
+      const value = finite(entry?.stats?.[key] ?? entry?.[key]);
+      if (value !== null) return value;
+    }
+    return 0;
+  };
+  const worldDevelopment = countries.reduce((sum, country) => sum + (finite(country?.currentDevelopment) || 0), 0);
+  const allianceBonus = (country: any) => {
+    const allianceId = String(country?.allianceId || "");
+    if (!allianceId || !worldDevelopment) return 0;
+    const development = countries.filter((member) => String(member?.allianceId || "") === allianceId)
+      .reduce((sum, member) => sum + (finite(member?.currentDevelopment) || 0), 0);
+    const sharePercent = development / worldDevelopment * 100;
+    const cap = finite(battleConfig?.allianceDamagesBonusPercent) ?? 10;
+    return Math.max(0, Math.min(cap, cap - Math.max(0, sharePercent - 10) * 0.4));
+  };
+  const wars = battles.map((battle) => {
+    const battleId = String(battle?._id || battle?.id || "");
+    const attackerId = String(battle?.attacker?.country || "");
+    const defenderId = String(battle?.defender?.country || "");
+    const attackerRegionId = String(battle?.attacker?.region || "");
+    const defenderRegionId = String(battle?.defender?.region || "");
+    const attackerRegion = regionsById.get(attackerRegionId);
+    const defenderRegion = regionsById.get(defenderRegionId);
+    const round = battle?.currentRound || {};
+    const sideCountries = (side: "attacker" | "defender") => {
+      const data = battle?.[side] || {};
+      const mainCountryId = String(data?.country || "");
+      const oppositeId = String(battle?.[side === "attacker" ? "defender" : "attacker"]?.country || "");
+      const countryOrderIds = (Array.isArray(data?.countryOrders) ? data.countryOrders : []).map(String);
+      const muOrderIds = (Array.isArray(data?.muOrders) ? data.muOrders : []).map(String);
+      const sideOrders = ordersByBattleSide.get(`${battleId}:${side}`) || [];
+      const candidateIds = new Set<string>([mainCountryId, ...countryOrderIds]);
+      const sideAllianceId = String(countryMap.get(mainCountryId)?.allianceId || "");
+      for (const country of countries) {
+        const id = countryId(country);
+        if (id && sideAllianceId && String(country?.allianceId || "") === sideAllianceId) candidateIds.add(id);
+        if (id && (Array.isArray(countryMap.get(mainCountryId)?.defensivePacts) ? countryMap.get(mainCountryId).defensivePacts : []).map(String).includes(id)) candidateIds.add(id);
+      }
+      for (const muId of muOrderIds) {
+        const mu = muById.get(muId);
+        const ownerCountry = String(mu?.country || mu?.countryId || "");
+        if (ownerCountry) candidateIds.add(ownerCountry);
+      }
+      const ordersFor = (countryIdValue: string, kind: "country" | "mu") => sideOrders.filter((order) => {
+        const orderCountry = String(order?.countryId || order?.country?._id || order?.country?.id || order?.country || "");
+        const orderMu = String(order?.muId || order?.mu?._id || order?.mu?.id || order?.mu || "");
+        return kind === "country" ? orderCountry === countryIdValue : orderMu === countryIdValue;
+      });
+      const countriesOnSide = Array.from(candidateIds).filter(Boolean).map((id) => {
+        const country = countryMap.get(id) || {};
+        const bonuses: Array<{ name: string; percent: number }> = [];
+        if (id === mainCountryId) bonuses.push({ name: "Savaşan ülke", percent: finite(battleConfig?.patrioticBonusPercent) ?? 20 });
+        const sharesAlliance = id !== mainCountryId && sideAllianceId && String(country?.allianceId || "") === sideAllianceId;
+        if (sharesAlliance) bonuses.push({ name: "İttifak", percent: allianceBonus(country) });
+        if (String(country?.enemy || country?.swornEnemy || "") === oppositeId) bonuses.push({ name: "Yeminli düşman", percent: finite(battleConfig?.enemyDamagesBonusPercent) ?? 10 });
+        if (side === "defender" && (Array.isArray(country?.defensivePacts) ? country.defensivePacts : []).map(String).includes(mainCountryId)) {
+          bonuses.push({ name: "Savunma paktı", percent: finite(battleConfig?.defensivePactDamagesBonusPercent ?? battleConfig?.enemyDamagesBonusPercent) ?? 10 });
+        }
+        const detailedCountryOrders = ordersFor(id, "country");
+        const countryOrders = detailedCountryOrders.length
+          ? detailedCountryOrders
+          : countryOrderIds.includes(id) ? [{ priority: "default" }] : [];
+        for (const order of countryOrders) bonuses.push({ name: "Ülke emri", percent: orderBonusPercent(order, finite(battleConfig?.countryOrderBonusPercent) ?? 10) });
+        const unitOrderBonuses = muOrderIds.flatMap((muId) => {
+          const mu = muById.get(muId);
+          if (String(mu?.country || mu?.countryId || "") !== id) return [];
+          const relatedOrders = ordersFor(muId, "mu");
+          const orderValue = relatedOrders.length ? relatedOrders.reduce((sum, order) => sum + orderBonusPercent(order, finite(battleConfig?.muOrderBonusPercent) ?? 10), 0) : (finite(battleConfig?.muOrderBonusPercent) ?? 10);
+          const hqLevel = Number(mu?.activeUpgradeLevels?.headquarters || 0);
+          const hqBonus = percentFromUpgrade("headquarters", hqLevel, ["attackBonus", "damageBonus", "damage", "attack"]);
+          return [{ name: "Ordu emri", percent: orderValue }, ...(hqBonus ? [{ name: "Ordu karargâhı", percent: hqBonus }] : [])];
+        });
+        bonuses.push(...unitOrderBonuses);
+        if (id === mainCountryId && side === "defender" && String(defenderRegion?.initialCountry || "") === id) {
+          bonuses.push({ name: "Öz bölge savunması", percent: finite(battleConfig?.coreRegionBonusPercent) ?? 15 });
+        }
+        const isPartnerOf = (countryIdValue: string, ownerId: string) => {
+          if (!ownerId || !countryIdValue) return false;
+          const owner = countryMap.get(ownerId) || {};
+          const partner = countryMap.get(countryIdValue) || {};
+          return Boolean(
+            (owner.allianceId && String(owner.allianceId) === String(partner.allianceId || "")) ||
+            (Array.isArray(owner.allies) && owner.allies.map(String).includes(countryIdValue)) ||
+            (Array.isArray(owner.defensivePacts) && owner.defensivePacts.map(String).includes(countryIdValue)) ||
+            (Array.isArray(partner.defensivePacts) && partner.defensivePacts.map(String).includes(ownerId)),
+          );
+        };
+        if (side === "defender") {
+          const level = Number(defenderRegion?.activeUpgradeLevels?.bunker || 0);
+          const value = percentFromUpgrade("bunker", level, ["defenseBonus", "defense", "defence", "damage"]);
+          const ownerId = String(defenderRegion?.country || defenderId);
+          const factor = id === ownerId ? 1 : isPartnerOf(id, ownerId) ? 0.5 : 0;
+          if (value && factor) bonuses.push({ name: factor === 1 ? "Bunker" : "Müttefik bunker desteği", percent: value * factor });
+        }
+        if (side === "attacker") {
+          const level = Number(attackerRegion?.activeUpgradeLevels?.base || 0);
+          const value = percentFromUpgrade("base", level, ["attackBonus", "attack", "damage", "damageBonus"]);
+          const ownerId = String(attackerRegion?.country || attackerId);
+          const factor = id === ownerId ? 1 : isPartnerOf(id, ownerId) ? 0.5 : 0;
+          if (value && factor) bonuses.push({ name: factor === 1 ? "Askerî üs" : "Müttefik üs desteği", percent: value * factor });
+        }
+        if (id === mainCountryId && side === "defender" && defenderRegion?.isLinkedToCapital === false) {
+          bonuses.push({ name: "Başkent bağlantısı kesik", percent: finite(battleConfig?.regionNotLinkedToCapitalMalusPercent) ?? -25 });
+        }
+        if (id === mainCountryId && String(battle?.type || "") === "resistance" && side === "attacker") {
+          const ratio = Number(defenderRegion?.resistance || 0) / Math.max(1, Number(defenderRegion?.resistanceMax || 0));
+          bonuses.push({ name: "Direniş", percent: Math.max(0, Math.min(40, ratio * 40)) });
+        }
+        const total = bonuses.reduce((sum, bonus) => sum + bonus.percent, 0);
+        return { id, name: String(country?.name || id), bonusPercent: Number(total.toFixed(2)), bonuses };
+      }).filter((row) => row.bonuses.length).sort((a, b) => b.bonusPercent - a.bonusPercent);
+      return {
+        mainCountry: { id: mainCountryId, name: String(countryMap.get(mainCountryId)?.name || mainCountryId) },
+        countries: countriesOnSide,
+        totalBonusPercent: Number(countriesOnSide.reduce((sum, country) => sum + country.bonusPercent, 0).toFixed(2)),
+        damage: Number(round?.[side]?.damages || 0),
+        points: Number(round?.[side]?.points || 0),
+      };
+    };
+    const attacker = sideCountries("attacker");
+    const defender = sideCountries("defender");
+    return {
+      id: battleId,
+      url: `https://app.warera.io/battle/${battleId}`,
+      type: String(battle?.type || "war"),
+      typeLabel: ({ war: "Savaş", resistance: "Direniş", revolution: "Devrim" } as Record<string, string>)[String(battle?.type)] || "Muharebe",
+      attacker,
+      defender,
+      region: String(defenderRegion?.name || attackerRegion?.name || "Bölge bilinmiyor"),
+      round: Number(round?.number || 0),
+      roundsToWin: Number(battle?.roundsToWin || 2),
+      isActive: Boolean(battle?.isActive),
+      startedAt: battle?.createdAt || null,
+    };
+  }).sort((a, b) => a.type.localeCompare(b.type) || a.region.localeCompare(b.region, "tr"));
+  const battleIncludesCountry = (war: any, id: string) => [war.attacker, war.defender]
+    .some((side) => side.mainCountry.id === id || side.countries.some((country: any) => country.id === id));
+  return {
+    success: true,
+    countries: tracked.map(({ id, key, label }) => ({ id, key, label })),
+    wars,
+    counts: {
+      wars: wars.length,
+      turkey: wars.filter((war) => battleIncludesCountry(war, TURKEY_ID)).length,
+      cameroon: wars.filter((war) => battleIncludesCountry(war, CAMEROON_ID)).length,
+    },
+    fetchedAt: new Date().toISOString(),
+    source: "battle.getBattles · battleOrder.getByBattle · country.getAllCountries · region.getRegionsObject · mu.getById · gameConfig",
+    note: "Toplamlar ülke emri, ordu emri/karargâh, ittifak, yeminli düşman, savunma paktı, öz bölge, bunker/üs, direniş ve ikmal hattı bonuslarını toplar. API öncelik veya süre bilgisini vermediğinde ilgili bonus oyun yapılandırmasındaki varsayılan değerle hesaplanır.",
+  };
+}
+
 const MILITARY_SKILLS = ["attack", "precision", "criticalChance", "criticalDamages", "armor", "dodge", "lootChance", "health", "hunger"];
 const ECONOMY_SKILLS = ["production", "entrepreneurship", "companies", "energy", "management"];
 const MINISTRY_NAMES: Record<string, string> = {
@@ -1118,6 +1332,7 @@ async function loadView(view: string, force: boolean, countryFilter = "all", sel
   switch (view) {
     case "citizens": return citizensData(force, countryFilter);
     case "factory-audit": return factoryAuditData(force);
+    case "country-wars": return countryWarsData(force);
     case "country-tracker": return countryTrackerData(force, selectedCountryIds);
     case "alliance-damage": return allianceDamageData(force);
     default: throw Object.assign(new Error("Geçersiz yönetim görünümü."), { statusCode: 400 });
@@ -1131,7 +1346,7 @@ export default async function handler(req: any, res: any) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET") return res.status(405).json({ success: false, error: "Method not allowed" });
   const view = String(req.query?.view || "");
-  const allowed = new Set(["citizens", "factory-audit", "country-tracker", "alliance-damage"]);
+  const allowed = new Set(["citizens", "factory-audit", "country-wars", "country-tracker", "alliance-damage"]);
   if (!allowed.has(view)) return res.status(400).json({ success: false, error: "Geçersiz yönetim görünümü." });
   const force = req.query?.refresh === "true";
   const countryFilter = String(req.query?.country || "all");
@@ -1144,9 +1359,9 @@ export default async function handler(req: any, res: any) {
     : view === "country-tracker"
       ? countrySelectionProvided ? (selectedCountryIds?.length ? [...selectedCountryIds].sort().join("-") : "none") : "default"
       : "all";
-  const cacheVersion = view === "factory-audit" ? "v7" : "v4";
+  const cacheVersion = view === "factory-audit" ? "v7" : view === "country-wars" ? "v1" : "v4";
   const key = `nizam_management_${view}_${selectionKey}_${cacheVersion}`;
-  const ttl = view === "citizens" || view === "factory-audit" ? 10 * 60_000 : view === "country-tracker" ? 30_000 : VIEW_TTL_MS;
+  const ttl = view === "citizens" || view === "factory-audit" ? 10 * 60_000 : view === "country-wars" ? 30_000 : view === "country-tracker" ? 30_000 : VIEW_TTL_MS;
   try {
     const cached = viewCache.get(key);
     if (!force && cached && Date.now() - cached.timestamp < ttl) return res.status(200).json(cached.data);

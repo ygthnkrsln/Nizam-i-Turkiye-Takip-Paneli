@@ -2312,6 +2312,7 @@ export async function fetchManagementTreasury(forceRefresh = false): Promise<Man
 export type ManagementIntelligenceView =
   | "citizens"
   | "factory-audit"
+  | "country-wars"
   | "country-tracker"
   | "alliance-damage";
 
