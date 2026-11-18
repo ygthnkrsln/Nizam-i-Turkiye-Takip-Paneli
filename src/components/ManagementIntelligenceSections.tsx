@@ -353,7 +353,7 @@ export function CountryWarsSection() {
     <div className={`rounded-xl border p-2 ${color === "rose" ? "border-rose-500/20 bg-rose-950/10" : "border-sky-500/20 bg-sky-950/10"}`}>
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-white/[0.06] pb-1.5">
         <div><div className={`text-[9px] font-bold uppercase tracking-[0.18em] ${color === "rose" ? "text-rose-300" : "text-sky-300"}`}>{label}</div><div className="mt-0.5 text-sm font-black text-white">{side.mainCountry.name}</div></div>
-        <div className="text-right"><div className="text-lg font-black text-white">{formatPercent(side.totalBonusPercent)}</div><div className="text-[9px] uppercase tracking-wider text-[#BBE1FA]/45">ülkelerin toplam bonusu</div></div>
+        <div className="text-right"><div className="text-[9px] uppercase tracking-wider text-[#BBE1FA]/45">ülke bonusları</div></div>
       </div>
       <div className="mt-2 flex items-center justify-between text-[10px] text-[#BBE1FA]/60"><span>Bu tur hasarı</span><b className="text-white">{formatNumber(side.damage)}</b></div>
       <div className="mt-1 flex items-center justify-between text-[10px] text-[#BBE1FA]/60"><span>Tur puanı</span><b className="text-white">{formatNumber(side.points)}</b></div>

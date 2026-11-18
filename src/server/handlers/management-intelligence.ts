@@ -978,10 +978,13 @@ async function countryWarsData(force = false) {
         const total = bonuses.reduce((sum, bonus) => sum + bonus.percent, 0);
         return { id, name: String(country?.name || id), bonusPercent: Number(total.toFixed(2)), bonuses };
       }).filter((row) => row.bonuses.length).sort((a, b) => b.bonusPercent - a.bonusPercent);
+      const isTrackedMainCountry = [TURKEY_ID, CAMEROON_ID].includes(mainCountryId);
+      const visibleCountries = isTrackedMainCountry
+        ? countriesOnSide.filter((country) => country.id === mainCountryId)
+        : countriesOnSide;
       return {
         mainCountry: { id: mainCountryId, name: String(countryMap.get(mainCountryId)?.name || mainCountryId) },
-        countries: countriesOnSide,
-        totalBonusPercent: Number(countriesOnSide.reduce((sum, country) => sum + country.bonusPercent, 0).toFixed(2)),
+        countries: visibleCountries,
         damage: Number(round?.[side]?.damages || 0),
         points: Number(round?.[side]?.points || 0),
       };
@@ -1015,7 +1018,7 @@ async function countryWarsData(force = false) {
     },
     fetchedAt: new Date().toISOString(),
     source: "battle.getBattles · battleOrder.getByBattle · country.getAllCountries · region.getRegionsObject · mu.getById · gameConfig",
-    note: "Toplamlar ülke emri, ordu emri/karargâh, ittifak, yeminli düşman, savunma paktı, öz bölge, bunker/üs, direniş ve ikmal hattı bonuslarını toplar. API öncelik veya süre bilgisini vermediğinde ilgili bonus oyun yapılandırmasındaki varsayılan değerle hesaplanır.",
+    note: "Bonuslar savaş başına, Türkiye veya Kamerun'un kendi ülkesi ve karşı taraftaki ülkeler için ayrı ayrı gösterilir; taraf bonusları toplanmaz. API öncelik veya süre bilgisini vermediğinde ilgili bonus oyun yapılandırmasındaki varsayılan değerle hesaplanır.",
   };
 }
 
