@@ -930,7 +930,12 @@ async function countryWarsData(force = false) {
           const hqBonus = percentFromUpgrade("headquarters", hqLevel, ["attackBonus", "damageBonus", "damage", "attack"]);
           return [{ name: "Ordu emri", percent: orderValue }, ...(hqBonus ? [{ name: "Ordu karargâhı", percent: hqBonus }] : [])];
         });
-        bonuses.push(...unitOrderBonuses);
+        // A battle bonus applies once per country, even if several military units
+        // have placed the same order. Keep the strongest value for each bonus type.
+        for (const name of ["Ordu emri", "Ordu karargâhı"]) {
+          const matching = unitOrderBonuses.filter((bonus) => bonus.name === name);
+          if (matching.length) bonuses.push({ name, percent: Math.max(...matching.map((bonus) => bonus.percent)) });
+        }
         if (id === mainCountryId && side === "defender" && String(defenderRegion?.initialCountry || "") === id) {
           bonuses.push({ name: "Öz bölge savunması", percent: finite(battleConfig?.coreRegionBonusPercent) ?? 15 });
         }
