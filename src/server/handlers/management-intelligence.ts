@@ -894,7 +894,9 @@ async function countryWarsData(force = false) {
       for (const country of countries) {
         const id = countryId(country);
         if (id && sideAllianceId && String(country?.allianceId || "") === sideAllianceId) candidateIds.add(id);
-        if (id && (Array.isArray(countryMap.get(mainCountryId)?.defensivePacts) ? countryMap.get(mainCountryId).defensivePacts : []).map(String).includes(id)) candidateIds.add(id);
+        const mainPacts = Array.isArray(countryMap.get(mainCountryId)?.defensivePacts) ? countryMap.get(mainCountryId).defensivePacts.map(String) : [];
+        const countryPacts = Array.isArray(country?.defensivePacts) ? country.defensivePacts.map(String) : [];
+        if (id && (mainPacts.includes(id) || countryPacts.includes(mainCountryId))) candidateIds.add(id);
       }
       for (const muId of muOrderIds) {
         const mu = muById.get(muId);
@@ -910,10 +912,12 @@ async function countryWarsData(force = false) {
         const country = countryMap.get(id) || {};
         const bonuses: Array<{ name: string; percent: number }> = [];
         if (id === mainCountryId) bonuses.push({ name: "Savaşan ülke", percent: finite(battleConfig?.patrioticBonusPercent) ?? 20 });
-        const sharesAlliance = id !== mainCountryId && sideAllianceId && String(country?.allianceId || "") === sideAllianceId;
+        const sharesAlliance = sideAllianceId && String(country?.allianceId || "") === sideAllianceId;
         if (sharesAlliance) bonuses.push({ name: "İttifak", percent: allianceBonus(country) });
         if (String(country?.enemy || country?.swornEnemy || "") === oppositeId) bonuses.push({ name: "Yeminli düşman", percent: finite(battleConfig?.enemyDamagesBonusPercent) ?? 10 });
-        if (side === "defender" && (Array.isArray(country?.defensivePacts) ? country.defensivePacts : []).map(String).includes(mainCountryId)) {
+        const mainPacts = Array.isArray(countryMap.get(mainCountryId)?.defensivePacts) ? countryMap.get(mainCountryId).defensivePacts.map(String) : [];
+        const countryPacts = Array.isArray(country?.defensivePacts) ? country.defensivePacts.map(String) : [];
+        if (side === "defender" && (countryPacts.includes(mainCountryId) || mainPacts.includes(id))) {
           bonuses.push({ name: "Savunma paktı", percent: finite(battleConfig?.defensivePactDamagesBonusPercent ?? battleConfig?.enemyDamagesBonusPercent) ?? 10 });
         }
         const detailedCountryOrders = ordersFor(id, "country");

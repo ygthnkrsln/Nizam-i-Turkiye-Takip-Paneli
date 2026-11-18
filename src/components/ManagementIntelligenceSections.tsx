@@ -350,17 +350,17 @@ export function CountryWarsSection() {
     return `${number > 0 ? "+" : ""}${formatNumber(number, 1)}%`;
   };
   const sidePanel = (side: AnyRecord, label: string, color: "rose" | "sky") => (
-    <div className={`rounded-xl border p-3 ${color === "rose" ? "border-rose-500/20 bg-rose-950/10" : "border-sky-500/20 bg-sky-950/10"}`}>
-      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-white/[0.06] pb-2">
-        <div><div className={`text-[9px] font-bold uppercase tracking-[0.18em] ${color === "rose" ? "text-rose-300" : "text-sky-300"}`}>{label}</div><div className="mt-1 font-black text-white">{side.mainCountry.name}</div></div>
-        <div className="text-right"><div className="text-xl font-black text-white">{formatPercent(side.totalBonusPercent)}</div><div className="text-[9px] uppercase tracking-wider text-[#BBE1FA]/45">ülkelerin toplam bonusu</div></div>
+    <div className={`rounded-xl border p-2 ${color === "rose" ? "border-rose-500/20 bg-rose-950/10" : "border-sky-500/20 bg-sky-950/10"}`}>
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-white/[0.06] pb-1.5">
+        <div><div className={`text-[9px] font-bold uppercase tracking-[0.18em] ${color === "rose" ? "text-rose-300" : "text-sky-300"}`}>{label}</div><div className="mt-0.5 text-sm font-black text-white">{side.mainCountry.name}</div></div>
+        <div className="text-right"><div className="text-lg font-black text-white">{formatPercent(side.totalBonusPercent)}</div><div className="text-[9px] uppercase tracking-wider text-[#BBE1FA]/45">ülkelerin toplam bonusu</div></div>
       </div>
       <div className="mt-2 flex items-center justify-between text-[10px] text-[#BBE1FA]/60"><span>Bu tur hasarı</span><b className="text-white">{formatNumber(side.damage)}</b></div>
       <div className="mt-1 flex items-center justify-between text-[10px] text-[#BBE1FA]/60"><span>Tur puanı</span><b className="text-white">{formatNumber(side.points)}</b></div>
-      <div className="mt-3 space-y-2">
-        {(side.countries || []).map((country: AnyRecord) => <div key={country.id} className="rounded-lg border border-white/[0.06] bg-[#11191E]/80 p-2.5">
-          <div className="flex items-center justify-between gap-2"><span className="text-xs font-bold text-white">{country.name}</span><span className={`text-xs font-black ${country.bonusPercent < 0 ? "text-rose-300" : "text-emerald-300"}`}>{formatPercent(country.bonusPercent)}</span></div>
-          <div className="mt-1.5 flex flex-wrap gap-1">{(country.bonuses || []).map((bonus: AnyRecord, index: number) => <span key={`${bonus.name}-${index}`} className="rounded border border-[#3282B8]/15 bg-[#182329] px-1.5 py-0.5 text-[9px] text-[#BBE1FA]/65">{bonus.name} {formatPercent(bonus.percent)}</span>)}</div>
+      <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto pr-1">
+        {(side.countries || []).map((country: AnyRecord) => <div key={country.id} className="rounded-md border border-white/[0.06] bg-[#11191E]/80 px-2 py-1.5">
+          <div className="flex items-center justify-between gap-2"><span className="text-[11px] font-bold text-white">{country.name}</span><span className={`text-[11px] font-black ${country.bonusPercent < 0 ? "text-rose-300" : "text-emerald-300"}`}>{formatPercent(country.bonusPercent)}</span></div>
+          <div className="mt-1 flex flex-wrap gap-1">{(country.bonuses || []).map((bonus: AnyRecord, index: number) => <span key={`${bonus.name}-${index}`} className="rounded border border-[#3282B8]/15 bg-[#182329] px-1 py-0.5 text-[8px] text-[#BBE1FA]/65">{bonus.name} {formatPercent(bonus.percent)}</span>)}</div>
         </div>)}
         {!side.countries?.length && <div className="py-2 text-center text-[10px] text-[#BBE1FA]/40">Ülke bonusu bulunamadı.</div>}
       </div>
