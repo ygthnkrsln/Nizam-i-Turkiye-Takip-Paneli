@@ -863,15 +863,15 @@ async function countryWarsData(force = false) {
     }
     return 0;
   };
-  const worldDevelopment = countries.reduce((sum, country) => sum + (finite(country?.currentDevelopment) || 0), 0);
+  const allianceIds = Array.from(new Set(countries.map((country) => String(country?.allianceId || "")).filter(Boolean)));
+  const allianceRows = await Promise.all(allianceIds.map(async (allianceId) => [allianceId, await query("alliance.getById", { allianceId }, force, 60_000).catch(() => null)] as const));
+  const allianceById = new Map<string, any>(allianceRows);
   const allianceBonus = (country: any) => {
     const allianceId = String(country?.allianceId || "");
-    if (!allianceId || !worldDevelopment) return 0;
-    const development = countries.filter((member) => String(member?.allianceId || "") === allianceId)
-      .reduce((sum, member) => sum + (finite(member?.currentDevelopment) || 0), 0);
-    const sharePercent = development / worldDevelopment * 100;
-    const cap = finite(battleConfig?.allianceDamagesBonusPercent) ?? 10;
-    return Math.max(0, Math.min(cap, cap - Math.max(0, sharePercent - 10) * 0.4));
+    const alliance = allianceById.get(allianceId) || {};
+    return finite(alliance?.damageBonusPercent ?? alliance?.damagesBonusPercent ?? alliance?.damageBonus ?? alliance?.bonusPercent)
+      ?? finite(battleConfig?.allianceDamagesBonusPercent)
+      ?? 0;
   };
   const wars = battles.map((battle) => {
     const battleId = String(battle?._id || battle?.id || "");
