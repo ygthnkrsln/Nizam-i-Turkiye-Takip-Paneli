@@ -22,12 +22,12 @@ This document is a navigation index for coding assistants and contributors. It d
 
 ### Donation tracking
 
-1. `src/components/ManagementDonationTrackingSection.tsx` requests the management overview through `src/services/wareraApi.ts`; its player autocomplete combines the saved 30-day tracked-player directory with members in the current overview response.
+1. When reactivated, `src/components/ManagementDonationTrackingSection.tsx` requests the management overview through `src/services/wareraApi.ts`; its player autocomplete combines the saved 30-day tracked-player directory with members in the current overview response.
 2. `src/server/handlers/management-overview.ts` fetches tracked-unit membership, user profiles and donations; it combines current data with daily snapshots and aggregates the overview.
-3. `src/server/services/daily-damage.ts` records one player-keyed profile for every player seen in tracked armies during the 30-day window, plus each day's tracked-army membership. The scheduled cron captures each player's daily income calculation and eligibility, and advances a signed country-donation balance from the daily target and donation transactions. Nonzero balances remain player-keyed across inactivity and army changes.
-4. `src/lib/supabaseStorage.ts` stores player snapshots and donation balances inside the existing `daily_snapshots.armies` JSONB payload (under `__players`) to avoid a database migration, normalizes them on read, and enforces the 30-day snapshot retention policy.
-5. `src/server/handlers/management-overview.ts` automatically refreshes stale eligible daily targets for the current week when the donation overview is requested, using current company income while preserving each day's saved eligibility/rate. It returns refresh status with the overview; `src/components/ManagementDonationTrackingSection.tsx` applies country payments against the signed balance (debts first, then positive carry) and shows each day's target alongside its payments.
-6. The donation page falls back to the bulk `POST /api/player-factories` path when a daily income calculation is unavailable; the individual calculation modal uses the single-player path.
+3. `src/server/services/daily-damage.ts` records one player-keyed profile for every player seen in tracked armies during the 30-day window, plus each day's tracked-army membership. The cron currently captures army/player data only; donation target and balance capture is dormant, and new snapshots omit those fields. Its reactivation steps are documented in `docs/donation-tracking-reactivation.md`.
+4. `src/lib/supabaseStorage.ts` supports legacy player snapshots and donation balances inside the existing `daily_snapshots.armies` JSONB payload (under `__players`) without a database migration and enforces the 30-day retention policy. Existing historical donation fields expire with their snapshots; new snapshots omit them.
+5. The management overview endpoint retains automatic stale-target refresh and donation aggregation for reactivation. The inactive page does not call it; `donations=false` excludes donation processing for other callers.
+6. The donation tracking page is currently inactive: its route shows a notice without mounting the component or requesting data. The component and API handlers remain available for reactivation.
 7. `src/server/handlers/player-factories.ts` calculates automated-engine and employee income, applying item conversion recipes and input-material costs.
 8. Factory location tracking uses the existing `/api/management-overview?view=factory-audit` dispatch to scan active Türkiye and Cameroon citizens, their active company slots, and company regions; `region.getRegionsObject` maps each factory region to its country, with Yaounde and Central Anatolia treated as their initial-country capitals. It does not add a Vercel function.
 
@@ -37,6 +37,8 @@ The canonical tracked unit list is `src/config/trackedArmies.ts`; server and cli
 
 - Cron route: `api/cron/record-daily-damage.ts` → `src/server/services/daily-damage.ts`.
 - Shared snapshots: player profiles are keyed once per user while daily army membership is stored separately; `src/lib/supabaseStorage.ts` handles backward-compatible persistence and `src/lib/dailyDamage.ts` resolves legacy and current snapshot shapes.
+- The 02:55 TSİ snapshot also archives the combined daily damage for all tracked armies in `all_armies_daily_damage`, separate from the 30-day player snapshots. `/api/all-armies-daily-summary?history=true` serves this history to the selectable 7-day, 30-day, week, and month chart in `src/components/ManagementArmyTrackingSection.tsx`.
+- Create the long-lived aggregate table by running `scripts/create-all-armies-daily-damage-table.sql` in Supabase; the cron backfills eligible totals from the retained snapshots when it next runs.
 - Economy/combat mode classification: `src/lib/playerMode.ts`; mode-sensitive profile flows use `user.getUserById` because `user.getUserLite` no longer includes skills. Consumers include daily snapshots, management handlers, country statistics, and military-unit data.
 - Snapshot dates are retained for 30 days. Check the `Europe/Istanbul` game-day offset/reset logic before changing date calculations.
 - Local Express routes are separately defined in `server.ts`; when changing cron/snapshot behavior, compare the local route with the Vercel API route.
@@ -63,7 +65,7 @@ The canonical tracked unit list is `src/config/trackedArmies.ts`; server and cli
 
 | Feature | Files |
 |---|---|
-| Donation table, weekly totals, filters, settings, exports | `src/components/ManagementDonationTrackingSection.tsx` |
+| Donation table, weekly totals, filters, settings, exports (currently inactive) | `src/components/ManagementDonationTrackingSection.tsx`, `src/App.tsx` |
 | Donation calculation details and company breakdown | `src/components/DonationCalculationModal.tsx` |
 | Company/factory and employee revenue calculations | `src/server/handlers/player-factories.ts`, `api/player-factories.ts` |
 | Bulk company calculation client | `src/services/wareraApi.ts` (`fetchPlayerCompanyCalculations`) |
@@ -80,7 +82,7 @@ The canonical tracked unit list is `src/config/trackedArmies.ts`; server and cli
 |---|---|
 | Army overview / army member table | `src/components/ManagementArmyTrackingSection.tsx`, `src/components/ArmyStatsTable.tsx`, `src/server/handlers/mu-data.ts` |
 | Military overview and details | `src/components/MilitaryOverviewSection.tsx`, `src/components/MilitaryDetailsSection.tsx`, `src/server/handlers/military-overview.ts`, `src/server/handlers/military-details.ts` |
-| Combat telemetry and daily damage | `src/components/DailyDamageTelemetrySection.tsx`, `src/components/AllianceDamageSection.tsx`, `src/server/handlers/combat-telemetry.ts`, `src/server/handlers/all-armies-daily-summary.ts` |
+| Combat telemetry, daily damage, and all-armies damage history | `src/components/DailyDamageTelemetrySection.tsx`, `src/components/ManagementArmyTrackingSection.tsx`, `src/components/AllianceDamageSection.tsx`, `src/server/handlers/combat-telemetry.ts`, `src/server/handlers/all-armies-daily-summary.ts`, `src/server/services/daily-damage.ts` |
 | Türkiye and Cameroon active wars / country damage bonuses | `src/components/ManagementIntelligenceSections.tsx`, `src/server/handlers/management-intelligence.ts` (`country-wars` view through the existing management endpoint) |
 | Potential damage / combat classification | `src/lib/potentialDamage.ts`, `src/lib/dailyDamage.ts` |
 | Level and prestige tools | `src/components/LevelCalculatorSection.tsx`, `src/components/PrestigeDamageOptimizerSection.tsx`, `src/utils/levelProgression.ts`, `src/utils/prestigeOptimizer.ts` |
@@ -96,7 +98,7 @@ Vercel function files in `api/` are thin entry points. Implementations generally
 | `/api/player-factories` | `api/player-factories.ts` → `src/server/handlers/player-factories.ts` |
 | `/api/cron/record-daily-damage` | `api/cron/record-daily-damage.ts` → `src/server/services/daily-damage.ts` |
 | `/api/daily-damage-snapshots` | `api/daily-damage-snapshots.ts` → `src/server/handlers/daily-damage-snapshots.ts` |
-| `/api/all-armies-daily-summary` | `api/all-armies-daily-summary.ts` → `src/server/handlers/all-armies-daily-summary.ts` |
+| `/api/all-armies-daily-summary` | `api/all-armies-daily-summary.ts` → `src/server/handlers/all-armies-daily-summary.ts`; `?history=true&from=YYYY-MM-DD&to=YYYY-MM-DD` reads archived totals |
 | `/api/combat-telemetry` | `api/combat-telemetry.ts` → `src/server/handlers/combat-telemetry.ts` |
 | `/api/country-stats` | `api/country-stats.ts` → `src/server/handlers/country-stats.ts` |
 | `/api/military-overview` | `api/military-overview.ts` → `src/server/handlers/military-overview.ts` |
@@ -115,6 +117,7 @@ Local development uses the Express routes in `server.ts`; it is not just a wrapp
 | Daily snapshot processing | `src/server/services/daily-damage.ts` |
 | Vercel cron schedule / function limits | `vercel.json` |
 | Optional management cache SQL | `scripts/create-management-cache-table.sql` |
+| All-armies daily damage history table | `scripts/create-all-armies-daily-damage-table.sql` |
 | Snapshot/backfill utilities | `scripts/seed-yesterday-baseline.ts`, `scripts/backfill-dtx-daily-baseline.ts`, `scripts/backfill-mu-member-baseline.ts` |
 | Local development and build scripts | `package.json`, `server.ts` |
 

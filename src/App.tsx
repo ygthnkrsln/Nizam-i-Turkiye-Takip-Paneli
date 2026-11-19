@@ -13,7 +13,6 @@ const MilitaryOverviewSection = React.lazy(() => import('./components/MilitaryOv
 const MilitaryDetailsSection = React.lazy(() => import('./components/MilitaryDetailsSection').then((module) => ({ default: module.MilitaryDetailsSection })));
 const DailyDamageTelemetrySection = React.lazy(() => import('./components/DailyDamageTelemetrySection').then((module) => ({ default: module.DailyDamageTelemetrySection })));
 const ManagementArmyTrackingSection = React.lazy(() => import('./components/ManagementArmyTrackingSection').then((module) => ({ default: module.ManagementArmyTrackingSection })));
-const ManagementDonationTrackingSection = React.lazy(() => import('./components/ManagementDonationTrackingSection').then((module) => ({ default: module.ManagementDonationTrackingSection })));
 const ManagementCitizensSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementCitizensSection })));
 const ManagementFactoryAuditSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.ManagementFactoryAuditSection })));
 const CountryWarsSection = React.lazy(() => import('./components/ManagementIntelligenceSections').then((module) => ({ default: module.CountryWarsSection })));
@@ -460,7 +459,7 @@ export default function App() {
       {/* Main Container */}
       <main className="flex-1 min-w-0 max-w-7xl w-full mx-auto px-3 pt-16 pb-5 sm:px-6 sm:pb-6 lg:px-8 relative z-10 md:pt-6">
         {/* Error Alert */}
-        {error && (
+        {error && activeTab !== 'mgmtDonations' && (
           <div className="mb-6 p-3 sm:p-4 rounded-xl bg-[#182329] border border-[#3282B8]/40 text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm shadow-xl">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-[#3282B8] shrink-0" />
@@ -486,7 +485,15 @@ export default function App() {
         ) : activeTab === 'mgmtArmies' ? (
           <ManagementArmyTrackingSection onSelectArmy={handleMuIdChange} onNavigateTab={handleTabChange} />
         ) : activeTab === 'mgmtDonations' ? (
-          <ManagementDonationTrackingSection currentMuId={muId} onSelectArmy={handleMuIdChange} />
+          <div
+            role="status"
+            className="rounded-xl border border-amber-500/30 bg-amber-950/25 p-4 text-sm text-amber-100 shadow-lg"
+          >
+            <div className="flex items-center gap-2 font-semibold">
+              <AlertCircle className="h-5 w-5 shrink-0 text-amber-300" />
+              <span>Bu sayfa aktif değil, fonksiyonları değiştirilecek.</span>
+            </div>
+          </div>
         ) : activeTab === 'mgmtCitizens' ? (
           <ManagementCitizensSection />
         ) : activeTab === 'mgmtFactoryAudit' ? (

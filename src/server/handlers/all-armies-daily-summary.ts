@@ -9,12 +9,63 @@ import {
   getCurrentWeeklyDamage,
   getMilitaryUnitWeeklyDamage,
 } from "../../lib/dailyDamage.js";
-import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
+import {
+  getAllArmiesDailyDamageHistoryRecords,
+  readSnapshotsWithSupabase,
+} from "../services/daily-damage.js";
+import { fetchAllArmiesDailyDamageHistory } from "../../lib/supabaseStorage.js";
 
 export const PRESET_TRACKED_ARMIES = TRACKED_ARMIES;
 
 let summaryCache: { data: any; timestamp: number } | null = null;
 const CACHE_TTL_MS = 20 * 1000; // 20 seconds fresh cache
+
+function isValidDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const timestamp = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(timestamp) &&
+    new Date(timestamp).toISOString().slice(0, 10) === value;
+}
+
+async function handleHistoryRequest(req: any, res: any) {
+  const from = String(req.query?.from || "");
+  const to = String(req.query?.to || "");
+  if (!isValidDate(from) || !isValidDate(to) || from > to) {
+    return res.status(400).json({
+      success: false,
+      error: "Günlük hasar geçmişi için geçerli başlangıç ve bitiş tarihleri gereklidir.",
+    });
+  }
+
+  try {
+    const [archivedRecords, snapshots] = await Promise.all([
+      fetchAllArmiesDailyDamageHistory(from, to),
+      readSnapshotsWithSupabase(),
+    ]);
+    const recordsByDate = new Map(
+      archivedRecords.map((record) => [record.date, record]),
+    );
+    for (const record of getAllArmiesDailyDamageHistoryRecords(
+      snapshots,
+      PRESET_TRACKED_ARMIES.map((army) => army.id),
+    )) {
+      if (record.date >= from && record.date <= to && !recordsByDate.has(record.date)) {
+        recordsByDate.set(record.date, record);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      records: Array.from(recordsByDate.values()).sort((a, b) => a.date.localeCompare(b.date)),
+    });
+  } catch (error: any) {
+    console.error("Could not load all-armies daily damage history:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Günlük hasar geçmişi alınamadı.",
+    });
+  }
+}
 
 async function fetchWarEra(url: string) {
   const token = getNextWarEraToken();
@@ -38,6 +89,10 @@ export default async function handler(req: any, res: any) {
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
+  }
+
+  if (req.query?.history === "true") {
+    return handleHistoryRequest(req, res);
   }
 
   const forceRefresh = req.query?.refresh === "true";

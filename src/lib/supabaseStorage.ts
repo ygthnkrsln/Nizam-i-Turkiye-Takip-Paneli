@@ -64,6 +64,7 @@ export interface DailySnapshotRecord {
   date: string;
   timestamp: number;
   iso?: string;
+  allArmiesDailyDamage?: Omit<AllArmiesDailyDamageRecord, "date">;
   players?: Record<string, {
     username: string;
     countryId?: string;
@@ -139,6 +140,15 @@ export interface DailySnapshotRecord {
   created_at?: string;
 }
 
+export interface AllArmiesDailyDamageRecord {
+  date: string;
+  totalDamage: number;
+  trackedArmyCount: number;
+  expectedArmyCount: number;
+  isComplete: boolean;
+  capturedAt: string;
+}
+
 export interface ManagementOverviewCacheRecord {
   key: string;
   payload: Record<string, any>;
@@ -164,6 +174,9 @@ export async function saveSnapshotToSupabase(
       armies: {
         ...snapshot.armies,
         __players: snapshot.players || {},
+        ...(snapshot.allArmiesDailyDamage
+          ? { __allArmiesDailyDamage: snapshot.allArmiesDailyDamage }
+          : {}),
       },
       iso: snapshot.iso || new Date(snapshot.timestamp).toISOString(),
     };
@@ -227,7 +240,11 @@ export async function fetchSnapshotsFromSupabase(
       if (row.date && row.armies) {
         const armies =
           typeof row.armies === "string" ? JSON.parse(row.armies) : row.armies;
-        const { __players: embeddedPlayers = {}, ...armyRecords } = armies || {};
+        const {
+          __players: embeddedPlayers = {},
+          __allArmiesDailyDamage: allArmiesDailyDamage,
+          ...armyRecords
+        } = armies || {};
         store[row.date] = {
           date: row.date,
           timestamp:
@@ -236,6 +253,7 @@ export async function fetchSnapshotsFromSupabase(
               : Number(row.timestamp),
           iso: row.iso || row.created_at,
           players: embeddedPlayers,
+          allArmiesDailyDamage,
           armies: armyRecords,
         };
       }
@@ -246,6 +264,71 @@ export async function fetchSnapshotsFromSupabase(
     console.error("[Supabase] Error reading snapshots from Supabase:", err);
     return null;
   }
+}
+
+export async function saveAllArmiesDailyDamageHistory(
+  records: AllArmiesDailyDamageRecord[],
+): Promise<boolean> {
+  if (records.length === 0) return true;
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  const rows = records.map((record) => ({
+    date: record.date,
+    total_damage: record.totalDamage,
+    tracked_army_count: record.trackedArmyCount,
+    expected_army_count: record.expectedArmyCount,
+    is_complete: record.isComplete,
+    captured_at: record.capturedAt,
+  }));
+  const { error } = await client
+    .from("all_armies_daily_damage")
+    .upsert(rows, { onConflict: "date" });
+
+  if (error) {
+    console.warn("[Supabase] Could not save all-armies daily damage history:", error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function fetchAllArmiesDailyDamageHistory(
+  from: string,
+  to: string,
+): Promise<AllArmiesDailyDamageRecord[]> {
+  const client = getSupabaseClient();
+  if (!client) {
+    throw new Error("Günlük hasar geçmişi veritabanına bağlanılamadı.");
+  }
+
+  const { data, error } = await client
+    .from("all_armies_daily_damage")
+    .select("date,total_damage,tracked_army_count,expected_army_count,is_complete,captured_at")
+    .gte("date", from)
+    .lte("date", to)
+    .order("date", { ascending: true });
+
+  if (error) {
+    console.error("[Supabase] Could not read all-armies daily damage history:", error.message);
+    const message = error.message.toLowerCase();
+    if (
+      message.includes("does not exist") ||
+      message.includes("schema cache") ||
+      message.includes("could not find the table")
+    ) {
+      throw new Error("Günlük hasar arşivi hazır değil. Supabase'de scripts/create-all-armies-daily-damage-table.sql dosyasını çalıştırın.");
+    }
+    throw new Error("Günlük hasar geçmişi veritabanından alınamadı.");
+  }
+
+  return (data || []).map((row: any) => ({
+    date: String(row.date).slice(0, 10),
+    totalDamage: Number(row.total_damage),
+    trackedArmyCount: Number(row.tracked_army_count),
+    expectedArmyCount: Number(row.expected_army_count),
+    isComplete: Boolean(row.is_complete),
+    capturedAt: String(row.captured_at),
+  }));
 }
 
 export async function readManagementOverviewCache(

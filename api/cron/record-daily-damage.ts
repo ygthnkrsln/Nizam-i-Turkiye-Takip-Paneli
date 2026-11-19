@@ -33,9 +33,7 @@ export default async function handler(req: any, res: any) {
   const startedAt = Date.now();
   try {
     let phaseStartedAt = Date.now();
-    const snapshot = await snapshotAllArmies({
-      captureDonationTargets: req.method === "GET",
-    });
+    const snapshot = await snapshotAllArmies();
     const snapshotDurationMs = Date.now() - phaseStartedAt;
     let countrySnapshot: any = null;
     let countrySnapshotDurationMs = 0;
@@ -57,6 +55,7 @@ export default async function handler(req: any, res: any) {
       ...timingMs,
       trackedArmies: Object.keys(snapshot.armies).length,
       trackedPlayers: Object.keys(snapshot.players || {}).length,
+      allArmiesDamageHistorySaved: snapshot.allArmiesDamageHistorySaved,
     }));
     return res.status(200).json({
       success: true,
@@ -64,6 +63,7 @@ export default async function handler(req: any, res: any) {
       date: snapshot.date,
       armiesCount: Object.keys(snapshot.armies).length,
       supabaseSaved: snapshot.supabaseSaved,
+      allArmiesDamageHistorySaved: snapshot.allArmiesDamageHistorySaved,
       supabaseConnected: snapshot.supabaseConnected,
       timingMs,
       countrySnapshot,
