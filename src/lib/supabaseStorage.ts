@@ -66,6 +66,7 @@ export interface DailySnapshotRecord {
   iso?: string;
   players?: Record<string, {
     username: string;
+    countryId?: string;
     weeklyDamage: number;
     wealth?: number;
     dailyDamage?: number;

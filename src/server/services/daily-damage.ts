@@ -592,6 +592,7 @@ export async function snapshotAllArmies(
 
       return [userId, {
         username: user.username || existingToday?.username || previousPlayer?.username || "Bilinmeyen Asker",
+        countryId: String(user.country?._id || user.country?.id || user.countryId || (typeof user.country === "string" ? user.country : "") || existingToday?.countryId || previousPlayer?.countryId || ""),
         weeklyDamage,
         wealth: Number(user.rankings?.userWealth?.value ?? user.wealth ?? 0),
         dailyDamage: previousPlayer

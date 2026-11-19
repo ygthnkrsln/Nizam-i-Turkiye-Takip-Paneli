@@ -1,5 +1,6 @@
 import { getNextWarEraToken, getWarEraTokens } from "../../lib/wareraTokens.js";
 import {
+  fetchSnapshotsFromSupabase,
   readManagementOverviewCache,
   saveManagementOverviewCache,
 } from "../../lib/supabaseStorage.js";
@@ -574,29 +575,51 @@ async function allianceDamageData(force = false) {
     unionNames.test(String(country?.name || "")),
   );
   const { snapshots } = await persistCountrySnapshot(raw, new Date());
+  const globalSnapshots = (globalThis as any).__DAILY_DAMAGE_SNAPSHOTS__ || {};
+  const dailySnapshots = await fetchSnapshotsFromSupabase(30).catch(() => null) || globalSnapshots;
   const today = turkeyDate();
   const todayTime = new Date(`${today}T12:00:00`).getTime();
-  const previousTarget = todayTime - 7 * 86_400_000;
-  const previousSnapshot = [...snapshots]
-    .filter((snapshot) => {
-      const diff = previousTarget - new Date(`${snapshot.date}T12:00:00`).getTime();
-      return diff >= 0 && diff <= 2 * 86_400_000;
-    })
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
-  const previousById = new Map<string, any>((previousSnapshot?.countries || []).map((country: AnyRecord): [string, AnyRecord] => [String(country.id), country]));
-  const previousAvailable = Boolean(previousSnapshot);
+  const damageDates = Array.from({ length: 14 }, (_, index) => turkeyDate(new Date(todayTime - (13 - index) * 86_400_000)));
+  const daySet = new Set(damageDates);
+  const dailyTotals = new Map<string, { current: number; previous: number; currentDays: Set<string>; previousDays: Set<string> }>();
+  for (const date of damageDates) {
+    const snapshot = dailySnapshots?.[date];
+    for (const [userId, player] of Object.entries(snapshot?.players || {})) {
+      const countryIdValue = String((player as any)?.countryId || "");
+      if (!countryIdValue || !unionCountryIds.has(countryIdValue) && !members.some((country) => countryId(country) === countryIdValue)) continue;
+      const row = dailyTotals.get(countryIdValue) || { current: 0, previous: 0, currentDays: new Set<string>(), previousDays: new Set<string>() };
+      const damage = Number((player as any)?.dailyDamage);
+      const age = Math.floor((todayTime - new Date(`${date}T12:00:00`).getTime()) / 86_400_000);
+      if (Number.isFinite(damage)) {
+        if (age >= 0 && age < 7) { row.current += damage; row.currentDays.add(date); }
+        else if (age >= 7 && age < 14) { row.previous += damage; row.previousDays.add(date); }
+      }
+      dailyTotals.set(countryIdValue, row);
+    }
+  }
+  const currentCoverageDays = new Set(damageDates.filter((date) => {
+    const age = Math.floor((todayTime - new Date(`${date}T12:00:00`).getTime()) / 86_400_000);
+    return age >= 0 && age < 7 && dailySnapshots?.[date];
+  })).size;
+  const previousCoverageDays = new Set(damageDates.filter((date) => {
+    const age = Math.floor((todayTime - new Date(`${date}T12:00:00`).getTime()) / 86_400_000);
+    return age >= 7 && age < 14 && dailySnapshots?.[date];
+  })).size;
+  const previousAvailable = previousCoverageDays > 0;
   const countryMetrics = members.map((country) => {
     const current = metricCountry(country);
     return {
       ...current,
-      previousWeeklyDamage: finite(previousById.get(current.id)?.weeklyDamage),
+      weeklyDamage: dailyTotals.get(current.id)?.currentDays.size ? dailyTotals.get(current.id)!.current : 0,
+      previousWeeklyDamage: dailyTotals.get(current.id)?.previousDays.size ? dailyTotals.get(current.id)!.previous : null,
+      damageCoverageDays: dailyTotals.get(current.id)?.currentDays.size || 0,
       allianceId: String(country?.allianceId || ""),
     };
   }).sort((a, b) => (b.weeklyDamage || 0) - (a.weeklyDamage || 0));
   const unionMembers = countryMetrics.filter((country) => unionCountryIds.has(country.id) || unionNames.test(country.name));
   const otherMembers = countryMetrics.filter((country) => !unionMembers.includes(country));
   const unionCurrent = unionMembers.reduce((sum, country) => sum + (country.weeklyDamage || 0), 0);
-  const unionPreviousAvailable = previousAvailable && unionMembers.every((country) => country.previousWeeklyDamage !== null);
+  const unionPreviousAvailable = previousAvailable && unionMembers.some((country) => country.previousWeeklyDamage !== null);
   const unionPrevious = unionPreviousAvailable
     ? unionMembers.reduce((sum, country) => sum + (country.previousWeeklyDamage || 0), 0)
     : null;
@@ -619,13 +642,13 @@ async function allianceDamageData(force = false) {
     countries,
     currentTotal: unionCurrent,
     previousTotal: unionPrevious,
-    previousSnapshotDate: previousSnapshot?.date || null,
+    previousSnapshotDate: damageDates.find((date) => date === turkeyDate(new Date(todayTime - 7 * 86_400_000))) || null,
     currentSnapshotDate: today,
     previousAvailable,
     fetchedAt: new Date().toISOString(),
-    note: previousAvailable
-      ? "Haftalık hasar, WarEra ülke sıralamasındaki son 7 günlük değerdir. Geçen hafta karşılaştırması 7 gün önceki günlük snapshot ile yapılır."
-      : "Geçen hafta karşılaştırması için en az 5 günlük snapshot geçmişi gerekir; günlük ülke snapshotları mevcut hasar cron'u tarafından kaydedilir.",
+    damageSource: "Kişi başı günlük hasar snapshot toplamı",
+    coverage: { currentDays: currentCoverageDays, previousDays: previousCoverageDays },
+    note: `Haftalık hasar kişi başı günlük snapshot'lardan toplanır. Kapsam: bu hafta ${currentCoverageDays}/7 gün, geçen hafta ${previousCoverageDays}/7 gün. Eski snapshot'larda ülke kimliği bulunmayan oyuncular dahil edilemez.`,
   };
 }
 
