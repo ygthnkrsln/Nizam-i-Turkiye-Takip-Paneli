@@ -1,13 +1,15 @@
 ﻿// Vercel Serverless Function / Cron Job: GET /api/cron/record-daily-damage
-// Runs daily at 02:55 to snapshot army damage, player modes, and donation targets.
+// Runs daily at 02:55 to snapshot army damage and player modes.
 
 import fs from "fs";
 import path from "path";
 import {
+  saveAllArmiesDailyDamageHistory,
   saveSnapshotToSupabase,
   fetchSnapshotsFromSupabase,
   isSupabaseConnected,
 } from "../../lib/supabaseStorage.js";
+import type { AllArmiesDailyDamageRecord } from "../../lib/supabaseStorage.js";
 import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
 import {
   calculateDailyDamageFromSnapshot,
@@ -233,6 +235,88 @@ export function writeSnapshotsToDisk(data: Record<string, any>) {
   }
 }
 
+function getPreviousDate(date: string): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) - 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function calculateAllArmiesDailyDamage(
+  snapshotDate: string,
+  snapshot: any,
+  baselineDate: string | null,
+  baselineSnapshot: any,
+  trackedArmyIds: string[],
+  freshProfileIds?: Set<string>,
+): AllArmiesDailyDamageRecord {
+  const capturedAt = String(snapshot?.iso || new Date(snapshot?.timestamp || Date.now()).toISOString());
+  const trackedArmyCount = trackedArmyIds.filter((id) => snapshot?.armies?.[id]).length;
+  const consecutiveBaseline = baselineDate === getPreviousDate(snapshotDate);
+  let isComplete =
+    consecutiveBaseline &&
+    trackedArmyCount === trackedArmyIds.length &&
+    trackedArmyIds.every((id) => Boolean(baselineSnapshot?.armies?.[id]));
+  let totalDamage = 0;
+
+  for (const armyId of trackedArmyIds) {
+    if (!snapshot?.armies?.[armyId]) continue;
+    for (const userId of getSnapshotArmyMemberIds(snapshot, armyId)) {
+      const currentPlayer = getSnapshotPlayer(snapshot, userId);
+      const baselinePlayer = getSnapshotPlayer(baselineSnapshot, userId);
+      if (!currentPlayer || (freshProfileIds && !freshProfileIds.has(userId))) {
+        isComplete = false;
+        continue;
+      }
+      if (!baselinePlayer) isComplete = false;
+      totalDamage += calculateDailyDamageFromSnapshot(
+        Number(currentPlayer.weeklyDamage || 0),
+        baselinePlayer?.weeklyDamage,
+      );
+    }
+  }
+
+  return {
+    date: snapshotDate,
+    totalDamage,
+    trackedArmyCount,
+    expectedArmyCount: trackedArmyIds.length,
+    isComplete,
+    capturedAt,
+  };
+}
+
+export function getAllArmiesDailyDamageHistoryRecords(
+  snapshots: Record<string, any>,
+  trackedArmyIds: string[],
+): AllArmiesDailyDamageRecord[] {
+  const dates = Object.keys(snapshots).sort().slice(-30);
+  const datesByValue = new Set(dates);
+  return dates.flatMap((date, index) => {
+    const snapshot = snapshots[date];
+    const saved = snapshot?.allArmiesDailyDamage;
+    if (saved && Number.isFinite(Number(saved.totalDamage))) {
+      return [{
+        date,
+        totalDamage: Number(saved.totalDamage),
+        trackedArmyCount: Number(saved.trackedArmyCount || 0),
+        expectedArmyCount: Number(saved.expectedArmyCount || trackedArmyIds.length),
+        isComplete: Boolean(saved.isComplete),
+        capturedAt: String(saved.capturedAt || snapshot.iso || date),
+      }];
+    }
+
+    const baselineDate = dates[index - 1];
+    if (!baselineDate || !datesByValue.has(getPreviousDate(date))) return [];
+    return [calculateAllArmiesDailyDamage(
+      date,
+      snapshot,
+      baselineDate,
+      snapshots[baselineDate],
+      trackedArmyIds,
+    )];
+  });
+}
+
 export async function readSnapshotsWithSupabase(): Promise<
   Record<string, any>
 > {
@@ -296,20 +380,22 @@ export async function snapshotAllArmies(
     balance: number;
     player: any;
   }>();
-  for (const snapshot of Object.values(currentStore).sort(
-    (snapshotA: any, snapshotB: any) => Number(snapshotA?.timestamp) - Number(snapshotB?.timestamp),
-  )) {
-    for (const [userId, player] of Object.entries(getSnapshotPlayers(snapshot))) {
-      const balanceDate = String((player as any)?.donationBalanceDate || "");
-      const balance = Number((player as any)?.donationBalance);
-      if (!balanceDate || !Number.isFinite(balance)) continue;
-      const previousBalance = latestDonationBalances.get(userId);
-      if (!previousBalance || balanceDate >= previousBalance.date) {
-        latestDonationBalances.set(userId, {
-          date: balanceDate,
-          balance,
-          player,
-        });
+  if (captureDonationTargets) {
+    for (const snapshot of Object.values(currentStore).sort(
+      (snapshotA: any, snapshotB: any) => Number(snapshotA?.timestamp) - Number(snapshotB?.timestamp),
+    )) {
+      for (const [userId, player] of Object.entries(getSnapshotPlayers(snapshot))) {
+        const balanceDate = String((player as any)?.donationBalanceDate || "");
+        const balance = Number((player as any)?.donationBalance);
+        if (!balanceDate || !Number.isFinite(balance)) continue;
+        const previousBalance = latestDonationBalances.get(userId);
+        if (!previousBalance || balanceDate >= previousBalance.date) {
+          latestDonationBalances.set(userId, {
+            date: balanceDate,
+            balance,
+            player,
+          });
+        }
       }
     }
   }
@@ -481,14 +567,16 @@ export async function snapshotAllArmies(
     if (balance.balance !== 0) recentlyTrackedUserIds.add(userId);
   }
 
-  const bootstrapStartDate = previousGameWeekStart(completedGameDate);
   const usersWithPriorTargets = new Set<string>();
-  for (const [snapshotDate, snapshot] of Object.entries(currentStore)) {
-    const snapshotGameDate = getSnapshotGameDate(snapshotDate, snapshot);
-    if (snapshotGameDate < bootstrapStartDate || snapshotGameDate > completedGameDate) continue;
-    for (const [userId, player] of Object.entries(getSnapshotPlayers(snapshot))) {
-      if (Number((player as any)?.donationTargetSnapshot?.target) > 0) {
-        usersWithPriorTargets.add(userId);
+  const bootstrapStartDate = previousGameWeekStart(completedGameDate);
+  if (captureDonationTargets) {
+    for (const [snapshotDate, snapshot] of Object.entries(currentStore)) {
+      const snapshotGameDate = getSnapshotGameDate(snapshotDate, snapshot);
+      if (snapshotGameDate < bootstrapStartDate || snapshotGameDate > completedGameDate) continue;
+      for (const [userId, player] of Object.entries(getSnapshotPlayers(snapshot))) {
+        if (Number((player as any)?.donationTargetSnapshot?.target) > 0) {
+          usersWithPriorTargets.add(userId);
+        }
       }
     }
   }
@@ -526,20 +614,22 @@ export async function snapshotAllArmies(
   }
 
   const balanceStartDatesByUser = new Map<string, string>();
-  for (const userId of userIds) {
-    const previousBalance = latestDonationBalances.get(userId);
-    if (
-      !usersWithPriorTargets.has(userId) &&
-      (!previousBalance || previousBalance.balance === 0)
-    ) continue;
+  if (captureDonationTargets) {
+    for (const userId of userIds) {
+      const previousBalance = latestDonationBalances.get(userId);
+      if (
+        !usersWithPriorTargets.has(userId) &&
+        (!previousBalance || previousBalance.balance === 0)
+      ) continue;
 
-    const currentPlayer = getSnapshotPlayer(currentStore[dateStr], userId);
-    if (currentPlayer?.donationBalanceDate === completedGameDate) continue;
+      const currentPlayer = getSnapshotPlayer(currentStore[dateStr], userId);
+      if (currentPlayer?.donationBalanceDate === completedGameDate) continue;
 
-    const startDate = previousBalance
-      ? shiftGameDate(previousBalance.date, 1)
-      : bootstrapStartDate;
-    if (startDate <= completedGameDate) balanceStartDatesByUser.set(userId, startDate);
+      const startDate = previousBalance
+        ? shiftGameDate(previousBalance.date, 1)
+        : bootstrapStartDate;
+      if (startDate <= completedGameDate) balanceStartDatesByUser.set(userId, startDate);
+    }
   }
   const donationPaymentsPromise = captureDonationTargets
     ? fetchCountryDonationsByDate(balanceStartDatesByUser, completedGameDate)
@@ -587,7 +677,7 @@ export async function snapshotAllArmies(
           existingTarget?.calculationVersion === 2
             ? existingTarget
             : await getDonationTargetSnapshot(user, existingToday)
-        : existingTarget;
+        : undefined;
       const weeklyDamage = Number(user.rankings?.weeklyUserDamages?.value || 0);
 
       return [userId, {
@@ -609,9 +699,8 @@ export async function snapshotAllArmies(
       }] as const;
     },
   );
-  const playerProfilesAndIncomeMs = Date.now() - phaseStartedAt;
+  const playerProfilesMs = Date.now() - phaseStartedAt;
   const donationPayments = await donationPaymentsPromise;
-  const donationBalancesMs = donationPayments.durationMs;
 
   const players: NonNullable<DailySnapshotRecord["players"]> = {
     ...currentStore[dateStr].players,
@@ -629,22 +718,24 @@ export async function snapshotAllArmies(
   }
 
   const targetsByUserDate = new Map<string, Map<string, any>>();
-  for (const [snapshotDate, snapshot] of Object.entries(currentStore)) {
-    const snapshotGameDate = getSnapshotGameDate(snapshotDate, snapshot);
-    for (const [userId, player] of Object.entries(getSnapshotPlayers(snapshot))) {
-      const target = (player as any)?.donationTargetSnapshot;
-      if (!target || !Number.isFinite(Number(target.target))) continue;
+  if (captureDonationTargets) {
+    for (const [snapshotDate, snapshot] of Object.entries(currentStore)) {
+      const snapshotGameDate = getSnapshotGameDate(snapshotDate, snapshot);
+      for (const [userId, player] of Object.entries(getSnapshotPlayers(snapshot))) {
+        const target = (player as any)?.donationTargetSnapshot;
+        if (!target || !Number.isFinite(Number(target.target))) continue;
+        const targets = targetsByUserDate.get(userId) || new Map<string, any>();
+        targets.set(snapshotGameDate, target);
+        targetsByUserDate.set(userId, targets);
+      }
+    }
+    for (const [userId, player] of playerEntries) {
+      const target = player.donationTargetSnapshot;
+      if (!target) continue;
       const targets = targetsByUserDate.get(userId) || new Map<string, any>();
-      targets.set(snapshotGameDate, target);
+      targets.set(gameDate, target);
       targetsByUserDate.set(userId, targets);
     }
-  }
-  for (const [userId, player] of playerEntries) {
-    const target = player.donationTargetSnapshot;
-    if (!target) continue;
-    const targets = targetsByUserDate.get(userId) || new Map<string, any>();
-    targets.set(gameDate, target);
-    targetsByUserDate.set(userId, targets);
   }
 
   for (const [userId, startDate] of balanceStartDatesByUser) {
@@ -688,7 +779,15 @@ export async function snapshotAllArmies(
       delete players[userId];
     }
   }
+  if (!captureDonationTargets) {
+    for (const player of Object.values(players)) {
+      delete player.donationBalance;
+      delete player.donationBalanceDate;
+      delete player.donationTargetSnapshot;
+    }
+  }
   currentStore[dateStr].players = players;
+  currentStore[dateStr].armies = {};
 
   for (const army of validArmySnapshots) {
     const armyWeeklyDamage = army.memberIds.reduce(
@@ -705,6 +804,22 @@ export async function snapshotAllArmies(
     };
   }
 
+  const currentDamageSnapshot = calculateAllArmiesDailyDamage(
+    dateStr,
+    currentStore[dateStr],
+    previousDate || null,
+    previousSnapshot,
+    PRESET_MILITARY_UNITS.map((army) => army.id),
+    new Set(usersById.keys()),
+  );
+  currentStore[dateStr].allArmiesDailyDamage = {
+    totalDamage: currentDamageSnapshot.totalDamage,
+    trackedArmyCount: currentDamageSnapshot.trackedArmyCount,
+    expectedArmyCount: currentDamageSnapshot.expectedArmyCount,
+    isComplete: currentDamageSnapshot.isComplete,
+    capturedAt: currentDamageSnapshot.capturedAt,
+  };
+
   const retainedDates = Object.keys(currentStore).sort().slice(-30);
   currentStore = Object.fromEntries(retainedDates.map((date) => [date, currentStore[date]]));
 
@@ -719,28 +834,34 @@ export async function snapshotAllArmies(
   } catch (err) {
     console.warn("Could not persist snapshot to Supabase:", err);
   }
+  const allArmiesDamageHistorySaved = await saveAllArmiesDailyDamageHistory(
+    getAllArmiesDailyDamageHistoryRecords(
+      currentStore,
+      PRESET_MILITARY_UNITS.map((army) => army.id),
+    ),
+  );
+  if (!allArmiesDamageHistorySaved) {
+    console.warn("All-armies daily damage history was not persisted.");
+  }
 
   const timingMs = {
     loadSnapshots: loadSnapshotsMs,
     trackedArmyMembership: trackedArmyMembershipMs,
-    playerProfilesAndIncome: playerProfilesAndIncomeMs,
-    donationBalances: donationBalancesMs,
+    playerProfiles: playerProfilesMs,
     persistSnapshot: Date.now() - phaseStartedAt,
     total: Date.now() - startedAt,
   };
-  const incomeCalculatedCount = Object.values(currentStore[dateStr].players || {})
-    .filter((player: any) => player.donationTargetSnapshot?.incomeCalculated).length;
   console.info("[Daily snapshot timing]", JSON.stringify({
     date: dateStr,
     ...timingMs,
     trackedArmies: validArmySnapshots.length,
     trackedPlayers: userIds.length,
-    incomeCalculatedPlayers: incomeCalculatedCount,
   }));
 
   return {
     ...currentStore[dateStr],
     supabaseSaved,
+    allArmiesDamageHistorySaved,
     supabaseConnected: isSupabaseConnected(),
     timingMs,
   };

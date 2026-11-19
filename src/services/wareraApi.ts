@@ -2037,6 +2037,28 @@ export async function fetchAllArmiesDailySummary(
   return res.json();
 }
 
+export interface AllArmiesDailyDamageHistoryRecord {
+  date: string;
+  totalDamage: number;
+  trackedArmyCount: number;
+  expectedArmyCount: number;
+  isComplete: boolean;
+  capturedAt: string;
+}
+
+export async function fetchAllArmiesDailyDamageHistory(
+  from: string,
+  to: string,
+): Promise<AllArmiesDailyDamageHistoryRecord[]> {
+  const params = new URLSearchParams({ history: "true", from, to });
+  const res = await fetch(`/api/all-armies-daily-summary?${params.toString()}`);
+  const result = await res.json();
+  if (!res.ok || !result.success || !Array.isArray(result.records)) {
+    throw new Error(result.error || `Hasar geçmişi alınamadı (${res.status})`);
+  }
+  return result.records;
+}
+
 export interface CompanyCalculationItem {
   id: string;
   name: string;

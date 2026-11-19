@@ -1991,9 +1991,7 @@ app.get("/api/combat-telemetry", async (req, res) => {
 // API Route: Cron Job endpoint for recording daily damage snapshot (runs at 02:55 TSİ)
 app.all("/api/cron/record-daily-damage", async (req, res) => {
   try {
-    const snapshot = await snapshotAllArmies({
-      captureDonationTargets: req.method === "GET",
-    });
+    const snapshot = await snapshotAllArmies();
     let countrySnapshot: any = null;
     try {
       countrySnapshot = await recordCountryTrackerSnapshot();
@@ -2005,6 +2003,7 @@ app.all("/api/cron/record-daily-damage", async (req, res) => {
       message: `02:55 Günlük Hasar Snapshot başarıyla tamamlandı (${Object.keys(snapshot.armies).length} Ordu).`,
       date: snapshot.date,
       armiesCount: Object.keys(snapshot.armies).length,
+      allArmiesDamageHistorySaved: snapshot.allArmiesDamageHistorySaved,
       countrySnapshot,
       snapshot,
     });
@@ -2177,7 +2176,7 @@ async function startServer() {
           console.log(
             `[02:55 TSİ CRON] Taking scheduled daily damage snapshot for ${todayStr}...`,
           );
-          snapshotAllArmies({ captureDonationTargets: true })
+          snapshotAllArmies()
             .then(() => recordCountryTrackerSnapshot())
             .catch(console.error);
         }
