@@ -866,12 +866,25 @@ async function countryWarsData(force = false) {
     }
     const uniqueIds = Array.from(new Set(ids));
     const profiles = await queryBatchUsers(uniqueIds);
+    const militaryUnitEntries = profiles.flatMap((profile) => {
+      const values = [profile?.militaryUnits, profile?.militaryUnit, profile?.militaryUnitId, profile?.mu, profile?.muId].flatMap((value) => Array.isArray(value) ? value : value ? [value] : []);
+      return values.map((value: any) => ({ value, id: String(value?._id || value?.id || value?.muId || (typeof value === "string" && /^[a-f0-9]{24}$/i.test(value) ? value : "")) }));
+    });
+    const unitIds = Array.from(new Set(militaryUnitEntries.map((entry) => entry.id).filter(Boolean)));
+    const unitRows = await queryBatchProcedure("mu.getById", unitIds.map((muId) => ({ muId }))).catch(() => []);
+    const unitNames = new Map<string, string>(unitRows.map((unit: any, index: number): [string, string] => [String(unit?._id || unit?.id || unitIds[index]), String(unit?.name || unit?.shortName || "Birlik bilgisi yok")]));
     const players = profiles.flatMap((profile, index) => {
       if (!profile || typeof profile !== "object") return [];
       const weeklyDamage = finite(profile?.rankings?.weeklyUserDamages?.value ?? profile?.weeklyDamages ?? profile?.weeklyDamage);
       if (weeklyDamage === null) return [];
       const id = String(profile?._id || profile?.id || uniqueIds[index] || "");
-      return [{ id, name: String(profile?.username || profile?.name || "Adsız oyuncu"), weeklyDamage, url: id ? `https://app.warera.io/user/${id}` : null }];
+      const rawUnits = [profile?.militaryUnits, profile?.militaryUnit, profile?.militaryUnitId, profile?.mu, profile?.muId].flatMap((value) => Array.isArray(value) ? value : value ? [value] : []);
+      const units = Array.from(new Set(rawUnits.map((value: any) => {
+        if (typeof value === "object") return String(value?.name || value?.shortName || unitNames.get(String(value?._id || value?.id || value?.muId || "")) || "");
+        const unitId = String(value);
+        return unitNames.get(unitId) || (/^[a-f0-9]{24}$/i.test(unitId) ? "" : unitId);
+      }).filter(Boolean)));
+      return [{ id, name: String(profile?.username || profile?.name || "Adsız oyuncu"), countryId: target.id, countryName: target.label, units, unitLabel: units.join(", ") || "Birlik bilgisi yok", weeklyDamage, url: id ? `https://app.warera.io/user/${id}` : null }];
     }).sort((left, right) => right.weeklyDamage - left.weeklyDamage);
     return { key: target.key, label: target.label, players, playerCount: uniqueIds.length, profiledCount: players.length, complete };
   });

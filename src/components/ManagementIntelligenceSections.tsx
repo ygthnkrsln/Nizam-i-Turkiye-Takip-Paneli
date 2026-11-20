@@ -391,42 +391,46 @@ export function CountryWarsSection() {
 
 export function CountryDamageRankingSection() {
   const { data, error, loading, refreshing, reload } = useManagementView<AnyRecord>("country-wars");
-  const [countryKey, setCountryKey] = useState("tr");
+  const [countryKey, setCountryKey] = useState("all");
+  const [unitFilter, setUnitFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"damage" | "name">("damage");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const ranking = (data?.playerRankings || []).find((item: AnyRecord) => item.key === countryKey);
+  const rankingRows = countryKey === "all" ? (data?.playerRankings || []) : (data?.playerRankings || []).filter((item: AnyRecord) => item.key === countryKey);
+  const rawPlayers = rankingRows.flatMap((row: AnyRecord) => row.players || []);
+  const unitOptions = Array.from(new Set(rawPlayers.flatMap((player: AnyRecord) => player.units || []))).sort((a: string, b: string) => a.localeCompare(b, "tr"));
   const players = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("tr-TR");
-    return [...(ranking?.players || [])]
-      .filter((player: AnyRecord) => !query || String(player.name || "").toLocaleLowerCase("tr-TR").includes(query))
+    return [...rawPlayers]
+      .filter((player: AnyRecord) => (!query || String(player.name || "").toLocaleLowerCase("tr-TR").includes(query)) && (unitFilter === "all" || (player.units || []).includes(unitFilter)))
       .sort((left: AnyRecord, right: AnyRecord) => sort === "name"
         ? String(left.name).localeCompare(String(right.name), "tr")
         : Number(right.weeklyDamage) - Number(left.weeklyDamage));
-  }, [ranking, search, sort]);
+  }, [rawPlayers, search, sort, unitFilter]);
   const pageCount = Math.max(1, Math.ceil(players.length / pageSize));
   const pagePlayers = players.slice((page - 1) * pageSize, page * pageSize);
   const totalDamage = players.reduce((sum: number, player: AnyRecord) => sum + Number(player.weeklyDamage || 0), 0);
   const averageDamage = players.length ? totalDamage / players.length : 0;
-  useEffect(() => setPage(1), [countryKey, search, sort, pageSize]);
+  useEffect(() => setPage(1), [countryKey, search, sort, pageSize, unitFilter]);
   return <div className="space-y-4">
     <PageHeading title="Haftalık Hasar Sıralaması" subtitle="Türkiye ve Kamerun vatandaşlarını haftalık hasarlarına göre filtreleyip karşılaştır." onRefresh={reload} refreshing={refreshing} />
     <StatusMessage error={error} loading={loading && !data} />
     {data && <>
-      <div className="flex flex-wrap gap-2 rounded-xl border border-[#3282B8]/15 bg-[#182329] p-2">{(data.playerRankings || []).map((row: AnyRecord) => <button key={row.key} onClick={() => setCountryKey(row.key)} className={`rounded-lg border px-3 py-2 text-xs font-bold ${countryKey === row.key ? "border-sky-400/40 bg-sky-950/40 text-sky-100" : "border-transparent text-[#BBE1FA]/60 hover:bg-[#141C21]"}`}>{row.label}</button>)}</div>
+      <div className="flex flex-wrap gap-2 rounded-xl border border-[#3282B8]/15 bg-[#182329] p-2"><button onClick={() => setCountryKey("all")} className={`rounded-lg border px-3 py-2 text-xs font-bold ${countryKey === "all" ? "border-sky-400/40 bg-sky-950/40 text-sky-100" : "border-transparent text-[#BBE1FA]/60 hover:bg-[#141C21]"}`}>Tüm ülkeler</button>{(data.playerRankings || []).map((row: AnyRecord) => <button key={row.key} onClick={() => setCountryKey(row.key)} className={`rounded-lg border px-3 py-2 text-xs font-bold ${countryKey === row.key ? "border-sky-400/40 bg-sky-950/40 text-sky-100" : "border-transparent text-[#BBE1FA]/60 hover:bg-[#141C21]"}`}>{row.label}</button>)}</div>
       <div className="grid gap-3 sm:grid-cols-3">
-        <MetricCard label="Sıralanan oyuncu" value={formatNumber(players.length)} detail={`${ranking?.profiledCount || 0} profili alındı`} tone="info" icon={<Users className="h-4 w-4" />} />
+        <MetricCard label="Sıralanan oyuncu" value={formatNumber(players.length)} detail={`${rawPlayers.length} profili alındı`} tone="info" icon={<Users className="h-4 w-4" />} />
         <MetricCard label="Listelenen haftalık hasar" value={formatNumber(totalDamage)} detail="Filtrelenmiş oyuncuların toplamı" tone="good" icon={<Activity className="h-4 w-4" />} />
         <MetricCard label="Oyuncu başına ortalama" value={formatNumber(averageDamage)} detail="Seçili filtre sonucuna göre" tone="warn" icon={<Flag className="h-4 w-4" />} />
       </div>
-      <Panel title={`${ranking?.label || "Ülke"} oyuncu sıralaması`} subtitle={`${ranking?.playerCount || 0} vatandaş tarandı · ${ranking?.profiledCount || 0} haftalık hasar profili · ${ranking?.complete ? "Tarama tamamlandı" : "İlk 2.000 vatandaş tarandı"}`}>
+      <Panel title={`${countryKey === "all" ? "Tüm ülkeler" : rankingRows[0]?.label || "Ülke"} oyuncu sıralaması`} subtitle={`${rankingRows.reduce((sum: number, row: AnyRecord) => sum + Number(row.playerCount || 0), 0)} vatandaş tarandı · ${rawPlayers.length} haftalık hasar profili`}>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <div className="relative min-w-[220px] flex-1"><Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-[#BBE1FA]/35" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Oyuncu ara…" className="w-full rounded-lg border border-[#3282B8]/20 bg-[#10191e] py-2 pl-8 pr-3 text-xs text-white outline-none focus:border-sky-400/40" /></div>
           <select value={sort} onChange={(event) => setSort(event.target.value as "damage" | "name")} className="rounded-lg border border-[#3282B8]/20 bg-[#10191e] px-3 py-2 text-xs text-white"><option value="damage">Hasar: yüksekten düşüğe</option><option value="name">İsim: A–Z</option></select>
+          <select value={unitFilter} onChange={(event) => setUnitFilter(event.target.value)} className="max-w-52 rounded-lg border border-[#3282B8]/20 bg-[#10191e] px-3 py-2 text-xs text-white"><option value="all">Tüm birlikler</option>{unitOptions.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select>
           <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="rounded-lg border border-[#3282B8]/20 bg-[#10191e] px-3 py-2 text-xs text-white"><option value={25}>25 satır</option><option value={50}>50 satır</option><option value={100}>100 satır</option></select>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-white/[0.06]"><table className="w-full min-w-[620px] text-left text-xs"><thead className="bg-[#141C21] text-[9px] uppercase tracking-wider text-[#BBE1FA]/50"><tr><th className="px-3 py-2.5">Sıra</th><th className="px-3 py-2.5">Oyuncu</th><th className="px-3 py-2.5 text-right">Haftalık hasar</th><th className="px-3 py-2.5 text-right">Toplam içindeki pay</th><th className="px-3 py-2.5 text-right">Profil</th></tr></thead><tbody>{pagePlayers.map((player: AnyRecord, index: number) => <tr key={player.id || index} className="border-t border-white/[0.05] hover:bg-white/[0.02]"><td className="px-3 py-2.5 font-mono text-[#BBE1FA]/45">{sort === "damage" ? (page - 1) * pageSize + index + 1 : "—"}</td><td className="px-3 py-2.5 font-semibold text-white">{player.name}</td><td className="px-3 py-2.5 text-right font-mono font-bold text-cyan-200">{formatNumber(player.weeklyDamage)}</td><td className="px-3 py-2.5 text-right text-[#BBE1FA]/65">{totalDamage ? `${(player.weeklyDamage / totalDamage * 100).toLocaleString("tr-TR", { maximumFractionDigits: 2 })}%` : "—"}</td><td className="px-3 py-2.5 text-right">{player.url && <a href={player.url} target="_blank" rel="noreferrer" className="text-sky-300 hover:text-white">Aç ↗</a>}</td></tr>)}{!pagePlayers.length && <tr><td colSpan={5} className="px-3 py-8 text-center text-[#BBE1FA]/45">Bu aramayla eşleşen oyuncu bulunamadı.</td></tr>}</tbody></table></div>
+        <div className="overflow-x-auto rounded-lg border border-white/[0.06]"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-[#141C21] text-[9px] uppercase tracking-wider text-[#BBE1FA]/50"><tr><th className="px-3 py-2.5">Sıra</th><th className="px-3 py-2.5">Oyuncu</th><th className="px-3 py-2.5">Ülke</th><th className="px-3 py-2.5">Birlik</th><th className="px-3 py-2.5 text-right">Haftalık hasar</th><th className="px-3 py-2.5 text-right">Toplam içindeki pay</th><th className="px-3 py-2.5 text-right">Profil</th></tr></thead><tbody>{pagePlayers.map((player: AnyRecord, index: number) => <tr key={player.id || index} className="border-t border-white/[0.05] hover:bg-white/[0.02]"><td className="px-3 py-2.5 font-mono text-[#BBE1FA]/45">{sort === "damage" ? (page - 1) * pageSize + index + 1 : "—"}</td><td className="px-3 py-2.5 font-semibold text-white">{player.name}</td><td className="px-3 py-2.5 text-[#BBE1FA]/75">{player.countryName}</td><td className="px-3 py-2.5 text-[#BBE1FA]/65">{player.unitLabel}</td><td className="px-3 py-2.5 text-right font-mono font-bold text-cyan-200">{formatNumber(player.weeklyDamage)}</td><td className="px-3 py-2.5 text-right text-[#BBE1FA]/65">{totalDamage ? `${(player.weeklyDamage / totalDamage * 100).toLocaleString("tr-TR", { maximumFractionDigits: 2 })}%` : "—"}</td><td className="px-3 py-2.5 text-right">{player.url && <a href={player.url} target="_blank" rel="noreferrer" className="text-sky-300 hover:text-white">Aç ↗</a>}</td></tr>)}{!pagePlayers.length && <tr><td colSpan={7} className="px-3 py-8 text-center text-[#BBE1FA]/45">Bu aramayla eşleşen oyuncu bulunamadı.</td></tr>}</tbody></table></div>
         <div className="mt-3 flex items-center justify-between gap-2 text-[10px] text-[#BBE1FA]/50"><span>{players.length ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, players.length)} / ${players.length}` : "0 sonuç"}</span><div className="flex gap-2"><button disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="rounded border border-white/10 px-2.5 py-1.5 disabled:opacity-30">Önceki</button><span className="px-1 py-1.5">Sayfa {page} / {pageCount}</span><button disabled={page >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} className="rounded border border-white/10 px-2.5 py-1.5 disabled:opacity-30">Sonraki</button></div></div>
       </Panel>
       <div className="text-[10px] text-[#BBE1FA]/40">Kaynak: {data.source} · Güncelleme: {formatDate(data.fetchedAt)}. API yanıtı en fazla 2.000 vatandaş için tarama yapar; hasar profili dönmeyen oyuncular sıralamaya eklenmez.</div>
