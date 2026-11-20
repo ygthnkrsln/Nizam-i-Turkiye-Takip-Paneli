@@ -84,6 +84,7 @@ The canonical tracked unit list is `src/config/trackedArmies.ts`; server and cli
 | Military overview and details | `src/components/MilitaryOverviewSection.tsx`, `src/components/MilitaryDetailsSection.tsx`, `src/server/handlers/military-overview.ts`, `src/server/handlers/military-details.ts` |
 | Combat telemetry, daily damage, and all-armies damage history | `src/components/DailyDamageTelemetrySection.tsx`, `src/components/ManagementArmyTrackingSection.tsx`, `src/components/AllianceDamageSection.tsx`, `src/server/handlers/combat-telemetry.ts`, `src/server/handlers/all-armies-daily-summary.ts`, `src/server/services/daily-damage.ts` |
 | Türkiye and Cameroon active wars / country damage bonuses | `src/components/ManagementIntelligenceSections.tsx`, `src/server/handlers/management-intelligence.ts` (`country-wars` view through the existing management endpoint) |
+| Türkiye and Cameroon weekly player damage ranking | `src/components/ManagementIntelligenceSections.tsx` (`CountryDamageRankingSection`), `src/App.tsx`, `src/components/Header.tsx`; player profiles use `country-wars` view from `src/server/handlers/management-intelligence.ts` |
 | Potential damage / combat classification | `src/lib/potentialDamage.ts`, `src/lib/dailyDamage.ts` |
 | Level and prestige tools | `src/components/LevelCalculatorSection.tsx`, `src/components/PrestigeDamageOptimizerSection.tsx`, `src/utils/levelProgression.ts`, `src/utils/prestigeOptimizer.ts` |
 | Shared management API dispatch | `src/server/handlers/management-overview.ts` |

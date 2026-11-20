@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Crosshair,
+  Trophy,
   Flame,
   HeartHandshake,
   Menu,
@@ -51,6 +52,7 @@ const groups: {
       { id: 'combatDetails', title: 'Detaylı Bilgi', icon: Crosshair },
       { id: 'combatDamage', title: 'Hasar', icon: Flame },
       { id: 'countryWars', title: 'Türkiye & Kamerun Savaşları', icon: Crosshair },
+      { id: 'countryDamageRanking', title: 'Haftalık Hasar Sıralaması', icon: Trophy },
     ],
   },
   {
