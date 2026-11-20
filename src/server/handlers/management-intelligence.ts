@@ -563,16 +563,13 @@ async function allianceDamageData(force = false) {
   const allianceInfo = allianceId
     ? await query("alliance.getById", { allianceId }, force, 60_000).catch(() => null)
     : null;
-  const unionCountryIds = new Set([
-    homeId,
-    "6813b6d546e731854c7ac8d1", // Azerbaijan
-    "6873d0ea1758b40e712b5ef5", // Cameroon
-  ]);
-  const unionNames = /^(turkiye|türkiye|turkey|azerbaijan|azerbaycan|cameroon|kamerun)$/i;
+  const cameroon = raw.find((country) => countryId(country) === "6873d0ea1758b40e712b5ef5" || /^(cameroon|kamerun)$/i.test(String(country?.name || "")));
+  const unionCountryIds = new Set([homeId, ...(cameroon ? [countryId(cameroon)] : [])]);
+  const isTurkey = (country: any) => countryId(country) === homeId || String(country?.code || "").toUpperCase() === "TR" || /^(turkiye|türkiye|turkey)$/i.test(String(country?.name || ""));
+  const isUnionCountry = (country: any) => isTurkey(country) || countryId(country) === cameroon?.id || countryId(country) === "6873d0ea1758b40e712b5ef5" || /^(cameroon|kamerun)$/i.test(String(country?.name || ""));
+  const isAzerbaijan = (country: any) => countryId(country) === "6813b6d546e731854c7ac8d1" || /^(azerbaijan|azerbaycan)$/i.test(String(country?.name || ""));
   const members = raw.filter((country) =>
-    countryId(country) === homeId ||
-    (allianceId && String(country?.allianceId || "") === allianceId) ||
-    unionNames.test(String(country?.name || "")),
+    !isAzerbaijan(country) && ((allianceId && String(country?.allianceId || "") === allianceId) || isUnionCountry(country)),
   );
   const { snapshots } = await persistCountrySnapshot(raw, new Date());
   const today = turkeyDate();
@@ -620,7 +617,7 @@ async function allianceDamageData(force = false) {
       allianceId: String(country?.allianceId || ""),
     };
   }).sort((a, b) => (b.weeklyDamage || 0) - (a.weeklyDamage || 0));
-  const unionMembers = countryMetrics.filter((country) => unionCountryIds.has(country.id) || unionNames.test(country.name));
+  const unionMembers = countryMetrics.filter((country) => unionCountryIds.has(country.id) || isTurkey(raw.find((row) => countryId(row) === country.id)) || country.id === "6873d0ea1758b40e712b5ef5" || /^(cameroon|kamerun)$/i.test(country.name));
   const otherMembers = countryMetrics.filter((country) => !unionMembers.includes(country));
   const unionCurrent = unionMembers.reduce((sum, country) => sum + (country.weeklyDamage || 0), 0);
   const unionPreviousAvailable = previousAvailable && unionMembers.some((country) => country.previousWeeklyDamage !== null);
