@@ -10,6 +10,7 @@ import {
   Search,
   RefreshCw,
   Swords,
+  Trophy,
   Users,
 } from "lucide-react";
 import {
@@ -349,6 +350,8 @@ export function CountryWarsSection() {
     if (!Number.isFinite(number)) return "—";
     return `${number > 0 ? "+" : ""}${formatNumber(number, 1)}%`;
   };
+  const [rankingCountry, setRankingCountry] = useState("tr");
+  const ranking = (data?.playerRankings || []).find((item: AnyRecord) => item.key === rankingCountry);
   const sidePanel = (side: AnyRecord, label: string, color: "rose" | "sky") => (
     <div className={`rounded-xl border p-2 ${color === "rose" ? "border-rose-500/20 bg-rose-950/10" : "border-sky-500/20 bg-sky-950/10"}`}>
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-white/[0.06] pb-1.5">
@@ -379,6 +382,10 @@ export function CountryWarsSection() {
         <div className="flex flex-wrap gap-2 rounded-xl border border-[#3282B8]/15 bg-[#182329] p-2">
           {[{ key: "all", label: "Türkiye + Kamerun" }, ...countries].map((country: AnyRecord) => <button key={country.key} type="button" onClick={() => setCountryFilter(country.key)} className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${countryFilter === country.key ? "border-sky-400/40 bg-sky-950/40 text-sky-100" : "border-transparent text-[#BBE1FA]/60 hover:bg-[#141C21] hover:text-white"}`}>{country.label}</button>)}
         </div>
+        <Panel title="Haftalık oyuncu hasar sıralaması" subtitle="Ülke vatandaşlarının API profillerindeki bu haftaki hasarı, en yüksekten düşüğe." right={<select value={rankingCountry} onChange={(event) => setRankingCountry(event.target.value)} className="rounded-md border border-[#3282B8]/20 bg-[#141C21] px-2 py-1.5 text-xs text-white">{countries.map((country: AnyRecord) => <option key={country.key} value={country.key}>{country.label}</option>)}</select>}>
+          <div className="mb-2 flex items-center gap-2 text-[10px] text-[#BBE1FA]/50"><Trophy className="h-3.5 w-3.5 text-amber-300" />{ranking?.profiledCount || 0} / {ranking?.playerCount || 0} oyuncu profili{ranking?.complete ? " · Liste tamamlandı" : " · İlk 2.000 vatandaş tarandı"}</div>
+          <div className="max-h-80 overflow-auto rounded-lg border border-white/[0.06]"><table className="w-full min-w-[440px] text-left text-xs"><thead className="sticky top-0 bg-[#141C21] text-[9px] uppercase tracking-wider text-[#BBE1FA]/50"><tr><th className="px-2.5 py-2">#</th><th className="px-2.5 py-2">Oyuncu</th><th className="px-2.5 py-2 text-right">Haftalık hasar</th></tr></thead><tbody>{(ranking?.players || []).map((player: AnyRecord, index: number) => <tr key={player.id || index} className="border-t border-white/[0.05]"><td className="px-2.5 py-2 font-mono text-[#BBE1FA]/40">{index + 1}</td><td className="px-2.5 py-2 font-semibold text-white">{player.url ? <a href={player.url} target="_blank" rel="noreferrer" className="hover:text-sky-300">{player.name} ↗</a> : player.name}</td><td className="px-2.5 py-2 text-right font-mono text-cyan-200">{formatNumber(player.weeklyDamage)}</td></tr>)}{!ranking?.players?.length && <tr><td colSpan={3} className="px-3 py-5 text-center text-[#BBE1FA]/40">Haftalık hasar profili bulunamadı.</td></tr>}</tbody></table></div>
+        </Panel>
         {filteredWars.map((war: AnyRecord) => <Panel key={war.id} title={`${war.typeLabel} · ${war.region}`} subtitle={`Tur ${formatNumber(war.round)} / ${formatNumber(war.roundsToWin)} · ${formatDate(war.startedAt)}`} right={war.url && <a href={war.url} target="_blank" rel="noreferrer" className="rounded-md border border-[#3282B8]/20 bg-[#141C21] px-2.5 py-1.5 text-[10px] font-bold text-sky-200 hover:text-white">Savaşı aç ↗</a>}>
           <div className="grid gap-3 xl:grid-cols-2">{sidePanel(war.attacker, "Saldıran taraf", "rose")}{sidePanel(war.defender, "Savunan taraf", "sky")}</div>
         </Panel>)}

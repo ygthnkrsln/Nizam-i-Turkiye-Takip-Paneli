@@ -848,6 +848,33 @@ async function countryWarsData(force = false) {
     { id: CAMEROON_ID, key: "cm", label: "Kamerun" },
   ].map((target) => ({ ...target, country: countries.find((country) => countryId(country) === target.id) }))
     .filter((target) => target.country);
+  const playerRankings = await mapWithConcurrency(tracked, 2, async (target) => {
+    const ids: string[] = [];
+    let cursor: string | null = null;
+    let complete = false;
+    for (let page = 0; page < Math.ceil(USER_PROFILE_LIMIT / 100); page++) {
+      const input: Record<string, any> = { countryId: target.id, limit: 100 };
+      if (cursor) input.cursor = cursor;
+      const response = await query("user.getUsersByCountry", input, force, 60_000);
+      const rows = listOf(response);
+      for (const row of rows) {
+        const id = String(row?._id || row?.id || (typeof row === "string" ? row : ""));
+        if (id) ids.push(id);
+      }
+      cursor = response?.nextCursor ? String(response.nextCursor) : null;
+      if (!cursor || !rows.length) { complete = true; break; }
+    }
+    const uniqueIds = Array.from(new Set(ids));
+    const profiles = await queryBatchUsers(uniqueIds);
+    const players = profiles.flatMap((profile, index) => {
+      if (!profile || typeof profile !== "object") return [];
+      const weeklyDamage = finite(profile?.rankings?.weeklyUserDamages?.value ?? profile?.weeklyDamages ?? profile?.weeklyDamage);
+      if (weeklyDamage === null) return [];
+      const id = String(profile?._id || profile?.id || uniqueIds[index] || "");
+      return [{ id, name: String(profile?.username || profile?.name || "Adsız oyuncu"), weeklyDamage, url: id ? `https://app.warera.io/user/${id}` : null }];
+    }).sort((left, right) => right.weeklyDamage - left.weeklyDamage);
+    return { key: target.key, label: target.label, players, playerCount: uniqueIds.length, profiledCount: players.length, complete };
+  });
   const countryMap = asCountryMap(countries);
   const regionRows = normalizeRegions(rawRegions);
   const regionsById = new Map<string, any>(regionRows.map((region): [string, any] => [String(region?._id || region?.id || ""), region]));
@@ -1034,6 +1061,7 @@ async function countryWarsData(force = false) {
   return {
     success: true,
     countries: tracked.map(({ id, key, label }) => ({ id, key, label })),
+    playerRankings,
     wars,
     counts: {
       wars: wars.length,
@@ -1041,7 +1069,7 @@ async function countryWarsData(force = false) {
       cameroon: wars.filter((war) => battleIncludesCountry(war, CAMEROON_ID)).length,
     },
     fetchedAt: new Date().toISOString(),
-    source: "battle.getBattles · battleOrder.getByBattle · country.getAllCountries · region.getRegionsObject · mu.getById · gameConfig",
+    source: "battle.getBattles · user.getUsersByCountry · user.getUserById · battleOrder.getByBattle · country.getAllCountries · region.getRegionsObject · mu.getById · gameConfig",
     note: "Bonuslar savaş başına, Türkiye veya Kamerun'un kendi ülkesi ve karşı taraftaki ülkeler için ayrı ayrı gösterilir; taraf bonusları toplanmaz. API öncelik veya süre bilgisini vermediğinde ilgili bonus oyun yapılandırmasındaki varsayılan değerle hesaplanır.",
   };
 }
