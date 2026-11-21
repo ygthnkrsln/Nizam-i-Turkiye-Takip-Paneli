@@ -26,7 +26,7 @@ import {
   PRESET_MILITARY_UNITS,
 } from "../types";
 import {
-  calculateDailyDamageFromSnapshot,
+  calculateLiveDailyDamage,
   getSnapshotPlayers,
 } from "../lib/dailyDamage";
 import {
@@ -144,7 +144,7 @@ export const DailyDamageTelemetrySection: React.FC<
     setError(null);
 
     try {
-      // Always fetch fresh live telemetry from WarEra API against the 02:55 baseline
+      // Always fetch fresh live telemetry using the daily snapshot and weekly-reset state.
       const telemetry = await fetchCombatTelemetry(muId, true);
       setData(telemetry);
     } catch (err: any) {
@@ -191,7 +191,7 @@ export const DailyDamageTelemetrySection: React.FC<
     }
   };
 
-  // Members with real daily damages directly from server's 02:55 snapshot baseline
+  // Members with real daily damage from the daily snapshot and weekly-reset state
   const membersWithDailyDamage = useMemo(() => {
     if (!data?.members) return [];
 
@@ -216,9 +216,10 @@ export const DailyDamageTelemetrySection: React.FC<
       ) {
         const baseWeekly = baselineMembers[m.userId]?.weeklyDamage;
         if (baseWeekly !== undefined) {
-          dDamage = calculateDailyDamageFromSnapshot(
+          dDamage = calculateLiveDailyDamage(
             m.weeklyDamage,
             baseWeekly,
+            data.dailyDamageInfo?.weeklyResetActive,
           );
         }
       }
@@ -436,7 +437,7 @@ export const DailyDamageTelemetrySection: React.FC<
             <span>ORDU HASAR & ÜYE TELEMETRİSİ</span>
             <span
               className="text-rose-400 hover:text-rose-300 cursor-pointer text-sm"
-              title="Canlı War Era tRPC telemetri verileri ve 02:55 cron döngüsüyle sıfırlanan günlük hasar takibi"
+              title="Canlı WarEra tRPC telemetri verileri ve günlük snapshot / haftalık sıfırlama bazlı hasar takibi"
             >
               <Info className="w-4 h-4 inline" />
             </span>
@@ -521,7 +522,7 @@ export const DailyDamageTelemetrySection: React.FC<
             <div className="mt-2.5 flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-950/60 border border-rose-500/30 text-rose-300 text-[10px] font-bold">
                 <span>⏱️</span>
-                <span>02:55 TSİ Snapshot Bazlı</span>
+                <span>Günlük Snapshot Bazlı</span>
               </span>
               {snapshotData?.supabaseConnected && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold">
@@ -538,7 +539,7 @@ export const DailyDamageTelemetrySection: React.FC<
           </div>
 
           <div className="mt-4 pt-3 border-t border-rose-500/15 flex items-center justify-between text-[11px] text-[#BBE1FA]/60">
-            <span>02:55 TSİ Snapshot'ına göre net hasar</span>
+            <span>Günlük snapshot ve haftalık reset durumuna göre net hasar</span>
             <button
               type="button"
               onClick={() => setIsChartModalOpen(true)}
@@ -1300,7 +1301,7 @@ export const DailyDamageTelemetrySection: React.FC<
                     Hesaplama Kuralı
                   </span>
                   <span className="text-rose-400 font-bold text-xs">
-                    Haftalık Hasar - 02:55 Snapshot
+                    Haftalık sayaç değişimi · Pazartesi resetinde haftalık toplam
                   </span>
                 </div>
               </div>
@@ -1310,7 +1311,7 @@ export const DailyDamageTelemetrySection: React.FC<
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-[#BBE1FA]/80 font-bold">
-                      02:55 TSİ Snapshot Sistemi
+                      Günlük Snapshot Sistemi
                     </span>
                     {snapshotData?.supabaseConnected ? (
                       <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[9px] font-bold flex items-center gap-1">
@@ -1333,7 +1334,7 @@ export const DailyDamageTelemetrySection: React.FC<
                     <RefreshCw
                       className={`w-3.5 h-3.5 ${isSnapshotTriggering ? "animate-spin" : ""}`}
                     />
-                    <span>02:55 Snapshot'ı Şimdi Al (Test)</span>
+                    <span>Snapshot'ı Şimdi Al (Test)</span>
                   </button>
                 </div>
 
@@ -1360,7 +1361,7 @@ export const DailyDamageTelemetrySection: React.FC<
                         {data?.dailyDamageInfo?.baselineDate || "Bugün"})
                       </span>
                       <span className="text-[10px] text-[#BBE1FA]/50">
-                        02:55 TSİ döngüsü devrede
+                        Günlük snapshot döngüsü devrede
                       </span>
                     </div>
                     <span className="text-rose-300 font-bold text-sm">

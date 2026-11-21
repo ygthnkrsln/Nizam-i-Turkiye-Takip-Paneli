@@ -37,7 +37,7 @@ The canonical tracked unit list is `src/config/trackedArmies.ts`; server and cli
 
 - Cron route: `api/cron/record-daily-damage.ts` → `src/server/services/daily-damage.ts`.
 - Shared snapshots: player profiles are keyed once per user while daily army membership is stored separately; `src/lib/supabaseStorage.ts` handles backward-compatible persistence and `src/lib/dailyDamage.ts` resolves legacy and current snapshot shapes.
-- The 02:55 TSİ snapshot also archives the combined daily damage for all tracked armies in `all_armies_daily_damage`, separate from the 30-day player snapshots. `/api/all-armies-daily-summary?history=true` serves this history to the selectable 7-day, 30-day, week, and month chart in `src/components/ManagementArmyTrackingSection.tsx`.
+- One daily cron snapshot at 02:55 TSİ (23:55 UTC) archives the combined daily damage for all tracked armies in `all_armies_daily_damage`, separate from the 30-day player snapshots. It runs before the 03:00 TSİ game-day boundary. `/api/all-armies-daily-summary?history=true` serves this history to the selectable 7-day, 30-day, week, and month chart in `src/components/ManagementArmyTrackingSection.tsx`.
 - Create the long-lived aggregate table by running `scripts/create-all-armies-daily-damage-table.sql` in Supabase; the cron backfills eligible totals from the retained snapshots when it next runs.
 - Economy/combat mode classification: `src/lib/playerMode.ts`; mode-sensitive profile flows use `user.getUserById` because `user.getUserLite` no longer includes skills. Consumers include daily snapshots, management handlers, country statistics, and military-unit data.
 - Snapshot dates are retained for 30 days. Check the `Europe/Istanbul` game-day offset/reset logic before changing date calculations.
@@ -84,7 +84,6 @@ The canonical tracked unit list is `src/config/trackedArmies.ts`; server and cli
 | Military overview and details | `src/components/MilitaryOverviewSection.tsx`, `src/components/MilitaryDetailsSection.tsx`, `src/server/handlers/military-overview.ts`, `src/server/handlers/military-details.ts` |
 | Combat telemetry, daily damage, and all-armies damage history | `src/components/DailyDamageTelemetrySection.tsx`, `src/components/ManagementArmyTrackingSection.tsx`, `src/components/AllianceDamageSection.tsx`, `src/server/handlers/combat-telemetry.ts`, `src/server/handlers/all-armies-daily-summary.ts`, `src/server/services/daily-damage.ts` |
 | Türkiye and Cameroon active wars / country damage bonuses | `src/components/ManagementIntelligenceSections.tsx`, `src/server/handlers/management-intelligence.ts` (`country-wars` view through the existing management endpoint) |
-| Türkiye and Cameroon weekly player damage ranking | `src/components/ManagementIntelligenceSections.tsx` (`CountryDamageRankingSection`), `src/App.tsx`, `src/components/Header.tsx`; player profiles use `country-wars` view from `src/server/handlers/management-intelligence.ts` |
 | Potential damage / combat classification | `src/lib/potentialDamage.ts`, `src/lib/dailyDamage.ts` |
 | Level and prestige tools | `src/components/LevelCalculatorSection.tsx`, `src/components/PrestigeDamageOptimizerSection.tsx`, `src/utils/levelProgression.ts`, `src/utils/prestigeOptimizer.ts` |
 | Shared management API dispatch | `src/server/handlers/management-overview.ts` |
@@ -92,12 +91,14 @@ The canonical tracked unit list is `src/config/trackedArmies.ts`; server and cli
 ## API entry points
 
 Vercel function files in `api/` are thin entry points. Implementations generally live in `src/server/handlers/`.
+The Vercel Hobby limit is currently met exactly: 12 API entry files and one daily cron schedule. Consolidate an existing entry point before adding another function or cron.
 
 | Endpoint | Entry / implementation |
 |---|---|
 | `/api/management-overview` | `api/management-overview.ts` → `src/server/handlers/management-overview.ts`; also dispatches management intelligence and treasury views |
+| `/api/health` | `api/health.ts` |
 | `/api/player-factories` | `api/player-factories.ts` → `src/server/handlers/player-factories.ts` |
-| `/api/cron/record-daily-damage` | `api/cron/record-daily-damage.ts` → `src/server/services/daily-damage.ts` |
+| `/api/cron/record-daily-damage` | `api/cron/record-daily-damage.ts` → `src/server/services/daily-damage.ts`; one daily schedule at 02:55 TSİ |
 | `/api/daily-damage-snapshots` | `api/daily-damage-snapshots.ts` → `src/server/handlers/daily-damage-snapshots.ts` |
 | `/api/all-armies-daily-summary` | `api/all-armies-daily-summary.ts` → `src/server/handlers/all-armies-daily-summary.ts`; `?history=true&from=YYYY-MM-DD&to=YYYY-MM-DD` reads archived totals |
 | `/api/combat-telemetry` | `api/combat-telemetry.ts` → `src/server/handlers/combat-telemetry.ts` |

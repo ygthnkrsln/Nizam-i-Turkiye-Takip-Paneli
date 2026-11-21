@@ -372,6 +372,7 @@ export interface CombatTelemetryData {
     totalDailyDamage: number;
     baselineDate: string;
     baselineTimestamp: number;
+    weeklyResetActive?: boolean;
     calculationRule: string;
   };
   members: CombatMemberTelemetry[];

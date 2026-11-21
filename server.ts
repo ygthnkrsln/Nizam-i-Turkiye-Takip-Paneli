@@ -11,7 +11,7 @@ import {
   snapshotAllArmies as captureSharedArmySnapshot,
 } from "./src/server/services/daily-damage.js";
 import {
-  calculateDailyDamageFromSnapshot,
+  calculateLiveDailyDamage,
   findBaselineForCurrentCycle,
   getCurrentWeeklyDamage,
   getMilitaryUnitWeeklyDamage,
@@ -1784,7 +1784,13 @@ app.get("/api/combat-telemetry", async (req, res) => {
 
     // 3. Load baseline snapshot from 02:55 cron
     let snapshots = await readSnapshotsWithSupabaseServer();
-    const { baselineDate, baselineArmy, baselineMembers, targetResetDate } =
+    const {
+      baselineDate,
+      baselineArmy,
+      baselineMembers,
+      targetResetDate,
+      weeklyResetActive,
+    } =
       findBaselineForCurrentCycleServer(snapshots, targetMuId);
 
     // 4. Map member telemetry records with REAL live daily damage (Current Live Weekly - 02:55 Snapshot Weekly)
@@ -1843,9 +1849,10 @@ app.get("/api/combat-telemetry", async (req, res) => {
       const userId = u._id || u.id;
       const currentWeekly = getCurrentWeeklyDamage(u);
       const baselineWeekly = baselineMembers[userId]?.weeklyDamage;
-      const dailyDamage = calculateDailyDamageFromSnapshot(
+      const dailyDamage = calculateLiveDailyDamage(
         currentWeekly,
         baselineWeekly,
+        weeklyResetActive,
       );
       const isFighter = isCombatBuild(u);
       const potentialDamage = calculatePotentialDamage(
@@ -1965,6 +1972,7 @@ app.get("/api/combat-telemetry", async (req, res) => {
           totalDailyDamage,
           baselineDate,
           targetResetDate,
+          weeklyResetActive,
           baselineTimestamp:
             baselineDate && snapshots[baselineDate]?.timestamp
               ? snapshots[baselineDate].timestamp
@@ -2166,8 +2174,9 @@ async function startServer() {
         parts.find((p) => p.type === "minute")?.value || "-1",
         10,
       );
+      const isDailySnapshotTime = hour === 2 && minute === 55;
 
-      if (hour === 2 && minute === 55) {
+      if (isDailySnapshotTime) {
         const todayStr = new Intl.DateTimeFormat("en-CA", {
           timeZone: "Europe/Istanbul",
         }).format(now);

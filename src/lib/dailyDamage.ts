@@ -3,6 +3,7 @@ export interface DailyDamageBaseline {
   baselineArmy: any | null;
   baselineMembers: Record<string, { username?: string; weeklyDamage: number }>;
   targetResetDate: string;
+  weeklyResetActive: boolean;
 }
 
 export function getSnapshotArmyMemberIds(
@@ -103,6 +104,21 @@ export function calculateDailyDamageFromSnapshot(
   return current >= baseline ? current - baseline : current;
 }
 
+export function calculateLiveDailyDamage(
+  currentWeeklyDamage: number,
+  baselineWeeklyDamage?: number | null,
+  weeklyResetActive = false,
+): number {
+  if (weeklyResetActive) {
+    const current = Number(currentWeeklyDamage);
+    return Number.isFinite(current) ? Math.max(0, current) : 0;
+  }
+  return calculateDailyDamageFromSnapshot(
+    currentWeeklyDamage,
+    baselineWeeklyDamage,
+  );
+}
+
 /** Find the latest snapshot for this MU that belongs to the active 02:55 TSİ cycle. */
 export function findBaselineForCurrentCycle(
   snapshots: Record<string, any>,
@@ -143,6 +159,19 @@ export function findBaselineForCurrentCycle(
   const baselineArmy = baselineDate
     ? snapshots[baselineDate]?.armies?.[muId] || null
     : null;
+  const targetDate = new Date(`${targetResetDate}T00:00:00.000Z`);
+  const daysSinceMonday = (targetDate.getUTCDay() + 6) % 7;
+  targetDate.setUTCDate(targetDate.getUTCDate() - daysSinceMonday);
+  const weeklyResetTimestamp = Date.parse(
+    `${targetDate.toISOString().slice(0, 10)}T00:00:00.000Z`,
+  );
+  const baselineTimestamp = baselineDate
+    ? Number(snapshots[baselineDate]?.timestamp)
+    : Number.NaN;
+  const weeklyResetActive =
+    now.getTime() >= weeklyResetTimestamp &&
+    (!Number.isFinite(baselineTimestamp) ||
+      baselineTimestamp < weeklyResetTimestamp);
 
   return {
     baselineDate,
@@ -151,5 +180,6 @@ export function findBaselineForCurrentCycle(
       ? getSnapshotPlayers(snapshots[baselineDate])
       : {},
     targetResetDate,
+    weeklyResetActive,
   };
 }

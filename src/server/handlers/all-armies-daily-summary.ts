@@ -4,7 +4,7 @@ import { TRACKED_ARMIES } from "../../config/trackedArmies.js";
 
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
 import {
-  calculateDailyDamageFromSnapshot,
+  calculateLiveDailyDamage,
   findBaselineForCurrentCycle,
   getCurrentWeeklyDamage,
   getMilitaryUnitWeeklyDamage,
@@ -114,7 +114,7 @@ export default async function handler(req: any, res: any) {
     // 2. Fetch live data for all tracked armies in parallel
     const armyResults = await Promise.all(
       PRESET_TRACKED_ARMIES.map(async (army) => {
-        const { baselineArmy, baselineMembers: armyBaseline } =
+        const { baselineArmy, baselineMembers: armyBaseline, weeklyResetActive } =
           findBaselineForCurrentCycle(snapshots, army.id);
         try {
           const muUrl = `https://api2.warera.io/trpc/mu.getById?input=${encodeURIComponent(
@@ -168,9 +168,10 @@ export default async function handler(req: any, res: any) {
               const weeklyDmg = getCurrentWeeklyDamage(userData);
 
               const baselineDmg = armyBaseline[uid]?.weeklyDamage;
-              const todayDmg = calculateDailyDamageFromSnapshot(
+              const todayDmg = calculateLiveDailyDamage(
                 weeklyDmg,
                 baselineDmg,
+                weeklyResetActive,
               );
               armyTodayDamage += todayDmg;
 

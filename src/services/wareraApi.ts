@@ -15,7 +15,7 @@ import {
   CombatTelemetryData,
   DailyDamageSnapshotsResponse,
 } from "../types";
-import { calculateDailyDamageFromSnapshot } from "../lib/dailyDamage.js";
+import { calculateLiveDailyDamage } from "../lib/dailyDamage.js";
 import { calculatePlayerSkillMode } from "../lib/playerMode.js";
 import {
   COUNTRY_STATS_ARMIES,
@@ -1966,10 +1966,12 @@ export function getDailyDamageForMember(
   userId: string,
   currentWeeklyDamage: number,
   baselineWeeklyDamage?: number,
+  weeklyResetActive = false,
 ): number {
-  return calculateDailyDamageFromSnapshot(
+  return calculateLiveDailyDamage(
     currentWeeklyDamage,
     baselineWeeklyDamage,
+    weeklyResetActive,
   );
 }
 

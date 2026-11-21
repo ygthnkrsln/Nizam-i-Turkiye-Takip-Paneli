@@ -210,20 +210,6 @@ export const ManagementArmyTrackingSection: React.FC<
       : "—";
   };
   const dailyChange = changeForDays(1);
-  const selectedHistoryByDate = new Map<string, AllArmiesDailyDamageHistoryRecord>(
-    historyRecords.map((record): [string, AllArmiesDailyDamageHistoryRecord] => [record.date, record]),
-  );
-  const historyChartData = selectedHistory.map((record) => {
-    const previous = selectedHistoryByDate.get(shiftDate(record.date, -1));
-    const dailyChangePercent = record.isComplete && previous?.isComplete && previous.totalDamage > 0
-      ? Number((((record.totalDamage - previous.totalDamage) / previous.totalDamage) * 100).toFixed(1))
-      : null;
-    return {
-      ...record,
-      chartDamage: record.isComplete ? record.totalDamage : null,
-      dailyChangePercent,
-    };
-  });
   const selectedRangeLabel = historyMode === "week"
     ? `${historyWeek}. hafta · ${historyRange.from} – ${historyRange.to}`
     : historyMode === "month"
@@ -239,6 +225,17 @@ export const ManagementArmyTrackingSection: React.FC<
     1,
     Math.round((Date.parse(`${historyRange.to}T00:00:00Z`) - Date.parse(`${historyRange.from}T00:00:00Z`)) / 86_400_000) + 1,
   );
+  const selectedHistoryByDate = new Map<string, AllArmiesDailyDamageHistoryRecord>(
+    selectedHistory.map((record): [string, AllArmiesDailyDamageHistoryRecord] => [record.date, record]),
+  );
+  const historyChartData = Array.from({ length: selectedExpectedDays }, (_, index) => {
+    const date = shiftDate(historyRange.from, index);
+    const record = selectedHistoryByDate.get(date);
+    return {
+      date,
+      chartDamage: record?.isComplete ? record.totalDamage : null,
+    };
+  });
   const historyModeButtonClass = (mode: DamageHistoryMode) =>
     `rounded-lg px-3 py-1.5 text-[11px] font-bold transition-colors ${
       historyMode === mode
@@ -273,7 +270,7 @@ export const ManagementArmyTrackingSection: React.FC<
           </div>
           <p className="text-xs text-[#BBE1FA]/70 mt-1">
             Türk ordularının anlık toplam can ve açlık barı doluluk oranları ile
-            02:55 TSİ bazlı günlük hasarları
+            02:55 TSİ günlük snapshot ile kaydedilen hasarları
           </p>
         </div>
 
@@ -399,7 +396,7 @@ export const ManagementArmyTrackingSection: React.FC<
               </span>
             </div>
             <span className="text-xs font-bold px-2 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-500/30">
-              02:55 TSİ Bazlı
+              Günlük snapshot bazlı
             </span>
           </div>
 
@@ -446,7 +443,7 @@ export const ManagementArmyTrackingSection: React.FC<
                   Türk Topluluğu Günlük Hasar · {selectedRangeLabel}
                 </h2>
                 <p className="mt-1 text-[9px] uppercase tracking-wider text-[#BBE1FA]/40">
-                  02:55 TSİ snapshot · {selectedCompleteHistory.length}/{selectedExpectedDays} eksiksiz kayıt
+                  Günlük snapshot · Her gün 02:55 TSİ · {selectedCompleteHistory.length}/{selectedExpectedDays} eksiksiz kayıt
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -556,30 +553,16 @@ export const ManagementArmyTrackingSection: React.FC<
                     tickLine={false}
                     width={54}
                   />
-                  <YAxis
-                    yAxisId="change"
-                    orientation="right"
-                    tickFormatter={(value) => `${Number(value)}%`}
-                    tick={{ fill: "#fbbf24", fontSize: 10 }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={48}
-                  />
                   <Tooltip
-                    labelFormatter={(value) => `Snapshot · ${value} · 02:55 TSİ`}
-                    formatter={(value, _name, item) => {
-                      if (item.dataKey === "dailyChangePercent") {
-                        return [value == null ? "—" : `${Number(value) > 0 ? "+" : ""}${value}%`, "Günlük değişim"];
-                      }
-                      return [value == null ? "Eksik snapshot" : `${formatDmg(Number(value))} hasar`, "Günlük hasar"];
-                    }}
+                    labelFormatter={(value) => `Snapshot · ${value}`}
+                    formatter={(value) => [value == null ? "Eksik snapshot" : `${formatDmg(Number(value))} hasar`, "Günlük hasar"]}
                     contentStyle={{ background: "#0b1419", border: "1px solid rgba(56,189,248,.35)", borderRadius: 10, color: "#fff" }}
                     labelStyle={{ color: "#fff", fontWeight: 700 }}
                   />
                   <Legend wrapperStyle={{ color: "#dbeafe", fontSize: 10 }} />
                   <Line
                     yAxisId="damage"
-                    type="monotone"
+                    type="linear"
                     dataKey="chartDamage"
                     name="Günlük hasar"
                     stroke="#38bdf8"
@@ -588,21 +571,10 @@ export const ManagementArmyTrackingSection: React.FC<
                     activeDot={{ r: 5, stroke: "#fff", strokeWidth: 1 }}
                     connectNulls={false}
                   />
-                  <Line
-                    yAxisId="change"
-                    type="monotone"
-                    dataKey="dailyChangePercent"
-                    name="Günlük değişim"
-                    stroke="#fbbf24"
-                    strokeWidth={1.75}
-                    dot={false}
-                    activeDot={{ r: 4 }}
-                    connectNulls={false}
-                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            {!isHistoryLoading && !historyError && historyChartData.length === 0 && (
+            {!isHistoryLoading && !historyError && selectedCompleteHistory.length === 0 && (
               <div className="mt-2 text-center text-[11px] text-[#BBE1FA]/45">
                 {selectedRangeLabel} için henüz günlük hasar snapshot’ı bulunmuyor.
               </div>

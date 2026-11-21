@@ -6,7 +6,7 @@ import { readSnapshotsWithSupabase } from "../services/daily-damage.js";
 import { getNextWarEraToken } from "../../lib/wareraTokens.js";
 import { calculatePotentialDamage, isCombatBuild, isPlayerInactive } from "../../lib/potentialDamage.js";
 import {
-  calculateDailyDamageFromSnapshot,
+  calculateLiveDailyDamage,
   findBaselineForCurrentCycle as selectDailyDamageBaseline,
   getCurrentWeeklyDamage,
 } from "../../lib/dailyDamage.js";
@@ -137,7 +137,13 @@ export default async function handler(req: any, res: any) {
 
     // 3. Load baseline snapshot from 02:55 cron (from Supabase/disk)
     const snapshots = await readSnapshotsWithSupabase();
-    const { baselineDate, baselineArmy, baselineMembers, targetResetDate } =
+    const {
+      baselineDate,
+      baselineArmy,
+      baselineMembers,
+      targetResetDate,
+      weeklyResetActive,
+    } =
       findBaselineForCurrentCycle(snapshots, targetMuId);
 
     // 4. Map member telemetry records with LIVE daily damage (Current Live Weekly - 02:55 Snapshot Weekly)
@@ -196,9 +202,10 @@ export default async function handler(req: any, res: any) {
       const userId = u._id || u.id;
       const currentWeekly = getCurrentWeeklyDamage(u);
       const baselineWeekly = baselineMembers[userId]?.weeklyDamage;
-      const dailyDamage = calculateDailyDamageFromSnapshot(
+      const dailyDamage = calculateLiveDailyDamage(
         currentWeekly,
         baselineWeekly,
+        weeklyResetActive,
       );
       const isFighter = isCombatBuild(u);
       const isInactive = isPlayerInactive(u.dates?.lastConnectionAt);
@@ -322,6 +329,7 @@ export default async function handler(req: any, res: any) {
           totalDailyDamage,
           baselineDate,
           targetResetDate,
+          weeklyResetActive,
           calculationRule:
             "Anlık Canlı Haftalık Hasar - 02:55 Snapshot Haftalık Hasar",
         },

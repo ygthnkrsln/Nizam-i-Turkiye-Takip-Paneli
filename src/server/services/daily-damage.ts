@@ -1,4 +1,4 @@
-﻿// Vercel Serverless Function / Cron Job: GET /api/cron/record-daily-damage
+// Vercel Serverless Function / Cron Job: GET /api/cron/record-daily-damage
 // Runs daily at 02:55 to snapshot army damage and player modes.
 
 import fs from "fs";
@@ -682,7 +682,6 @@ export async function snapshotAllArmies(
 
       return [userId, {
         username: user.username || existingToday?.username || previousPlayer?.username || "Bilinmeyen Asker",
-        countryId: String(user.country?._id || user.country?.id || user.countryId || (typeof user.country === "string" ? user.country : "") || existingToday?.countryId || previousPlayer?.countryId || ""),
         weeklyDamage,
         wealth: Number(user.rankings?.userWealth?.value ?? user.wealth ?? 0),
         dailyDamage: previousPlayer

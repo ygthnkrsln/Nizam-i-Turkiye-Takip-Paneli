@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { PlayerStats, SortDirection, PlayerMode } from '../types';
 import { ArrowDown, ArrowUp, ArrowUpDown, Search, RefreshCw, Swords, TrendingUp, UserRound, X } from 'lucide-react';
-import { calculateDailyDamageFromSnapshot, findBaselineForCurrentCycle } from '../lib/dailyDamage';
+import { calculateLiveDailyDamage, findBaselineForCurrentCycle } from '../lib/dailyDamage';
 import { getPlayerModeInfo } from '../utils/playerMode';
 import { HistoricalTrendChart } from './HistoricalTrendChart';
 import type { HistoryPeriod, HistoricalPoint } from './HistoricalTrendChart';
@@ -69,7 +69,13 @@ export const ArmyStatsTable: React.FC<ArmyStatsTableProps> = ({ players, isLoadi
     for (const player of players) {
       const weekly = Number(player.weeklyDamages || 0);
       const baselineWeekly = members[player.userId]?.weeklyDamage;
-      if (baselineWeekly !== undefined) values[player.userId] = calculateDailyDamageFromSnapshot(weekly, baselineWeekly);
+      if (baselineWeekly !== undefined || baseline.weeklyResetActive) {
+        values[player.userId] = calculateLiveDailyDamage(
+          weekly,
+          baselineWeekly,
+          baseline.weeklyResetActive,
+        );
+      }
     }
     setDailyDamageByUser(values);
   }).catch(() => setDailyDamageByUser({})); }, [muId, players]);

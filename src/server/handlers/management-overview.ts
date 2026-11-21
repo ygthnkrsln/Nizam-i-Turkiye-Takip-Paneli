@@ -11,7 +11,7 @@ import {
   saveSnapshotToSupabase,
 } from "../../lib/supabaseStorage.js";
 import {
-  calculateDailyDamageFromSnapshot,
+  calculateLiveDailyDamage,
   findBaselineForCurrentCycle,
   getCurrentWeeklyDamage,
   getMilitaryUnitWeeklyDamage,
@@ -423,7 +423,7 @@ async function processSingleArmy(
     const commanders: string[] = muData?.roles?.commanders || [];
     const managers: string[] = muData?.roles?.managers || [];
 
-    const { baselineMembers: armyBaseline } = findBaselineForCurrentCycle(
+    const { baselineMembers: armyBaseline, weeklyResetActive } = findBaselineForCurrentCycle(
       snapshots,
       army.id,
     );
@@ -643,7 +643,11 @@ async function processSingleArmy(
       const weeklyDmg = getCurrentWeeklyDamage(u);
 
       const baselineDmg = armyBaseline[uid]?.weeklyDamage;
-      const todayDmg = calculateDailyDamageFromSnapshot(weeklyDmg, baselineDmg);
+      const todayDmg = calculateLiveDailyDamage(
+        weeklyDmg,
+        baselineDmg,
+        weeklyResetActive,
+      );
       armyDailyDamage += todayDmg;
 
       // Level & Wealth
