@@ -569,7 +569,7 @@ export const ManagementArmyTrackingSection: React.FC<
                     strokeWidth={2.5}
                     dot={{ r: 3, fill: "#38bdf8", strokeWidth: 0 }}
                     activeDot={{ r: 5, stroke: "#fff", strokeWidth: 1 }}
-                    connectNulls={false}
+                    connectNulls
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -583,7 +583,7 @@ export const ManagementArmyTrackingSection: React.FC<
               <div className="mt-2 text-center text-[10px] text-[#BBE1FA]/45">Hasar geçmişi yükleniyor…</div>
             )}
             <div className="mt-2 text-[9px] text-[#BBE1FA]/40">
-              Eksik snapshot’lar toplam ve çizgi hesabına katılmaz.
+              Eksik snapshot’lar toplama katılmaz; çizgi mevcut kayıt noktalarını boşluklar üzerinden birleştirir.
             </div>
           </div>
 
