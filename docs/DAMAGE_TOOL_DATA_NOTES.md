@@ -10,7 +10,7 @@
 - `search.searchAnything`: `result.data.userIds` ID dizisi verir; tam/küçük büyük harf duyarsız ad eşleşmesi için profiller `user.getUserLite` ile karşılaştırılır.
 - `itemTrading.getPrices`: `result.data` doğrudan item kodu → sayı şeklinde fiyat haritasıdır. Eksik fiyatlar sıfır kabul edilmez; fiyatı bilinmeyen mühimmat veya tüketim planına eklenmez.
 - `country.getCountryById`: `result.data.taxes.market` market vergi yüzdesi olarak gözlendi. API bunu vermezse vergi kullanıcı tarafından girilir.
-- Supabase `price_data` tablo şeması anon erişimi olan proje/ortamdan doğrulanamadı. Handler görev tanımındaki kolonları okur; kolon/tablo/RLS uyumsuzluğunu uyarı olarak döndürür, servis rolü ile fallback yapmaz.
+- Supabase `price_data` tablo şeması anon erişimi olan proje/ortamdan doğrulanamadı. Handler görev tanımındaki kolonları sunucu tarafındaki ortak Supabase istemcisiyle okur; servis rolü varsa RLS'yi bypass ederek SELECT yapar, anahtar istemciye gönderilmez. Yalnız anon key yapılandırılmışsa tablo için SELECT RLS politikası gerekir.
 
 ## Modelde doğrulanmamış varsayımlar
 
@@ -25,6 +25,6 @@ Vercel Hobby 12 fonksiyon sınırı dolu olduğundan yeni `api/` entry point ekl
 Vercel ortam değişkenleri:
 
 - `WARERA_API_KEY`: bu araç için sunucu tarafı WarEra API anahtarı. Boşsa eski `WARERA_API_TOKEN` / `WARERA_API_TOKENS` döngüsü kullanılır.
-- `SUPABASE_URL` (veya `NEXT_PUBLIC_SUPABASE_URL`) ve `SUPABASE_ANON_KEY` (veya `NEXT_PUBLIC_SUPABASE_ANON_KEY`): `price_data` tablosuna salt okunur erişim. Anon key için tablonun SELECT RLS/policy ayarı gerekir; servis rolü anahtarı kullanılmaz.
+- `SUPABASE_URL` ve `SUPABASE_SERVICE_ROLE_KEY` (veya mevcut Supabase ortam değişkenleri): `price_data` tablosuna sunucu tarafında okuma. Servis rolü anahtarını `NEXT_PUBLIC_` değişkeni olarak tanımlamayın. Yalnız anon key kullanıldığında tabloya SELECT RLS/policy izni verilmelidir.
 
 Arama ve optimizasyon hataları açıkça gösterilir. CPU yoğun tarama tarayıcı Web Worker'ında yürür, iptal/progress destekler ve varsayılan 8 saniyede eldeki en iyi sonucu döndürür.

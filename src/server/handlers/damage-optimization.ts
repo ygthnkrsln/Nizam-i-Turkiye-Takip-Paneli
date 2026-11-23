@@ -1,5 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
 import { getWarEraTokens } from "../../lib/wareraTokens.js";
+import { getSupabaseClient } from "../../lib/supabaseStorage.js";
 import { buildPlayerProfile, buildRules, unwrapTrpc } from "../../lib/damage/rules.js";
 
 const BASE = "https://api2.warera.io/trpc/";
@@ -38,12 +38,6 @@ async function trpcBatch(proc:string,inputs:Record<string,unknown>[]) {
   if(!response.ok)throw Object.assign(new Error(`WarEra API isteği başarısız (${response.status}).`),{status:response.status});
   const body=await response.json();if(!Array.isArray(body))throw new Error("WarEra toplu yanıtı beklenen biçimde değil.");return body.map((entry:any)=>unwrapTrpc(entry));
 }
-function getAnonSupabase() {
-  const url=process.env.SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL||"";
-  const key=process.env.SUPABASE_ANON_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||"";
-  if(!url||!key) throw Object.assign(new Error("Ekipman fiyatları için Supabase URL ve anon key ayarlanmamış."),{status:503});
-  return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
-}
 async function getStatic(key:string,proc:string,ttl:number) { const saved=cached(key); if(saved)return saved; return remember(key,await trpc(proc),ttl); }
 export default async function damageOptimizationHandler(req:any,res:any) {
   if(req.method!=="GET") return send(res,405,{error:"Method not allowed"});
@@ -77,7 +71,11 @@ export default async function damageOptimizationHandler(req:any,res:any) {
     const equipCache=cached("damage:equipment"); let equipment:any[]; let equipmentUpdatedAt:string|null;
     if(equipCache){equipment=equipCache.rows;equipmentUpdatedAt=equipCache.updatedAt;}
     else {
-      const client=getAnonSupabase();
+      // This handler runs only on the server. Reuse the app's server-side
+      // Supabase client so price_data reads do not depend on a public anon
+      // SELECT policy; privileged credentials never leave this endpoint.
+      const client=getSupabaseClient();
+      if(!client) throw Object.assign(new Error("Ekipman fiyatları için Supabase bağlantısı yapılandırılmamış."),{status:503});
       const columns=["equipment_name,quality,main_stat,critical_chance,cautious_price,median_price,confidence,n_used,source,updated_at","equipment_name,main_stat,critical_chance,cautious_price,median_price,confidence,n_used,source,updated_at","equipment_name,main_stat,critical_chance,cautious_price,updated_at","equipment_name,main_stat,cautious_price"];
       let data:any[]|null=null; let lastError:any=null;
       for(const select of columns){const result=await client.from("price_data").select(select).in("equipment_name",["boots","chest","gloves","gun","helmet","jet","knife","pants","rifle","sniper","tank"]).limit(1000);if(!result.error){data=result.data||[];lastError=null;break;}lastError=result.error;}
