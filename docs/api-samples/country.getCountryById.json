@@ -1,0 +1,10 @@
+{
+  "_id": "<redacted-country-id>",
+  "name": "Turkiye",
+  "code": "tr",
+  "taxes": {
+    "income": 24.5,
+    "market": 0.5,
+    "manager": 1
+  }
+}

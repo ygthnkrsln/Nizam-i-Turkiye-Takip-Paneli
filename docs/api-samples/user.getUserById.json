@@ -1,0 +1,134 @@
+{
+  "_id": "<redacted-user-id>",
+  "username": "<redacted>",
+  "leveling": {
+    "level": 34,
+    "totalXp": 173018,
+    "dailyXpLeft": 0,
+    "availableSkillPoints": 0,
+    "spentSkillPoints": 136,
+    "totalSkillPoints": 136,
+    "freeReset": 0,
+    "xp": 43018,
+    "prestigeLevel": 2,
+    "prestige": 0
+  },
+  "militaryRank": 99,
+  "skills": {
+    "energy": {
+      "level": 0,
+      "currentBarValue": 30,
+      "value": 100,
+      "total": 110,
+      "hourlyBarRegen": 11,
+      "prestige": 0,
+      "strategic": 10
+    },
+    "stamina": {
+      "level": 0,
+      "currentBarValue": 100,
+      "value": 100,
+      "total": 100,
+      "hourlyBarRegen": 10,
+      "prestige": 0
+    },
+    "health": {
+      "level": 4,
+      "currentBarValue": 30.300000000000022,
+      "value": 140,
+      "total": 150,
+      "hourlyBarRegen": 15,
+      "prestige": 0,
+      "strategic": 10
+    },
+    "hunger": {
+      "level": 4,
+      "currentBarValue": 2.1999999999999997,
+      "value": 8,
+      "total": 8,
+      "hourlyBarRegen": 0.8,
+      "prestige": 0
+    },
+    "attack": {
+      "level": 7,
+      "ammoPercent": 10,
+      "buffsPercent": 60,
+      "debuffsPercent": 0,
+      "militaryRankPercent": 61,
+      "value": 300,
+      "weapon": 119,
+      "overflow": 16,
+      "total": 1233,
+      "prestige": 1
+    },
+    "companies": {
+      "level": 3,
+      "value": 5,
+      "total": 5,
+      "prestige": 0
+    },
+    "production": {
+      "level": 0,
+      "currentBarValue": 10,
+      "value": 30,
+      "total": 33,
+      "hourlyBarRegen": 3.3,
+      "prestige": 0,
+      "strategic": 3
+    },
+    "criticalChance": {
+      "level": 6,
+      "value": 45,
+      "weapon": 16,
+      "total": 61,
+      "prestige": 1
+    },
+    "criticalDamages": {
+      "level": 5,
+      "value": 200,
+      "equipment": 86,
+      "total": 286,
+      "prestige": 0
+    },
+    "armor": {
+      "level": 4,
+      "value": 24,
+      "equipment": 52,
+      "total": 76,
+      "totalAfterSoftCap": 66,
+      "prestige": 0
+    },
+    "precision": {
+      "level": 5,
+      "value": 75,
+      "equipment": 24,
+      "limited": -4,
+      "total": 100,
+      "prestige": 0,
+      "strategic": 5
+    },
+    "dodge": {
+      "level": 5,
+      "value": 20,
+      "equipment": 25,
+      "total": 45,
+      "totalAfterSoftCap": 53,
+      "prestige": 0
+    },
+    "lootChance": {
+      "level": 3,
+      "value": 11,
+      "total": 13,
+      "prestige": 0,
+      "strategic": 2
+    },
+    "management": {
+      "level": 0,
+      "value": 1,
+      "total": 2,
+      "prestige": 0,
+      "strategic": 1
+    }
+  },
+  "country": "<redacted-country-id>"
+}

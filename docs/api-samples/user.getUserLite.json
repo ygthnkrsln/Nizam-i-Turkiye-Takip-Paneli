@@ -1,0 +1,18 @@
+{
+  "_id": "<redacted-user-id>",
+  "username": "<redacted>",
+  "leveling": {
+    "level": 34,
+    "totalXp": 173018,
+    "dailyXpLeft": 0,
+    "availableSkillPoints": 0,
+    "spentSkillPoints": 136,
+    "totalSkillPoints": 136,
+    "freeReset": 0,
+    "xp": 43018,
+    "prestigeLevel": 2,
+    "prestige": 0
+  },
+  "militaryRank": 99,
+  "country": "<redacted-country-id>"
+}

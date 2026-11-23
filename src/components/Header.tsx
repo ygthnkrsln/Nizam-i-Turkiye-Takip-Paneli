@@ -10,6 +10,7 @@ import {
   HeartHandshake,
   Menu,
   ShoppingCart,
+  Swords,
   Sparkles,
   Shield,
   Users,
@@ -70,6 +71,7 @@ const groups: {
     tabs: [
       { id: 'levelCalculator', title: 'Seviye Hesaplayıcı', icon: Calculator },
       { id: 'prestigeOptimizer', title: 'Prestij - Hasar Optimizasyonu', icon: Sparkles },
+      { id: 'damageOptimization', title: 'Hasar Optimizasyonu', icon: Swords },
     ],
   },
 ];

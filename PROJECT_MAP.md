@@ -86,6 +86,7 @@ The canonical tracked unit list is `src/config/trackedArmies.ts`; server and cli
 | Türkiye and Cameroon active wars / country damage bonuses | `src/components/ManagementIntelligenceSections.tsx`, `src/server/handlers/management-intelligence.ts` (`country-wars` view through the existing management endpoint) |
 | Potential damage / combat classification | `src/lib/potentialDamage.ts`, `src/lib/dailyDamage.ts` |
 | Level and prestige tools | `src/components/LevelCalculatorSection.tsx`, `src/components/PrestigeDamageOptimizerSection.tsx`, `src/utils/levelProgression.ts`, `src/utils/prestigeOptimizer.ts` |
+| Damage optimization tool | `src/components/DamageOptimizationSection.tsx`, `src/lib/damage/` (pure model/search/tests), `src/workers/damageOptimizer.worker.ts`, `src/server/handlers/damage-optimization.ts` via the existing `/api/warera-proxy?tool=damage` entry |
 | Shared management API dispatch | `src/server/handlers/management-overview.ts` |
 
 ## API entry points
@@ -106,7 +107,7 @@ The Vercel Hobby limit is currently met exactly: 12 API entry files and one dail
 | `/api/military-overview` | `api/military-overview.ts` → `src/server/handlers/military-overview.ts` |
 | `/api/military-details` | `api/military-details.ts` → `src/server/handlers/military-details.ts` |
 | `/api/mu-data` | `api/mu-data.ts` → `src/server/handlers/mu-data.ts` |
-| `/api/warera-proxy` | `api/warera-proxy.ts`; local implementation also exists in `server.ts` |
+| `/api/warera-proxy` | `api/warera-proxy.ts`; local implementation also exists in `server.ts`; `?tool=damage` dispatches to `src/server/handlers/damage-optimization.ts` so the Hobby function count stays unchanged |
 
 Local development uses the Express routes in `server.ts`; it is not just a wrapper around every Vercel handler. Confirm both paths when modifying an endpoint used in both environments.
 
@@ -129,5 +130,6 @@ Local development uses the Express routes in `server.ts`; it is not just a wrapp
 - Keep tracked-army behavior configuration-driven; avoid duplicating IDs or counts.
 - For donation target changes, inspect both cron snapshot production and historical-date consumption in the management overview and donation component.
 - For API changes, verify both Vercel `api/` and local `server.ts` paths when applicable.
-- Available checks: `npm run lint` (TypeScript) and `npm run build` (Vite client + bundled server). There is no configured test script in `package.json`.
+- Available checks: `npm run lint` (TypeScript), `npm run build` (Vite client + bundled server), and `npm test` (damage calculation unit tests).
+- Damage calculation unit tests: `npm test` runs `src/lib/damage/optimizer.test.ts` with Node's built-in test runner through existing `tsx`.
 - Never put API tokens or Supabase service-role credentials in client code or documentation.

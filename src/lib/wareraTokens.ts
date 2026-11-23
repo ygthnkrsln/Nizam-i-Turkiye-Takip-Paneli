@@ -8,6 +8,7 @@ dotenv.config({ override: true });
 export function getWarEraTokens(): string[] {
   const raw = [
     ...(process.env.WARERA_API_TOKENS || "").split(","),
+    process.env.WARERA_API_KEY || "",
     process.env.WARERA_API_TOKEN || "",
   ];
 

@@ -23,6 +23,7 @@ import { getTrpcData } from "./src/utils/wareraTransactions.js";
 import economyDonationsHandler from "./src/server/handlers/economy-donations.js";
 import { recordCountryTrackerSnapshot } from "./src/server/handlers/management-intelligence.js";
 import playerFactoriesHandler from "./src/server/handlers/player-factories.js";
+import damageOptimizationHandler from "./src/server/handlers/damage-optimization.js";
 
 dotenv.config({ override: true });
 
@@ -2078,6 +2079,7 @@ app.all("/api/player-factories", (req, res) => {
 
 // Secure WarEra Proxy endpoint: executes upstream queries server-side without exposing API tokens to the client
 app.get("/api/warera-proxy", async (req, res) => {
+  if (req.query.tool === "damage") return damageOptimizationHandler(req, res);
   try {
     const endpointPath = req.query.path as string;
     const input = req.query.input as string;

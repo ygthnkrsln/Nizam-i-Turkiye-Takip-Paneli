@@ -1,4 +1,5 @@
 import { getNextWarEraToken } from "../src/lib/wareraTokens.js";
+import damageOptimizationHandler from "../src/server/handlers/damage-optimization.js";
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -13,6 +14,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
+    if (req.query?.tool === "damage") return damageOptimizationHandler(req, res);
     const endpointPath = req.query?.path as string;
     const input = req.query?.input as string;
     const batch = req.query?.batch as string;
