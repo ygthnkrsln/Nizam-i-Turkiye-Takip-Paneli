@@ -10,7 +10,7 @@
 - `search.searchAnything`: `result.data.userIds` ID dizisi verir; tam/küçük büyük harf duyarsız ad eşleşmesi için profiller `user.getUserLite` ile karşılaştırılır.
 - `itemTrading.getPrices`: `result.data` doğrudan item kodu → sayı şeklinde fiyat haritasıdır. Eksik fiyatlar sıfır kabul edilmez; fiyatı bilinmeyen mühimmat veya tüketim planına eklenmez.
 - `country.getCountryById`: `result.data.taxes.market` market vergi yüzdesi olarak gözlendi. API bunu vermezse vergi kullanıcı tarafından girilir.
-- Supabase `price_data` tablo şeması anon erişimi olan proje/ortamdan doğrulanamadı. Handler görev tanımındaki kolonları sunucu tarafındaki ortak Supabase istemcisiyle okur; servis rolü varsa RLS'yi bypass ederek SELECT yapar, anahtar istemciye gönderilmez. Yalnız anon key yapılandırılmışsa tablo için SELECT RLS politikası gerekir.
+- Supabase `price_data` tablosunda `id`, `equipment_name`, `main_stat`, `critical_chance`, `cautious_price` ve `updated_at` kolonları doğrulandı. Ekipman adları Türkçe (ör. `Basit bot`) tutulduğundan sunucu handler'ı bunları modelin kullandığı ekipman slotlarına dönüştürür; quality kolonu olmadığı için kalite, oyun yapılandırmasındaki stat aralıklarından çıkarılır. Fiyatlar sayfalı okunur; servise ait olmayan `median_price`, `confidence` ve `source` alanları varsayılan değerlerle doldurulur.
 
 ## Modelde doğrulanmamış varsayımlar
 

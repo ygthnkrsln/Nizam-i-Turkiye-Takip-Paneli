@@ -39,6 +39,20 @@ async function trpcBatch(proc:string,inputs:Record<string,unknown>[]) {
   const body=await response.json();if(!Array.isArray(body))throw new Error("WarEra toplu yanıtı beklenen biçimde değil.");return body.map((entry:any)=>unwrapTrpc(entry));
 }
 async function getStatic(key:string,proc:string,ttl:number) { const saved=cached(key); if(saved)return saved; return remember(key,await trpc(proc),ttl); }
+function normalizeEquipmentName(value:unknown):string|null {
+  const name=String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("tr").trim();
+  if(/\b(bot|boots?)\b/.test(name))return "boots";
+  if(/\b(eldiven|gloves?)\b/.test(name))return "gloves";
+  if(/\b(kask|helmet)\b/.test(name))return "helmet";
+  if(/\b(pantolon|pants?)\b/.test(name))return "pants";
+  if(/\b(gogusluk|gogus zirhi|chest)\b/.test(name))return "chest";
+  if(/\b(knife|bicak)\b/.test(name))return "knife";
+  if(/\b(gun|pistol|tabanca)\b/.test(name))return "gun";
+  if(/\b(rifle|tufek)\b/.test(name)&&/keskin nisanci|sniper/.test(name))return "sniper";
+  if(/\b(rifle|tufek)\b/.test(name))return "rifle";
+  if(/\b(sniper|tank|jet)\b/.test(name))return name.match(/\b(sniper|tank|jet)\b/)?.[1]||null;
+  return null;
+}
 export default async function damageOptimizationHandler(req:any,res:any) {
   if(req.method!=="GET") return send(res,405,{error:"Method not allowed"});
   const ip=String(req.headers["x-forwarded-for"]||req.socket?.remoteAddress||"unknown").split(",")[0].trim();
@@ -76,11 +90,21 @@ export default async function damageOptimizationHandler(req:any,res:any) {
       // SELECT policy; privileged credentials never leave this endpoint.
       const client=getSupabaseClient();
       if(!client) throw Object.assign(new Error("Ekipman fiyatları için Supabase bağlantısı yapılandırılmamış."),{status:503});
-      const columns=["equipment_name,quality,main_stat,critical_chance,cautious_price,median_price,confidence,n_used,source,updated_at","equipment_name,main_stat,critical_chance,cautious_price,median_price,confidence,n_used,source,updated_at","equipment_name,main_stat,critical_chance,cautious_price,updated_at","equipment_name,main_stat,cautious_price"];
-      let data:any[]|null=null; let lastError:any=null;
-      for(const select of columns){const result=await client.from("price_data").select(select).in("equipment_name",["boots","chest","gloves","gun","helmet","jet","knife","pants","rifle","sniper","tank"]).limit(1000);if(!result.error){data=result.data||[];lastError=null;break;}lastError=result.error;}
-      if(lastError) throw Object.assign(new Error(`Ekipman fiyat tablosu okunamadı: ${lastError.message}`),{status:503});
-      equipment=data||[]; equipmentUpdatedAt=equipment.map((r:any)=>r.updated_at).filter(Boolean).sort().at(-1)||null; remember("damage:equipment",{rows:equipment,updatedAt:equipmentUpdatedAt},10*60_000);
+      const rows:any[]=[];const pageSize=1000;
+      for(let from=0;;from+=pageSize){
+        const {data,error}=await client.from("price_data").select("id,equipment_name,main_stat,critical_chance,cautious_price,updated_at").not("cautious_price","is",null).order("id",{ascending:true}).range(from,from+pageSize-1);
+        if(error) throw Object.assign(new Error(`Ekipman fiyat tablosu okunamadı: ${error.message}`),{status:503});
+        const page=data||[];
+        rows.push(...page);
+        if(page.length<pageSize)break;
+      }
+      equipment=rows.flatMap((row:any)=>{
+        const equipmentName=normalizeEquipmentName(row.equipment_name);
+        if(!equipmentName)return [];
+        return [{equipment_name:equipmentName,quality:null,main_stat:row.main_stat==null?null:Number(row.main_stat),critical_chance:row.critical_chance==null?null:Number(row.critical_chance),cautious_price:row.cautious_price==null?null:Number(row.cautious_price),median_price:null,confidence:"medium",source:"observed",updated_at:row.updated_at||null}];
+      });
+      equipmentUpdatedAt=rows.map((r:any)=>r.updated_at).filter(Boolean).sort().at(-1)||null;
+      remember("damage:equipment",{rows:equipment,updatedAt:equipmentUpdatedAt},10*60_000);
     }
     res.setHeader("Cache-Control","private, max-age=0, must-revalidate");
     return send(res,200,{rules,player,prices:unwrapTrpc<any>(priceRaw),marketTax,equipment,equipmentUpdatedAt,generatedAt:new Date().toISOString()});
