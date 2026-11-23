@@ -28,7 +28,7 @@ export function buildRules(config: any): DamageRules {
   const battle = data.battle || {};
   const battleKeys = ["countryOrderBonusPercent", "muOrderBonusPercent", "allianceDamagesBonusPercent", "enemyDamagesBonusPercent", "patrioticBonusPercent", "regionNotLinkedToCapitalMalusPercent", "lostAttackingRegionMalusPercent", "occupyingYourRegionsMalusPercent"];
   const upgrades = data.upgradesConfig || {};
-  return { skills: skills as DamageRules["skills"], economySkills, ignoredSkills, battle: Object.fromEntries(battleKeys.map((k) => [k, Number(battle[k]) || 0])), items: data.items || {}, upgrades, healthCost: Number(battle.healthCost) || 10, regenDividedBy: Number(user.regenDividedBy) || 10, fightSkillsUnlockLevel: Number(user.featureUnlockLevels?.fightSkills) || 1, muHealthPerHelp: Number(data.mu?.healthPerHelp) || 0 };
+  return { skills: skills as DamageRules["skills"], economySkills, ignoredSkills, battle: Object.fromEntries(battleKeys.map((k) => [k, Number(battle[k]) || 0])), items: data.items || {}, upgrades, healthCost: Number(battle.healthCost) || 10, regenDividedBy: Number(user.regenDividedBy) || 10, energyCostPerAction: Number(user.energyCostPerAction) || 10, dailyReward: { money: Number(user.dailyReward?.money) || 0, case1: Number(user.dailyReward?.case1) || 0 }, missionRewards: data.mission?.reward, fightSkillsUnlockLevel: Number(user.featureUnlockLevels?.fightSkills) || 1, muHealthPerHelp: Number(data.mu?.healthPerHelp) || 0 };
 }
 
 export function buildPlayerProfile(lite: any, full: any, rules: DamageRules): PlayerDamageProfile {
@@ -51,11 +51,21 @@ export function buildPlayerProfile(lite: any, full: any, rules: DamageRules): Pl
   const ignoredSpentPoints=rules.ignoredSkills.stamina?.levels[Number(f.skills?.stamina?.level)||0]?.totalCost||0;
   const allCurrentSpent=spentPoints+excludedEconomy+ignoredSpentPoints;
   const economyLevels=Object.fromEntries(ECONOMY_SKILLS.map(name=>[name,Number(f.skills?.[name]?.level)||0]));
+  const economyStrategic=Object.fromEntries(ECONOMY_SKILLS.map(name=>{
+    const skill=f.skills?.[name];const base=rules.economySkills[name]?.levels[economyLevels[name]]?.value||0;
+    const value=Number.isFinite(Number(skill?.strategic))?Number(skill.strategic):Math.max(0,(Number(skill?.value)||0)-base);
+    return [name,value];
+  }));
+  const idFrom=(value:any)=>String(value?._id||value?.id||value?.muId||(typeof value==="string"?value:""));
+  const militaryUnitIds=Array.from(new Set([p.militaryUnits,p.militaryUnit,p.militaryUnitId,p.mu,p.muId,f.militaryUnits,f.militaryUnit,f.militaryUnitId,f.mu,f.muId].flatMap((value:any)=>Array.isArray(value)?value:value?[value]:[]).map(idFrom).filter((id:string)=>/^[a-f\d]{24}$/i.test(id))));
+  const countryId=idFrom(p.country||p.countryId||f.country||f.countryId);
   const declaredSpent=Number(leveling.spentSkillPoints);const declaredUnspent=Number(leveling.availableSkillPoints);const declaredTotal=Number(leveling.totalSkillPoints);
   const validSpent=Number.isFinite(declaredSpent)&&declaredSpent>=0?declaredSpent:allCurrentSpent;
   const unspent=Number.isFinite(declaredUnspent)&&declaredUnspent>=0?declaredUnspent:0;
   const fallbackPoints=Number.isFinite(declaredSpent)&&Number.isFinite(declaredUnspent)?declaredSpent+declaredUnspent:Number.isFinite(declaredUnspent)?allCurrentSpent+unspent:level*4;
   const totalPoints=Number.isFinite(declaredTotal)&&declaredTotal>=0?declaredTotal:fallbackPoints;
   const spent=validSpent;
-  return { id: String(p._id), username: String(p.username || "Oyuncu"), level, xp: Number(leveling.xp) || 0, prestige: Number(leveling.prestigeLevel) || 0, totalPoints: Math.max(totalPoints, spentPoints + unspent), unspentPoints: unspent, spentPoints: spent, economySpentPoints:excludedEconomy, ignoredSpentPoints, economyLevels, militaryRank: Number(p.militaryRank) || 0, countryId: String(p.country || p.countryId || ""), strategic, current };
+  const rawRankBonus=f.skills?.attack?.militaryRankPercent;
+  const rankBonusValue=rawRankBonus===null||rawRankBonus===undefined||rawRankBonus===""?Number.NaN:Number(rawRankBonus);
+  return { id: String(p._id), username: String(p.username || "Oyuncu"), level, xp: Number(leveling.xp) || 0, prestige: Number(leveling.prestigeLevel) || 0, totalPoints: Math.max(totalPoints, spentPoints + unspent), unspentPoints: unspent, spentPoints: spent, economySpentPoints:excludedEconomy, ignoredSpentPoints, economyLevels, economyStrategic, militaryRank: Number(p.militaryRank) || 0, rankBonusPercent:Number.isFinite(rankBonusValue)?rankBonusValue:null, countryId, militaryUnitIds, strategic, current };
 }

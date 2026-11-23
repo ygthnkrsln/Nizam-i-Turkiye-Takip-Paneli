@@ -1,5 +1,6 @@
-import { optimizeDamageSteps } from "../lib/damage/optimizer";
+import { optimizeDamageWithIncomeSteps } from "../lib/damage/jointOptimizer";
 import { DamageDataset, OptimizerOptions } from "../lib/damage/types";
+import { IncomeOptions } from "../lib/damage/income";
 
 let cancelled = false;
 self.onmessage = (event: MessageEvent) => {
@@ -8,7 +9,7 @@ self.onmessage = (event: MessageEvent) => {
   if(message?.type!=="run")return;
   cancelled=false;
   try {
-    const iterator=optimizeDamageSteps(message.dataset as DamageDataset,message.options as OptimizerOptions,()=>cancelled);
+    const iterator=optimizeDamageWithIncomeSteps(message.dataset as DamageDataset,message.options as OptimizerOptions,message.incomeOptions as IncomeOptions,()=>cancelled);
     const step=()=>{
       if(cancelled){self.postMessage({type:"cancelled"});return;}
       try { const next=iterator.next(); if(next.done)self.postMessage({type:"result",result:next.value}); else {self.postMessage({type:"progress",progress:next.value});setTimeout(step,0);} }
