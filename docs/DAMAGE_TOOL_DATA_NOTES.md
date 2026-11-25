@@ -1,5 +1,13 @@
 # Hasar Optimizasyonu: API veri notları
 
+## Aktif sayfa akışı
+
+Aktif arayüz `public/damage-optimizer/reference/simple_dmg.html` içinden açılır. Kullanıcının verdiği `damage.js` ve `crews.js` hesaplama motorları `public/damage-optimizer/js/` altında tutulur; arama `damage_worker.js` içinde yürütülür. `damage_page.js`, `player_details.js`, `api.js` ve `i18n.js` referans arayüzünü sağlar. WarEra çağrıları aynı-origin `/api/warera-proxy` üzerinden yapılır; uygulama anahtarları tarayıcıya gönderilmez.
+
+`src/server/handlers/reference-damage-data.ts`, `gameConfig.getGameConfig` ve `itemTrading.getPrices` yanıtlarını referans motorunun veri şekline uyarlar. Ekipman fiyatları sunucuda Supabase `price_data` tablosundan okunur. `main_stat` aralıklarından kalite seviyesi belirlenir. Bu veri adaptörü mevcut `/api/warera-proxy?tool=damage&data=market|values` dispatch'ini kullanır; yeni Vercel function eklemez.
+
+Oyuncu profili, şirket kayıtları ve çalışan listeleri WarEra API proxy'sinden gelir; çalışanların günlük net gelirini referans `CrewEngine.companyDays` hesaplar. Görev ödülleri, ordu havuz tablosu ve otomatik motor çelik maliyeti mevcut `gameConfig` / `price_data` yanıtlarında bulunmadığı için bunlar için veri uydurulmaz; referans ekranındaki mevcut manuel alanlar korunur, motor çelik maliyeti oyun config'i sağlarsa otomatik doldurulur.
+
 Örnek API yanıtlarının kimlik bilgileri ayıklanmış dosyaları `docs/api-samples/` altındadır. Yenilemek için `npx tsx scripts/sample-damage-tool-data.ts [24-haneli-userId]` çalıştırın. Script yalnızca WarEra'dan salt-okunur istek yapar (user.getUserLite için POST); anahtar değerini yazdırmaz ve oyuncu adı/ID alanlarını örneklerden çıkarır.
 
 ## Doğrulanan yanıt biçimleri
@@ -12,11 +20,15 @@
 - `country.getCountryById`: `result.data.taxes.market` örnekte `0.5` olarak gözlendi. Sayısal alan doğrulandı; birimin yüzde puanı mı (`0.5%`) yoksa oran mı (`50%`) olduğu oyunun resmi dokümanlarından teyit edilemedi. Araç bütçeyi olduğundan geniş göstermemek için geçici olarak yüksek maliyetli `50%` yorumunu uygular ve arayüzde uyarır.
 - Supabase `price_data` tablosunda `id`, `equipment_name`, `main_stat`, `critical_chance`, `cautious_price` ve `updated_at` kolonları doğrulandı. Ekipman adları Türkçe (ör. `Basit bot`) tutulduğundan sunucu handler'ı bunları modelin kullandığı ekipman slotlarına dönüştürür; quality kolonu olmadığı için kalite, oyun yapılandırmasındaki stat aralıklarından çıkarılır. Fiyatlar sayfalı okunur; servise ait olmayan `median_price`, `confidence` ve `source` alanları varsayılan değerlerle doldurulur.
 
-## Modelde doğrulanmamış varsayımlar
+## Referans modelindeki varsayımlar
 
-Kod içindeki ilgili formüllerde varsayımlar ayrıca işaretlidir: overflow değerinin fazla precision/crit başına düz puan olması; ıskanın hasar çarpanının 0.5 olması; zırh can tüketiminin onda bir aşağı yuvarlanması ve alt sınırının 1 olması; her eşyanın 100 vuruş dayanması ve hurda getirilerinin sabit tablodan gelmesi; günde 2.4 can barı varsayan `100 / regenDividedBy` yenilenme geleneği; yemek yuvası hesabı `hunger × günlük bar`; kasa-2 gelir payının %1 olması; pill debuff saldırı azalmasının varsayılan %60 olması; battle bonuslarının toplamsal birleştirilmesi; market fiyatlarının vergi öncesi olması; market fiyatı yoksa gelir hanesinin sıfır kalması. `user.getUserById.skills.attack.militaryRankPercent` varsa rütbe yüzdesi otomatik gelir; alan yoksa yüzde uydurulmaz ve sıfır/elle düzenlenebilir kalır.
+Hesaplama formülleri bu dalda yeniden yazılmadı; referans `damage.js` ve `crews.js` korunmuştur. Oyun kuralları ve fiyatlar yeni veri alanlarına uyarlandığında aynı motor kullanılır. `src/lib/damage/` altındaki önceki TypeScript hesaplayıcısı artık aktif sayfadan çağrılmaz.
 
-## Gelir tahmini ve savaş ön dolguları
+## Referans gelir akışı
+
+Referans sayfası sabit ödülleri, MU ligi ve haftalık lig ödüllerini, şirket çalışanlarını, havuz ganimetini ve elle girilen ek geliri ayrı kalemler olarak işler. Şirket/çalışan gelirleri API şirket kayıtları, çalışan/estimate yanıtları ve `CrewEngine` ile hesaplanır. Ekipman ve üretim eşya fiyatları sunulan piyasa/veritabanı değerlerinden alınır. Görev ödülü ve havuz tablosu mevcut veri kaynaklarında olmadığı için manuel alanlar referans arayüzünde korunur.
+
+Önceki TypeScript aracına ait ayrıntılı formül notları aşağıda tarihsel API bağlamı olarak bırakılmıştır; bunlar aktif sayfanın veri akışını tarif etmez.
 
 | Alan | Kaynak / API alanı | Durum ve davranış |
 |---|---|---|
@@ -39,11 +51,11 @@ Fiyat tablosundaki ekipman satırlarında `cautious_price = null` hiçbir zaman 
 
 ## Güvenlik ve dağıtım
 
-Vercel Hobby 12 fonksiyon sınırı dolu olduğundan yeni `api/` entry point eklenmemiştir. Özellik mevcut `/api/warera-proxy?tool=damage` içinde sunucu tarafında çalışır; config 6 saat, piyasa fiyatı 5 dakika, ekipman tablosu 10 dakika bellekte cache edilir. Endpoint IP başına dakikada 12 istekle sınırlandırılır. WarEra anahtarı hiçbir zaman istemciye dönmez.
+Vercel Hobby 12 fonksiyon sınırı dolu olduğundan yeni `api/` entry point eklenmemiştir. Eşya/veri adaptörü mevcut `/api/warera-proxy?tool=damage` dispatch'i içindedir. Referans fiyat/rule paketi beş dakika bellekte tutulur; bu veri endpoint'i IP başına dakikada 4 çağrıyla sınırlandırılır. Tarayıcıdaki oyuncu API çağrıları da aynı proxy'den geçer; uygulama anahtarları istemciye dönmez. Hesaplama motoru ayrı statik dosyalardır ve browser Worker'ında çalışır.
 
 Vercel ortam değişkenleri:
 
 - `WARERA_API_KEY`: bu araç için sunucu tarafı WarEra API anahtarı. Boşsa eski `WARERA_API_TOKEN` / `WARERA_API_TOKENS` döngüsü kullanılır.
 - `SUPABASE_URL` ve `SUPABASE_SERVICE_ROLE_KEY` (veya mevcut Supabase ortam değişkenleri): `price_data` tablosuna sunucu tarafında okuma. Servis rolü anahtarını `NEXT_PUBLIC_` değişkeni olarak tanımlamayın. Yalnız anon key kullanıldığında tabloya SELECT RLS/policy izni verilmelidir.
 
-Arama ve optimizasyon hataları açıkça gösterilir. CPU yoğun tarama tarayıcı Web Worker'ında yürür, iptal/progress destekler ve varsayılan 8 saniyede eldeki en iyi sonucu döndürür. Ekonomi puanları savaşa ayrıldığında enerji/üretim seviyeleri gelir tablosunda puan maliyetiyle taranır; şirket/yönetim için ölçülebilir gelir etkisi olmadığı için mevcut seviyelerinde tutulurlar. 60 puanın üzerinde ekonomi dağılımları kaba adımlarla aranır ve mevcut puan seviyesi ayrıca dahil edilir.
+Arama ve optimizasyon hataları referans arayüzündeki durum alanında gösterilir. CPU yoğun arama iptal/progress desteğiyle statik Web Worker'da yürür. React/Vite ana frontend chunk'ına 400 KB üzeri reference code eklenmez.

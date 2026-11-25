@@ -86,7 +86,7 @@ The canonical tracked unit list is `src/config/trackedArmies.ts`; server and cli
 | Türkiye and Cameroon active wars / country damage bonuses | `src/components/ManagementIntelligenceSections.tsx`, `src/server/handlers/management-intelligence.ts` (`country-wars` view through the existing management endpoint) |
 | Potential damage / combat classification | `src/lib/potentialDamage.ts`, `src/lib/dailyDamage.ts` |
 | Level and prestige tools | `src/components/LevelCalculatorSection.tsx`, `src/components/PrestigeDamageOptimizerSection.tsx`, `src/utils/levelProgression.ts`, `src/utils/prestigeOptimizer.ts` |
-| Damage optimization tool | `src/components/DamageOptimizationSection.tsx`, `src/lib/damage/` (pure model/search/tests), `src/workers/damageOptimizer.worker.ts`, `src/server/handlers/damage-optimization.ts` via the existing `/api/warera-proxy?tool=damage` entry |
+| Damage optimization tool | `src/components/DamageOptimizationSection.tsx` hosts the reference UI at `public/damage-optimizer/reference/simple_dmg.html`; original calculation engines are `public/damage-optimizer/js/damage.js` and `crews.js`, run through `damage_worker.js`. `api.js` proxies WarEra requests through the existing `/api/warera-proxy`; `src/server/handlers/reference-damage-data.ts` adapts game rules, item prices, and Supabase `price_data` for the reference model through `src/server/handlers/damage-optimization.ts` (`?tool=damage&data=market|values`). No Vercel function entry was added. The prior TS model under `src/lib/damage/` remains in the repository but is not the active page calculation engine. |
 | Shared management API dispatch | `src/server/handlers/management-overview.ts` |
 
 ## API entry points

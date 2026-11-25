@@ -2,6 +2,7 @@ import { getWarEraTokens } from "../../lib/wareraTokens.js";
 import { getSupabaseClient } from "../../lib/supabaseStorage.js";
 import { buildPlayerProfile, buildRules, unwrapTrpc } from "../../lib/damage/rules.js";
 import { assessBattleBonuses, marketTaxToPercent } from "../../lib/damage/battleBonuses.js";
+import { buildReferenceMarket } from "./reference-damage-data.js";
 
 const BASE = "https://api2.warera.io/trpc/";
 const cache = new Map<string, { until: number; value: any }>();
@@ -137,6 +138,22 @@ export default async function damageOptimizationHandler(req:any,res:any) {
   if(req.method!=="GET") return send(res,405,{error:"Method not allowed"});
   const ip=String(req.headers["x-forwarded-for"]||req.socket?.remoteAddress||"unknown").split(",")[0].trim();
   const now=Date.now(); let entry=rate.get(ip); if(!entry||now-entry.start>60_000){entry={start:now,count:0};rate.set(ip,entry);} if(++entry.count>LIMIT){res.setHeader("Retry-After","60");return send(res,429,{error:"Çok sık istek gönderildi. Bir dakika sonra tekrar deneyin."});}
+  const dataMode=String(req.query?.data||"");
+  if(dataMode==="market"||dataMode==="values") {
+    try {
+      const marketCache=cached("damage:reference-market");
+      if(marketCache)return send(res,200,dataMode==="values"?marketCache.values:marketCache);
+      const [configRaw,priceRaw]=await Promise.all([getStatic("damage:config","gameConfig.getGameConfig",6*60*60_000),getStatic("damage:prices","itemTrading.getPrices",5*60_000)]);
+      const client=getSupabaseClient();
+      if(!client)throw Object.assign(new Error("Ekipman fiyatları için Supabase bağlantısı yapılandırılmamış."),{status:503});
+      const rows:any[]=[];const pageSize=1000;
+      for(let from=0;;from+=pageSize){const {data,error}=await client.from("price_data").select("equipment_name,main_stat,critical_chance,cautious_price,updated_at").not("cautious_price","is",null).order("id",{ascending:true}).range(from,from+pageSize-1);if(error)throw Object.assign(new Error(`Ekipman fiyat tablosu okunamadı: ${error.message}`),{status:503});const page=data||[];rows.push(...page);if(page.length<pageSize)break;}
+      const market=buildReferenceMarket(configRaw,priceRaw,rows);
+      remember("damage:reference-market",market,5*60_000);
+      res.setHeader("Cache-Control","private, max-age=60, stale-while-revalidate=300");
+      return send(res,200,dataMode==="values"?market.values:market);
+    } catch(error:any) { const status=Number(error?.status)||500;return send(res,status,{error:error?.message||"Hasar optimizasyonu verileri alınamadı."}); }
+  }
   const playerQuery=String(req.query?.player||"").trim().slice(0,100);
   if(!playerQuery||(!/^[a-f\d]{24}$/i.test(playerQuery)&&playerQuery.length<2)) return send(res,400,{error:"Geçerli bir oyuncu adı veya 24 haneli userId girin."});
   const battleId=String(req.query?.battleId||"").trim();

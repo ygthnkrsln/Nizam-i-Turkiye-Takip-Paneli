@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hasar Optimizasyonu</title>
+    <meta
+      name="description"
+      data-i18n-content="dmg.description"
+      content="The skills and equipment that do the most damage a day for what a WarEra player accepts to pay."
+    />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="stylesheet" href="../style.css" />
+    <script src="../js/i18n.js" defer></script>
+    <script src="../js/token.js" defer></script>
+    <script src="../js/api.js" defer></script>
+    <script src="../js/player_details.js" defer></script>
+    <script src="../js/crews.js" defer></script>
+    <script src="../js/damage.js" defer></script>
+    <script src="../js/damage_page.js" defer></script>
+    <script src="../js/i18n-tr.js" defer></script>
+  </head>
+  <body class="simple">
+    <main class="wide">
+      <div class="bar"><span>NİZAM-I TÜRKİYE · ARAÇLAR</span><span>HASAR OPTİMİZASYONU</span></div>
+      <h1 data-i18n="dmg.headingSimple">WAR SKILL OPTIMIZER (SIMPLE)</h1>
+      <div class="rule" aria-hidden="true">
+        ================================================================================
+      </div>
+      <p class="prompt" data-i18n="dmg.promptSimple">
+        type your name and the wealth you accept to lose a day: the skills to
+        set and the equipment to buy for the most damage
+      </p>
+      <p class="hint" id="reference-source-note">Oyuncu ve oyun kuralları WarEra API'sinden; ekipman fiyatları Supabase kayıtlarından yüklenir.</p>
+      <form id="token-form" class="token" autocomplete="off">
+        <label for="token" data-i18n="token.label">api token:</label>
+        <input
+          id="token"
+          type="password"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="paste your token"
+          data-i18n-placeholder="token.placeholder"
+        />
+        <label class="check">
+          <input id="remember" type="checkbox" />
+          <span data-i18n="token.remember">remember</span>
+        </label>
+        <button id="forget" type="button" data-i18n="token.forget">
+          [ forget ]
+        </button>
+      </form>
+      <p class="hint" id="token-status" data-i18n="dmg.tokenStatus">
+        API anahtarı bu tarayıcıda saklanır; istekler uygulamanın sunucu tarafındaki WarEra proxy'sinden gönderilir.
+      </p>
+      <form id="run-form" class="run" autocomplete="off">
+        <label for="player" data-i18n="tool.player">player:</label>
+        <input
+          id="player"
+          type="text"
+          spellcheck="false"
+          placeholder="username or user ID"
+          data-i18n-placeholder="tool.playerPlaceholder"
+          required
+        />
+        <button id="run" type="submit" class="go" data-i18n="dmg.run">
+          [ RUN ]
+        </button>
+      </form>
+      <div id="inputs">
+        <fieldset class="options">
+          <legend data-i18n="dmg.wantHead">what you want</legend>
+          <div class="option fields full-only">
+            <label for="goal" data-i18n="dmg.goal">goal:</label>
+            <select id="goal">
+              <option value="damage" data-i18n="dmg.goalDamage">
+                most damage for the wealth I accept to lose
+              </option>
+              <option value="profit" data-i18n="dmg.goalProfit">
+                most profit
+              </option>
+              <option value="target" data-i18n="dmg.goalTarget">
+                least cost for a damage
+              </option>
+              <option value="max" data-i18n="dmg.goalMax">
+                most damage, at any cost
+              </option>
+            </select>
+          </div>
+          <div class="option fields" id="budget-row">
+            <label for="budget" data-i18n="dmg.budget"
+              >wealth to lose a day:</label
+            >
+            <input
+              id="budget"
+              class="wide-num"
+              type="number"
+              step="5"
+              value="0"
+            />
+            <span class="hint-inline" data-i18n="dmg.budgetHintSimple"
+              >coins a day; 0 = your wealth stays where it is, negative = the
+              gain you want.</span
+            >
+          </div>
+          <div class="option fields" id="target-row" hidden>
+            <label for="target" data-i18n="dmg.target">damage to reach:</label>
+            <input
+              id="target"
+              class="wide-num"
+              type="number"
+              step="10000"
+              min="1"
+              value="500000"
+            />
+          </div>
+          <div class="option fields">
+            <label for="bonus" data-i18n="dmg.bonus">battle bonus:</label>
+            <input
+              id="bonus"
+              class="tiny-num"
+              type="number"
+              step="5"
+              value="70"
+            />
+            %
+            <span class="hint-inline full-only" data-i18n="dmg.bonusHint"
+              >patriotic, orders, MU headquarters... added up (a State Army +5%
+              for its country and allies, a Private Mercenary +5% under
+              contract)</span
+            >
+          </div>
+          <div class="option fields">
+            <label for="bounty-million" data-i18n="dmg.bountyMillion"
+              >bounty per 1M damage:</label
+            >
+            <input
+              id="bounty-million"
+              class="tiny-num"
+              type="number"
+              min="0"
+              step="1"
+              value="0"
+            />
+            <span class="hint-inline" data-i18n="dmg.bountyMillionHint"
+              >coins you get for each million damage (a bounty or mercenary
+              contract); 0 = none</span
+            >
+          </div>
+          <div class="option">
+            <label class="check">
+              <input id="keep-build" type="checkbox" />
+              <span data-i18n="dmg.keepBuild"
+                >keep my current build: only choose the equipment (no skill
+                reset)</span
+              >
+            </label>
+          </div>
+          <div class="option fields full-only">
+            <label class="check">
+              <input id="donate" type="checkbox" checked />
+              <span data-i18n="dmg.donate"
+                >donate to my country's treasury a day:</span
+              >
+            </label>
+            <input
+              id="donation"
+              class="tiny-num"
+              type="number"
+              min="0"
+              step="5"
+              value="50"
+              aria-label="coins a day"
+            />
+            <span class="hint-inline" data-i18n="dmg.donateHint"
+              >coins, counted as an expense.</span
+            >
+          </div>
+          <div class="option full-only">
+            <label class="check">
+              <input id="no-strategic" type="checkbox" />
+              <span data-i18n="dmg.noStrategic"
+                >don't count strategic resources (as if your alliance held
+                none)</span
+              >
+            </label>
+          </div>
+          <div class="option full-only">
+            <label class="check">
+              <input id="burst" type="checkbox" />
+              <span data-i18n="dmg.burst"
+                >count only the burst (full bars at the start) instead of the
+                day</span
+              >
+            </label>
+          </div>
+        </fieldset>
+        <p id="donation-note" data-i18n="dmg.donationReminder">
+          the build assumes you donate 50 coins a day to your country's
+          treasury, so remember to donate!
+        </p>
+        <details class="numbers fold full-only" id="count-fold" open>
+          <summary data-i18n="dmg.countHead">what to count</summary>
+          <div class="foldbox">
+            <div class="option">
+              <label class="check">
+                <input id="pill" type="checkbox" checked />
+                <span data-i18n="dmg.pill">use pill</span>
+              </label>
+            </div>
+            <div class="option">
+              <label class="check">
+                <input id="help" type="checkbox" checked />
+                <span data-i18n="dmg.help">MU help (10 health every 12 h)</span>
+              </label>
+            </div>
+            <div class="option">
+              <label class="check">
+                <input id="debuff" type="checkbox" checked />
+                <span data-i18n="dmg.debuff"
+                  >hits without gear in the pill's debuff (for the cases they
+                  drop)</span
+                >
+              </label>
+            </div>
+            <div class="option">
+              <label class="check">
+                <input id="pool" type="checkbox" checked />
+                <span data-i18n="dmg.pool"
+                  >pool loot (war spoils) for the day's damage</span
+                >
+              </label>
+            </div>
+            <div class="option">
+              <label class="check">
+                <input id="employees" type="checkbox" checked />
+                <span data-i18n="dmg.employees"
+                  >my employees' profit (needs the token)</span
+                >
+              </label>
+            </div>
+            <div class="option">
+              <label class="check">
+                <input id="keep-companies" type="checkbox" />
+                <span data-i18n="dmg.keepCompanies"
+                  >keep all my current companies (unticked: the companies skill
+                  may be any level, and new companies are counted)</span
+                >
+              </label>
+            </div>
+            <div class="option">
+              <label class="check">
+                <input id="no-eco" type="checkbox" checked />
+                <span data-i18n="dmg.noEco"
+                  >no economy skills other than companies (energy, production
+                  and management at most level 0)</span
+                >
+              </label>
+            </div>
+            <div class="option">
+              <label class="check">
+                <input id="full-precision" type="checkbox" />
+                <span data-i18n="dmg.fullPrecision"
+                  >only builds with at least 100% precision (no misses with the
+                  gear on)</span
+                >
+              </label>
+            </div>
+            <div class="option">
+              <label class="check">
+                <input id="one-food" type="checkbox" />
+                <span data-i18n="dmg.oneFood">one kind of food only</span>
+              </label>
+            </div>
+            <div class="option fields">
+              <span class="muted" data-i18n="dmg.foods">foods allowed:</span>
+              <span id="foods" class="pick"></span>
+            </div>
+            <div class="option fields">
+              <span class="muted" data-i18n="dmg.qualities"
+                >equipment qualities:</span
+              >
+              <span id="qualities" class="pick"></span>
+            </div>
+            <div class="option fields">
+              <label for="bounty" data-i18n="dmg.bounty"
+                >pay per 1,000 damage:</label
+              >
+              <input
+                id="bounty"
+                class="tiny-num"
+                type="number"
+                min="0"
+                step="0.01"
+                value="0"
+              />
+              <span class="hint-inline" data-i18n="dmg.bountyHint"
+                >bounty or mercenary contract, coins</span
+              >
+            </div>
+          </div>
+        </details>
+        <p class="hint full-only" data-i18n="dmg.optionalHint">
+          The fields below will be autopopulated by the tool if left empty, no
+          need to fill them
+        </p>
+        <details class="numbers fold full-only" id="skills-fold">
+          <summary data-i18n="dmg.skillsHead">skills</summary>
+          <div class="foldbox">
+            <div class="option fields">
+              <label for="skills-mode" data-i18n="dmg.skillsMode"
+                >skills:</label
+              >
+              <select id="skills-mode">
+                <option value="search" data-i18n="dmg.modeSearch">
+                  search every skill (a reset)
+                </option>
+                <option value="add" data-i18n="dmg.modeAdd">
+                  only add to my skills (no reset)
+                </option>
+                <option value="freeze" data-i18n="dmg.modeFreeze" disabled>
+                  keep the skills shown below
+                </option>
+              </select>
+            </div>
+            <div class="option fields">
+              <label for="level" data-i18n="dmg.level">level:</label>
+              <input
+                id="level"
+                class="tiny-num"
+                type="number"
+                min="1"
+                max="100"
+                step="1"
+                placeholder="yours"
+                data-i18n-placeholder="dmg.yours"
+              />
+              <label for="prestige" data-i18n="dmg.prestige"
+                >prestige points:</label
+              >
+              <input
+                id="prestige"
+                class="tiny-num"
+                type="number"
+                min="0"
+                max="31"
+                step="1"
+                placeholder="yours"
+                data-i18n-placeholder="dmg.yours"
+              />
+              <label for="rank" data-i18n="dmg.rank">military rank %:</label>
+              <input
+                id="rank"
+                class="tiny-num"
+                type="number"
+                min="0"
+                max="100"
+                step="0.25"
+                placeholder="yours"
+                data-i18n-placeholder="dmg.yours"
+              />
+            </div>
+            <div class="option fields">
+              <span class="muted" data-i18n="dmg.strategic"
+                >strategic resources, your alliance's levels 0-3:</span
+              >
+              <label for="st-coal" data-i18n="dmg.res.coal">coal</label>
+              <input
+                id="st-coal"
+                class="tiny-num"
+                type="number"
+                min="0"
+                max="3"
+                step="1"
+              />
+              <label for="st-diamonds" data-i18n="dmg.res.diamonds"
+                >diamonds</label
+              >
+              <input
+                id="st-diamonds"
+                class="tiny-num"
+                type="number"
+                min="0"
+                max="3"
+                step="1"
+              />
+              <label for="st-lithium" data-i18n="dmg.res.lithium"
+                >lithium</label
+              >
+              <input
+                id="st-lithium"
+                class="tiny-num"
+                type="number"
+                min="0"
+                max="3"
+                step="1"
+              />
+              <label for="st-rareEarths" data-i18n="dmg.res.rareEarths"
+                >rare earths</label
+              >
+              <input
+                id="st-rareEarths"
+                class="tiny-num"
+                type="number"
+                min="0"
+                max="3"
+                step="1"
+              />
+              <label for="st-gold" data-i18n="dmg.res.gold">gold</label>
+              <input
+                id="st-gold"
+                class="tiny-num"
+                type="number"
+                min="0"
+                max="3"
+                step="1"
+              />
+              <label for="st-uranium" data-i18n="dmg.res.uranium"
+                >uranium</label
+              >
+              <input
+                id="st-uranium"
+                class="tiny-num"
+                type="number"
+                min="0"
+                max="3"
+                step="1"
+              />
+            </div>
+            <p class="hint" data-i18n="dmg.strategicHint">
+              a level adds at every skill level: coal +5 precision, diamonds +10
+              health, lithium +10 energy, rare earths +3 production, gold +1
+              management, uranium +2 loot chance (empty: what your profile
+              shows)
+            </p>
+            <p class="hint" data-i18n="dmg.limitsHint">
+              each skill's lowest and highest level, 0-10 (empty: any;
+              companies: as now while "keep all my current companies" is
+              ticked). Prestige bonus levels come on top.
+            </p>
+            <div class="limits" id="limits"></div>
+          </div>
+        </details>
+        <details class="numbers fold full-only" id="income-fold">
+          <summary data-i18n="dmg.incomeHead">your income</summary>
+          <div class="foldbox">
+            <p class="hint" data-i18n="dmg.incomeHint">
+              empty fields use what the game shows for you; these raise what
+              fighting may cost.
+            </p>
+            <div class="scroll">
+              <table class="grid inputs">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th class="num" data-i18n="dmg.coinsDay">coins a day</th>
+                    <th class="num" data-i18n="dmg.casesDay">cases a day</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th data-i18n="dmg.incMissions">missions, every set</th>
+                    <td class="num">
+                      <input
+                        id="inc-missions-coins"
+                        class="tiny-num"
+                        type="number"
+                        step="1"
+                      />
+                    </td>
+                    <td class="num">
+                      <input
+                        id="inc-missions-cases"
+                        class="tiny-num"
+                        type="number"
+                        step="0.1"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <th data-i18n="dmg.incDaily">daily reward calendar</th>
+                    <td class="num">
+                      <input
+                        id="inc-daily-coins"
+                        class="tiny-num"
+                        type="number"
+                        step="1"
+                      />
+                    </td>
+                    <td class="num">
+                      <input
+                        id="inc-daily-cases"
+                        class="tiny-num"
+                        type="number"
+                        step="0.1"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <th data-i18n="dmg.incEmployees">
+                      employees (their output less wages)
+                    </th>
+                    <td class="num">
+                      <input
+                        id="inc-employees-coins"
+                        class="tiny-num"
+                        type="number"
+                        step="1"
+                        placeholder="auto"
+                        data-i18n-placeholder="dmg.auto"
+                      />
+                    </td>
+                    <td></td>
+                  </tr>
+                  <tr>
+                    <th data-i18n="dmg.incOther">
+                      other (trading, crafting...)
+                    </th>
+                    <td class="num">
+                      <input
+                        id="inc-other-coins"
+                        class="tiny-num"
+                        type="number"
+                        step="1"
+                        placeholder="0"
+                      />
+                    </td>
+                    <td></td>
+                  </tr>
+                  <tr>
+                    <th data-i18n="dmg.incPool">pool loot (war spoils)</th>
+                    <td class="num">
+                      <input
+                        id="inc-pool-coins"
+                        class="tiny-num"
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="auto"
+                        data-i18n-placeholder="dmg.auto"
+                      />
+                    </td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="hint" id="pool-hint" data-i18n="dmg.poolHint">
+              pool loot: empty = what fighters with the build's damage got on
+              the last 7 days, at market prices, worked out for each build; type
+              coins a day to count your own number instead.
+            </p>
+            <div class="option fields">
+              <label for="mu-division" data-i18n="dmg.muDivision"
+                >MU league division:</label
+              >
+              <select id="mu-division"></select>
+            </div>
+            <div class="option fields">
+              <label for="mu-place" data-i18n="dmg.muPlace"
+                >MU league place:</label
+              >
+              <select id="mu-place"></select>
+              <span class="hint-inline" data-i18n="dmg.muPlaceHint"
+                >an assumption: the unit's place in its group of 10; the League
+                tab shows the real one</span
+              >
+            </div>
+            <div class="option fields">
+              <label for="mu-share" data-i18n="dmg.muShare"
+                >your share of the MU's damage %:</label
+              >
+              <input
+                id="mu-share"
+                class="tiny-num"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                placeholder="auto"
+                data-i18n-placeholder="dmg.auto"
+              />
+              <span
+                class="hint-inline"
+                id="mu-share-hint"
+                data-i18n="dmg.muShareHint"
+                >by default an equal split of its members</span
+              >
+            </div>
+            <div class="option fields">
+              <label for="league-place" data-i18n="dmg.leaguePlace"
+                >your weekly league place:</label
+              >
+              <select id="league-place"></select>
+              <span class="hint-inline" data-i18n="dmg.leagueHint"
+                >your group is random, so this is an assumption; the League card
+                shows your real place</span
+              >
+            </div>
+            <div class="option fields">
+              <label for="league-bonus" data-i18n="dmg.leagueBonus"
+                >league group bonus %:</label
+              >
+              <input
+                id="league-bonus"
+                class="tiny-num"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="auto"
+                data-i18n-placeholder="dmg.auto"
+              />
+              <span class="hint-inline" data-i18n="dmg.leagueBonusHint"
+                >raises the prizes above, money and cases; empty: your group's,
+                read from the game (x1.39 = 39)</span
+              >
+            </div>
+            <div class="option fields">
+              <label for="manager-pay" data-i18n="dmg.managerPay"
+                >a manager job's pay:</label
+              >
+              <input
+                id="manager-pay"
+                class="tiny-num"
+                type="number"
+                min="0"
+                step="0.01"
+                value="0"
+              />
+              <span class="hint-inline" data-i18n="dmg.managerHint"
+                >coins a day a Management point, after tax; 0 = no manager
+                job</span
+              >
+            </div>
+            <div class="option fields">
+              <label for="self-value" data-i18n="dmg.selfValue"
+                >self-work, coins a PP:</label
+              >
+              <input
+                id="self-value"
+                class="tiny-num"
+                type="number"
+                min="0"
+                step="0.001"
+                placeholder="yours"
+                data-i18n-placeholder="dmg.yours"
+              />
+              <span class="hint-inline" data-i18n="dmg.selfHint"
+                >by default your best company's item</span
+              >
+            </div>
+            <div class="option fields">
+              <label for="self-clicks" data-i18n="dmg.selfClicks"
+                >self-work clicks a day:</label
+              >
+              <input
+                id="self-clicks"
+                class="tiny-num"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="auto"
+                data-i18n-placeholder="dmg.auto"
+              />
+              <span
+                class="hint-inline"
+                id="self-clicks-hint"
+                data-i18n="dmg.selfClicksHint"
+                >empty: what your energy bar gives, less one for each employee
+                with training draws left. Type more to give up training and go
+                full on self-work (at most what the bar gives counts).</span
+              >
+            </div>
+            <div class="option fields">
+              <label for="engine" data-i18n="dmg.engine"
+                >automated engines:</label
+              >
+              <select id="engine"></select>
+            </div>
+          </div>
+        </details>
+        <details class="numbers fold full-only" id="prices-fold">
+          <summary data-i18n="dmg.pricesHead">prices</summary>
+          <div class="foldbox">
+            <p class="hint" data-i18n="dmg.pricesHint">
+              empty: the median of the last 24 hours.
+            </p>
+            <div class="limits" id="prices"></div>
+            <div class="option fields">
+              <label for="adjust" data-i18n="dmg.adjust"
+                >all equipment prices, %:</label
+              >
+              <input
+                id="adjust"
+                class="tiny-num"
+                type="number"
+                step="1"
+                value="0"
+              />
+            </div>
+          </div>
+        </details>
+        <p class="hint full-only">
+          <button id="reset" type="button" data-i18n="dmg.reset">
+            [ reset the fields ]
+          </button>
+        </p>
+      </div>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <div
+        id="progress"
+        class="progress"
+        role="progressbar"
+        aria-label="search progress"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+        hidden
+      >
+        <span id="progress-bar" class="meter"></span>
+        <span id="progress-pct" class="pct"></span>
+        <span id="progress-text" class="what"></span>
+      </div>
+      <section id="results" hidden>
+        <fieldset class="options sandbox-box full-only">
+          <legend data-i18n="dmg.sandboxHead">sandbox</legend>
+          <div class="option">
+            <label class="check">
+              <input id="sandbox" type="checkbox" />
+              <span data-i18n="dmg.sandbox"
+                >sandbox mode: set the build yourself, worked out at once</span
+              >
+            </label>
+          </div>
+          <div id="sandbox-panel" hidden></div>
+        </fieldset>
+        <h2 class="prompt" data-i18n="dmg.buildSkills">skills to assign</h2>
+        <div class="scroll">
+          <table id="skills" class="grid"></table>
+        </div>
+        <p class="hint" id="skills-note"></p>
+        <h2 class="prompt" data-i18n="dmg.buildGear">
+          equipment to buy and use
+        </h2>
+        <p class="hint" data-i18n="dmg.gearPrices">
+          the prices below may differ slightly from those you see on the market,
+          so double-check them, especially for weapons.
+        </p>
+        <p class="hint full-only" data-i18n="dmg.gearScraps">
+          an item that is used up gives back 1/3 of its scrap value, so when the
+          tool suggests gold items that look much more expensive than purple
+          ones, remember they also give more scraps back.
+        </p>
+        <p id="gear-window" hidden></p>
+        <div class="scroll">
+          <table id="gear" class="grid"></table>
+        </div>
+        <p class="hint full-only" id="gear-note"></p>
+        <h2 class="prompt" id="summary-head" data-i18n="dmg.summaryHead">
+          the best build
+        </h2>
+        <div class="scroll">
+          <table id="summary" class="grid summary"></table>
+        </div>
+        <p class="status" id="new-companies" hidden></p>
+        <details class="numbers full-only" id="debuff-fold" hidden>
+          <summary id="debuff-head"></summary>
+          <p class="hint" id="debuff-note"></p>
+          <div class="scroll">
+            <table id="debuff-gear" class="grid"></table>
+          </div>
+        </details>
+        <details class="numbers full-only">
+          <summary data-i18n="dmg.costsHead">coins a day</summary>
+          <div class="scroll">
+            <table id="costs" class="grid"></table>
+          </div>
+        </details>
+        <details class="numbers full-only">
+          <summary data-i18n="dmg.incomeResult">income a day</summary>
+          <div class="scroll">
+            <table id="income" class="grid"></table>
+          </div>
+          <p class="hint" id="income-note"></p>
+        </details>
+        <details class="numbers full-only">
+          <summary data-i18n="dmg.statsHead">combat stats</summary>
+          <div class="scroll">
+            <table id="stats" class="grid"></table>
+          </div>
+        </details>
+        <details class="numbers full-only">
+          <summary data-i18n="dmg.compareHead">
+            compare: without the pill, and with your fighting skills
+          </summary>
+          <div class="scroll">
+            <table id="compare" class="grid"></table>
+          </div>
+        </details>
+        <details class="numbers full-only" id="curve-fold">
+          <summary data-i18n="dmg.curveHead">
+            wealth to lose a day and damage a day
+          </summary>
+          <p class="hint" id="curve-note"></p>
+          <p>
+            <button id="curve-run" type="button" data-i18n="dmg.curveRun">
+              [ work out the curve ]
+            </button>
+            <button
+              id="curve-table"
+              type="button"
+              data-i18n="dmg.curveTable"
+              hidden
+            >
+              [ table ]
+            </button>
+          </p>
+          <p class="legend" id="curve-legend" hidden></p>
+          <div id="curve-chart" class="chart"></div>
+          <div class="scroll" id="curve-rows" hidden>
+            <table id="curve" class="grid"></table>
+          </div>
+        </details>
+        <details class="numbers full-only" id="prices-list">
+          <summary data-i18n="dmg.listHead">equipment prices</summary>
+          <p class="hint" id="list-note"></p>
+          <p>
+            <select id="list-slot"></select>
+          </p>
+          <div class="scroll">
+            <table id="list" class="grid"></table>
+          </div>
+        </details>
+        <details class="numbers full-only">
+          <summary data-i18n="tool.howHead">how it's worked out</summary>
+          <ul id="notes" class="notes"></ul>
+        </details>
+      </section>
+      <div id="tip" class="tip" hidden></div>
+      <p class="note">
+        <span data-i18n="common.unofficial"
+          >-- unofficial fan site, not affiliated with WarEra.</span
+        >
+        <span data-i18n="tool.readOnlyNote"
+          >read-only: the page only reads from the game's API, with your token,
+          from your browser.</span
+        >
+        <span data-i18n="common.operator">operator:</span>
+        <span>h4N</span>
+      </p>
+    </main>
+    <script>
+      const sendHeight = () => parent.postMessage({ type: "nizam-damage-optimizer-height", height: document.documentElement.scrollHeight + 16 }, location.origin);
+      new ResizeObserver(sendHeight).observe(document.documentElement);
+      addEventListener("load", sendHeight);
+    </script>
+  </body>
+</html>
