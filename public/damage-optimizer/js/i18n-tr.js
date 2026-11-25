@@ -25,7 +25,7 @@ I18N.add({
     "dmg.goalTarget": "Hedef hasara en düşük maliyetle ulaş",
     "dmg.goalMax": "Bütçe sınırı olmadan en yüksek hasar",
     "dmg.budget": "Günlük harcanabilir servet:",
-    "dmg.budgetHintSimple": "Günlük altın; 0 mevcut servetin korunduğu anlamına gelir, negatif değer birikim hedefidir.",
+    "dmg.budgetHintSimple": "Günlük net harcama sınırı. API'de bulunan firma ve çalışan geliri, görev ödülleri, lig kasaları ve savaşta kazanılan kasalar otomatik hesaba katılır.",
     "dmg.bonus": "Savaş bonusu %:",
     "dmg.bountyMillion": "1 milyon hasar başına ödül:",
     "dmg.bountyMillionHint": "Ödül veya paralı asker sözleşmesi gelirini girin.",

@@ -1,4 +1,4 @@
-import { unwrapTrpc } from "../../lib/damage/rules.js";
+import { buildRules, unwrapTrpc } from "../../lib/damage/rules.js";
 
 const EQUIPMENT_SLOTS: Record<string, string> = {
   weapon: "weapon", knife: "weapon", gun: "weapon", pistol: "weapon", rifle: "weapon", sniper: "weapon", tank: "weapon", jet: "weapon",
@@ -60,6 +60,10 @@ function toGearRows(config: any, rows: any[]) {
 
 export function buildReferenceMarket(configInput: any, priceInput: any, equipmentRows: any[]) {
   const config = unwrapTrpc<any>(configInput) || {};
+  // Use the same reward mapping as the app's damage rules. gameConfig nests
+  // login rewards under user and mission rewards by period; treating the
+  // latter as a flat { money, case1 } object silently dropped its case income.
+  const appRules = buildRules(config);
   const prices = unwrapTrpc<Record<string, number>>(priceInput) || {};
   const values: Record<string, number[]> = {};
   const costs: Record<string, number[]> = {};
@@ -96,6 +100,29 @@ export function buildReferenceMarket(configInput: any, priceInput: any, equipmen
     const pp = Number(item.productionPoints) || 0;
     itemValues[code] = { ...item, price, value_per_pp: pp > 0 ? (price - inputCost) / pp : 0, raw: !Object.keys(needs).length };
   }
+  const missionReward = appRules.missionRewards || {};
+  const missionPeriods = [
+    ["daily", 1],
+    ["weekly", 7],
+    ["monthly", 30],
+  ] as const;
+  const hasPeriodRewards = missionPeriods.some(([period]) =>
+    missionReward[period] && typeof missionReward[period] === "object",
+  );
+  const missionIncome = hasPeriodRewards
+    ? missionPeriods.reduce(
+        (total, [period, days]) => {
+          const reward = missionReward[period];
+          if (!reward || typeof reward !== "object") return total;
+          return [
+            total[0] + (Number(reward.money) || 0) / days,
+            total[1] + (Number(reward.case1 ?? reward.cases) || 0) / days,
+          ];
+        },
+        [0, 0],
+      )
+    : [Number(missionReward.money) || 0, Number(missionReward.case1 ?? missionReward.cases) || 0];
+  const dailyReward = appRules.dailyReward;
   const gearsUpdated = equipmentRows.map((row) => row.updated_at).filter(Boolean).sort().at(-1) || null;
   return {
     rules,
@@ -103,8 +130,8 @@ export function buildReferenceMarket(configInput: any, priceInput: any, equipmen
     items: gear.items,
     prices: itemPrices,
     engines,
-    missions: [Number(config.mission?.reward?.money) || 0, Number(config.mission?.reward?.case1) || 0],
-    dailyReward: [Number(config.user?.dailyReward?.money) || 0, Number(config.user?.dailyReward?.case1) || 0],
+    missions: missionIncome,
+    dailyReward: [Number(dailyReward.money) || 0, Number(dailyReward.case1) || 0],
     pool: [], poolInfo: { mix: [] }, curve: [-500, -250, 0, 100, 250, 500, 1000, 2500, 5000],
     managerPayNow: 0,
     resetCost: Number(config.user?.resetSkillsCostPerPoint) || 0,
@@ -116,7 +143,8 @@ export function buildReferenceMarket(configInput: any, priceInput: any, equipmen
       prices: "WarEra · itemTrading.getPrices",
       rules: "WarEra · gameConfig.getGameConfig",
       engineUpgradeCostsAvailable: Object.keys(engineSteel).length > 0,
-      missionsAvailable: Boolean(config.mission?.reward),
+      missionsAvailable: hasPeriodRewards || Boolean(missionIncome[0] || missionIncome[1]),
+      dailyRewardAvailable: Boolean(dailyReward.money || dailyReward.case1),
       poolAvailable: false,
     },
   };

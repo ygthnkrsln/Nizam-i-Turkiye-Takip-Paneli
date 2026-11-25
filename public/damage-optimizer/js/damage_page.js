@@ -1062,6 +1062,7 @@ async function marketData() {
   const limitations = [];
   if (!MARKET.sourceInfo?.engineUpgradeCostsAvailable) limitations.push("motor yükseltme çelik maliyeti oyun config'inde bulunmuyor");
   if (!MARKET.sourceInfo?.missionsAvailable) limitations.push("görev ödülü config'te bulunmuyor");
+  if (!MARKET.sourceInfo?.dailyRewardAvailable) limitations.push("günlük giriş ödülü config'te bulunmuyor");
   if (!MARKET.sourceInfo?.poolAvailable) limitations.push("ordu havuz tablosu mevcut veritabanında bulunmuyor");
   const sourceNote = $("reference-source-note");
   if (sourceNote) sourceNote.textContent = limitations.length
@@ -1556,7 +1557,9 @@ function readScenario(noKeep = false) {
     ? clamp(numberOr("donation", 0), 0, 1e6)
     : 0;
   income -= donation;
-  const goal = $("goal").value,
+  // The embedded site tool is deliberately the maximum-damage-under-budget
+  // optimizer. Other objectives remain available only in the standalone full UI.
+  const goal = SIMPLE ? "damage" : $("goal").value,
     target = clamp(numberOr("target", 500000), 1, 1e9),
     burst = $("burst").checked && goal !== "profit";
   const wealth =
